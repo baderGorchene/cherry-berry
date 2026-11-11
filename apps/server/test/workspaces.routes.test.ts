@@ -68,3 +68,15 @@ describe("workspace routes", () => {
     expect(j.json().workspace.role).toBe("editor");
   });
 });
+
+describe("fastify client errors", () => {
+  it("unsupported content type is a 415", async () => {
+    const { cookie } = await signUp(t.app, "ada@example.com");
+    const res = await t.app.inject({
+      method: "POST", url: "/api/workspaces", payload: "<x/>",
+      headers: { cookie, "content-type": "application/xml" },
+    });
+    expect(res.statusCode).toBe(415);
+    expect(res.json()).toEqual({ error: "unsupported_media_type" });
+  });
+});

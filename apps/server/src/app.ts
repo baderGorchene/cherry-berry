@@ -3,6 +3,7 @@ import { createAuth, createRequireUser } from "./auth";
 import type { Config } from "./config";
 import type { Db } from "./db/client";
 import { HttpError } from "./errors";
+import { registerDesignRoutes } from "./designs/routes";
 import { registerWorkspaceRoutes } from "./workspaces/routes";
 import rateLimit from "@fastify/rate-limit";
 
@@ -21,6 +22,9 @@ export async function buildApp(config: Config, deps: { db: Db }): Promise<Fastif
     const e = err as { statusCode?: number; validation?: unknown };
     if (e.statusCode === 429) return reply.status(429).send({ error: "rate_limited" });
     if (e.validation || e.statusCode === 400) return reply.status(400).send({ error: "invalid_body" });
+    if (e.statusCode === 413) return reply.status(413).send({ error: "too_large" });
+    if (e.statusCode === 415) return reply.status(415).send({ error: "unsupported_media_type" });
+    if (e.statusCode && e.statusCode >= 400 && e.statusCode < 500) return reply.status(e.statusCode).send({ error: "bad_request" });
     app.log.error(err);
     return reply.status(500).send({ error: "internal" });
   });
@@ -52,5 +56,6 @@ export async function buildApp(config: Config, deps: { db: Db }): Promise<Fastif
 
   await app.register(rateLimit, { global: false });
   registerWorkspaceRoutes(app, deps.db, requireUser);
+  registerDesignRoutes(app, deps.db, requireUser);
   return app;
 }

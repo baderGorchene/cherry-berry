@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, customType, index, pgTable, primaryKey, real, text, timestamp, uuid } from "drizzle-orm/pg-core";
+
+// PGlite returns bytea as Uint8Array, node-postgres as Buffer.
+const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
+  dataType: () => "bytea",
+  fromDriver: (v) => new Uint8Array(v),
+});
 
 // --- Better Auth tables (shape required by better-auth's drizzle adapter) ---
 export const user = pgTable("user", {
@@ -81,3 +87,17 @@ export const invitations = pgTable("invitations", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   acceptedAt: timestamp("accepted_at", { withTimezone: true }),
 }, (t) => [check("invitations_role", sql`${t.role} in ('admin','editor','viewer')`)]);
+
+export const designs = pgTable("designs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  width: real("width").notNull(),
+  height: real("height").notNull(),
+  unit: text("unit").notNull(),
+  colorMode: text("color_mode").notNull(),
+  state: bytea("state").notNull(),
+  createdBy: text("created_by").notNull().references(() => user.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("designs_workspace_updated").on(t.workspaceId, t.updatedAt.desc())]);

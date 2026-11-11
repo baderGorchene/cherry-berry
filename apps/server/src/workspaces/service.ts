@@ -20,7 +20,7 @@ const isUniqueViolation = (e: unknown): boolean => {
   const err = e as { code?: string; cause?: unknown };
   return err?.code === "23505" || (err?.cause !== undefined && isUniqueViolation(err.cause));
 };
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function findById(db: Db, id: string): Promise<WorkspaceRow> {
   if (!UUID.test(id)) throw new WorkspaceError("not_found");
@@ -29,7 +29,7 @@ async function findById(db: Db, id: string): Promise<WorkspaceRow> {
   return w;
 }
 
-async function roleOf(db: Db, workspaceId: string, userId: string): Promise<Role | undefined> {
+export async function getRole(db: Db, workspaceId: string, userId: string): Promise<Role | undefined> {
   const [m] = await db.select({ role: memberships.role }).from(memberships)
     .where(and(eq(memberships.workspaceId, workspaceId), eq(memberships.userId, userId)));
   return m?.role as Role | undefined;
@@ -38,7 +38,7 @@ async function roleOf(db: Db, workspaceId: string, userId: string): Promise<Role
 /** Adds the member unless already present; returns the workspace with the member's actual role. */
 async function addMember(db: Db, w: WorkspaceRow, userId: string, role: Role, joinedVia: string) {
   await db.insert(memberships).values({ workspaceId: w.id, userId, role, joinedVia }).onConflictDoNothing();
-  return summary(w, await roleOf(db, w.id, userId));
+  return summary(w, await getRole(db, w.id, userId));
 }
 
 export async function createWorkspace(
@@ -83,7 +83,7 @@ export async function createInvitation(
   db: Db, inviterId: string, workspaceId: string, input: { email: string; role: "admin" | "editor" | "viewer" },
 ): Promise<{ token: string; expiresAt: Date }> {
   await findById(db, workspaceId);
-  const role = await roleOf(db, workspaceId, inviterId);
+  const role = await getRole(db, workspaceId, inviterId);
   if (role !== "owner" && role !== "admin") throw new WorkspaceError("forbidden");
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + 7 * 86400000);
