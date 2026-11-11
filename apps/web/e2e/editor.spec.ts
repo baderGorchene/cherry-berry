@@ -156,3 +156,23 @@ test("broken design id", async ({ page }) => {
   await expect(page.getByText("This design doesn't exist or you don't have access.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Back to home" })).toBeVisible();
 });
+
+test("a save rejected as invalid offers a reload to the latest version", async ({ page, context }) => {
+  const row = (p: Page, name: string) => p.getByRole("listitem").filter({ hasText: name });
+  const saved = (p: Page) => p.waitForResponse((r) => r.url().endsWith("/state") && r.request().method() === "PUT");
+  await newSocialPost(page);
+  await Promise.all([saved(page), page.getByRole("button", { name: "+ Add page" }).click()]);
+  const other = await context.newPage();
+  await other.goto(page.url());
+  await expect(row(other, "Page 2")).toBeVisible();
+
+  // Each tab deletes a different page; merged, the design would have no pages.
+  await Promise.all([saved(page), row(page, "Page 1").getByRole("button", { name: "Delete" }).click()]);
+  await row(other, "Page 2").getByRole("button", { name: "Delete" }).click();
+  const reload = other.getByRole("button", { name: "Reload to get the latest version" });
+  await expect(reload).toBeVisible();
+  await reload.click();
+  await expect(row(other, "Page 2")).toBeVisible();
+  await expect(row(other, "Page 1")).toHaveCount(0);
+  await expect(status(other)).toHaveText("Saved");
+});

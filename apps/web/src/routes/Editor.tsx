@@ -131,6 +131,7 @@ function Shell({ d }: { d: Ready }) {
             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
           <span className="muted">
             {page.width} × {page.height} {page.unit} · {page.colorMode.toUpperCase()} · {readOnly ? <span>View only</span> : <span role="status">{status}</span>}
+            {d.statusCode === "invalid_document" && <> <button className="ed-mini" onClick={d.reload}>Reload to get the latest version</button></>}
           </span>
         </div>
         <button className="ed-ib" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={readOnly} onClick={() => undo.undo()}>

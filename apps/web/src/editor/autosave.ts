@@ -6,7 +6,7 @@ type Opts = {
   encode(): Uint8Array;
   save(state: Uint8Array): Promise<Uint8Array>;
   onRemote(state: Uint8Array): void;
-  onStatus(s: SaveStatus, message?: string): void;
+  onStatus(s: SaveStatus, message?: string, code?: string): void;
   debounceMs?: number;
   retryMs?: number[];
 };
@@ -55,11 +55,11 @@ export class Autosave {
   }
 
   private last?: string;
-  private emit(s: SaveStatus, message?: string) {
+  private emit(s: SaveStatus, message?: string, code?: string) {
     const key = `${s}|${message ?? ""}`;
     if (key === this.last) return;
     this.last = key;
-    this.o.onStatus(s, message);
+    this.o.onStatus(s, message, code);
   }
 
   private schedule(ms: number) {
@@ -89,7 +89,7 @@ export class Autosave {
       this.current = null;
       if (this.disposed) return;
       if (e instanceof ApiError && e.status < 500) {
-        this.emit("error", errorMessage(e)); // a later markDirty tries again
+        this.emit("error", errorMessage(e), e.code); // a later markDirty tries again
         this.closed?.();
         return;
       }

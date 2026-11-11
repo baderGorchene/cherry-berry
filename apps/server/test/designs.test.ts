@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import * as Y from "yjs";
-import { addNode, createDocument, createShape, docToY, setTitle, yToDoc } from "@cherry/doc";
+import { addNode, addPage, createDocument, createShape, docToY, getPageIds, removePage, setTitle, yToDoc } from "@cherry/doc";
 import { setupTestApp, signUp } from "./helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
@@ -80,6 +80,26 @@ describe("designs", () => {
     expect(put.statusCode).toBe(200);
     expect(nodeIds(toYDoc(put.json().state))).toEqual(expect.arrayContaining([r1.id, r2.id]));
     expect(nodeIds(toYDoc(await load()))).toEqual(expect.arrayContaining([r1.id, r2.id]));
+  });
+
+  it("two tabs deleting different pages: the second save is rejected and nothing changes", async () => {
+    const { owner, design } = await setup();
+    const url = `/api/designs/${design.id}/state`;
+    const load = async () => (await call("GET", `/api/designs/${design.id}`, owner.cookie)).json().state as string;
+    const seed = toYDoc(await load());
+    addPage(seed);
+    expect((await call("PUT", url, owner.cookie, { state: b64(Y.encodeStateAsUpdate(seed)) })).statusCode).toBe(200);
+    const a = toYDoc(await load());
+    const b = toYDoc(await load());
+    const [p1, p2] = getPageIds(a);
+    expect(removePage(a, p1!)).toBe(true);
+    expect(removePage(b, p2!)).toBe(true);
+    expect((await call("PUT", url, owner.cookie, { state: b64(Y.encodeStateAsUpdate(a)) })).statusCode).toBe(200);
+    const stored = await load();
+    const put = await call("PUT", url, owner.cookie, { state: b64(Y.encodeStateAsUpdate(b)) });
+    expect([put.statusCode, put.json()]).toEqual([400, { error: "invalid_document" }]);
+    expect(await load()).toBe(stored);
+    expect(getPageIds(toYDoc(stored))).toEqual([p2]);
   });
 
   it("rejects garbage and invalid documents", async () => {
