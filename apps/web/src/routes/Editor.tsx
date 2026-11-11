@@ -204,7 +204,7 @@ function Shell({ d }: { d: Ready }) {
         {editNode
           ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
           : <Properties ydoc={ydoc} pageId={page.id} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act}
-            combinable={operands.length >= 2} message={message} onCombine={runCombine} onConvert={runConvert} />}
+            combinable={operands.length >= 2} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} />}
       </div>
     </div>
   );

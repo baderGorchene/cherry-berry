@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  addNode, createDocument, createShape, createUndoManager, docToY, yToDoc, type CherryNode,
+  addNode, removeNodes, createDocument, createShape, createUndoManager, docToY, yToDoc, type CherryNode,
 } from "@cherry/doc";
 import { moveAnchors } from "@cherry/vector";
-import { commitEdit, editModel } from "./pathEdit";
+import { combine, commitEdit, convertToPath, editModel } from "./pathEdit";
 
 function setup() {
   const ydoc = docToY(createDocument({ title: "T", width: 100, height: 100, unit: "px", colorMode: "rgb" }));
@@ -45,5 +45,32 @@ describe("commitEdit", () => {
     // A stale edit that widens the shape by 5 must not reach the rect.
     commitEdit(ydoc, page(), asPathNode, moveAnchors(editModel(asPathNode)!, [{ sub: 0, i: 0 }], -5, 0), act);
     expect(page().nodes[1]).toMatchObject({ id: rect.id, kind: "rect", x: 10, width: 20 });
+  });
+});
+
+describe("nested and vanished nodes", () => {
+  const nested = () => {
+    const t = setup();
+    const inner = createShape("rect", { x: 0, y: 0, width: 5, height: 5 });
+    const group = { ...createShape("rect", { x: 0, y: 0, width: 5, height: 5 }), kind: "group", name: "G", children: [inner] } as unknown as CherryNode;
+    t.act(() => addNode(t.ydoc, t.page().id, group));
+    return { ...t, inner, group };
+  };
+
+  it("convertToPath and commitEdit leave a node inside a group alone", () => {
+    const { ydoc, act, page, inner, group } = nested();
+    convertToPath(ydoc, page().id, inner, act);
+    commitEdit(ydoc, page(), inner, editModel(inner)!, act);
+    const g = page().nodes.find((n) => n.id === group.id)!;
+    expect(g.kind === "group" && g.children.map((c) => [c.id, c.kind])).toEqual([[inner.id, "rect"]]);
+    expect(page().nodes.map((n) => n.kind)).toEqual(["ellipse", "rect", "group"]);
+  });
+
+  it("combine writes nothing and reports when an operand vanished", () => {
+    const { ydoc, act, page } = setup();
+    const ops = page().nodes;
+    removeNodes(ydoc, page().id, [ops[1]!.id]);
+    expect(combine(ydoc, page().id, "union", ops, act, () => {})).toBe("These shapes can't be combined.");
+    expect(page().nodes.map((n) => n.id)).toEqual([ops[0]!.id]);
   });
 });

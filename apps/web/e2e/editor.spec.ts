@@ -298,3 +298,30 @@ test("convert to path keeps the layer", async ({ page }) => {
   await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
   await expect(page.getByText("Editing path", { exact: true })).toBeVisible();
 });
+
+test("long-label fields are visible and fillable", async ({ page }) => {
+  await newSocialPost(page);
+  await page.keyboard.press("T");
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  await page.mouse.click(cx, cy);
+  await page.keyboard.type("Hi");
+  await page.keyboard.press("Escape");
+  await layers(page).getByRole("button", { name: "Hi", exact: true }).click();
+  for (const label of ["Line height", "Letter spacing"]) {
+    await expect(page.getByLabel(label)).toBeVisible();
+    expect((await page.getByLabel(label).boundingBox())!.width).toBeGreaterThanOrEqual(40);
+    await page.getByLabel(label).fill("2");
+    await page.getByLabel(label).press("Enter");
+    await expect(page.getByLabel(label)).toHaveValue("2");
+  }
+  await page.waitForTimeout(450);
+  await page.getByRole("button", { name: "Rectangle (R)" }).click();
+  await page.mouse.click(cx + 200, cy + 150);
+  const sw = page.getByLabel("Stroke width");
+  await expect(sw).toBeVisible();
+  expect((await sw.boundingBox())!.width).toBeGreaterThanOrEqual(40);
+  await sw.fill("7");
+  await sw.press("Enter");
+  await expect(sw).toHaveValue("7");
+});
