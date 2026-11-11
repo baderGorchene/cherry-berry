@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: cherry
+      POSTGRES_PASSWORD: cherry
+      POSTGRES_DB: cherry
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+  minio:
+    image: minio/minio
+    command: server /data --console-address :9001
+    ports: ["9000:9000", "9001:9001"]
+    volumes:
+      - minio:/data
+volumes:
+  pgdata:
+  minio:
