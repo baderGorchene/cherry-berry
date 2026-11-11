@@ -9,6 +9,7 @@ const STATUS = {
   invitation_invalid: 400,
   invitation_used: 400,
   invitation_wrong_email: 400,
+  invalid_shape: 400,
 } as const;
 
 export type WorkspaceErrorCode = keyof typeof STATUS;

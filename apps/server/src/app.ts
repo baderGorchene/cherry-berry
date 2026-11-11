@@ -4,6 +4,7 @@ import type { Config } from "./config";
 import type { Db } from "./db/client";
 import { HttpError } from "./errors";
 import { registerDesignRoutes } from "./designs/routes";
+import { registerShapeRoutes } from "./shapes/routes";
 import { registerWorkspaceRoutes } from "./workspaces/routes";
 import rateLimit from "@fastify/rate-limit";
 
@@ -57,5 +58,6 @@ export async function buildApp(config: Config, deps: { db: Db }): Promise<Fastif
   await app.register(rateLimit, { global: false });
   registerWorkspaceRoutes(app, deps.db, requireUser);
   registerDesignRoutes(app, deps.db, requireUser);
+  registerShapeRoutes(app, deps.db, requireUser);
   return app;
 }

@@ -15,6 +15,13 @@
       "when": 1794399671473,
       "tag": "0001_purple_crusher_hogan",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794435560376,
+      "tag": "0002_shallow_vermin",
+      "breakpoints": true
     }
   ]
 }

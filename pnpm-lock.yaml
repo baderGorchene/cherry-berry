@@ -171,6 +171,9 @@ importers:
       '@cherry/doc':
         specifier: workspace:*
         version: link:../../packages/doc
+      '@cherry/vector':
+        specifier: workspace:*
+        version: link:../../packages/vector
       '@electric-sql/pglite':
         specifier: ^0.5.16
         version: 0.5.16

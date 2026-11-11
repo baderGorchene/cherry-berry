@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, customType, index, pgTable, primaryKey, real, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, customType, jsonb, index, pgTable, primaryKey, real, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 // PGlite returns bytea as Uint8Array, node-postgres as Buffer.
 const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
@@ -101,3 +101,25 @@ export const designs = pgTable("designs", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("designs_workspace_updated").on(t.workspaceId, t.updatedAt.desc())]);
+
+export const shapes = pgTable("shapes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdBy: text("created_by").notNull().references(() => user.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
+  visibility: text("visibility").notNull(),
+  name: text("name").notNull(),
+  tags: text("tags").array().notNull(),
+  d: text("d").notNull(),
+  width: real("width").notNull(),
+  height: real("height").notNull(),
+  fillRule: text("fill_rule").notNull(),
+  fill: jsonb("fill"),
+  stroke: jsonb("stroke"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check("shapes_visibility", sql`${t.visibility} in ('private','workspace','public')`),
+  check("shapes_workspace", sql`(${t.visibility} = 'workspace') = (${t.workspaceId} is not null)`),
+  index("shapes_visibility_created").on(t.visibility, t.createdAt.desc()),
+  index("shapes_workspace").on(t.workspaceId),
+  index("shapes_created_by").on(t.createdBy),
+]);
