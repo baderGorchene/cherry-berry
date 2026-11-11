@@ -109,6 +109,20 @@ describe("designs", () => {
     expect(list.json().designs[0]).toEqual(expect.objectContaining({ title: "Flyer", width: 297, height: 420 }));
   });
 
+  it("normalizes the stored title", async () => {
+    const { owner, workspace, design } = await setup();
+    const load = async () => toYDoc((await call("GET", `/api/designs/${design.id}`, owner.cookie)).json().state);
+    const save = async (d: Y.Doc) => call("PUT", `/api/designs/${design.id}/state`, owner.cookie, { state: b64(Y.encodeStateAsUpdate(d)) });
+    const list = async () => (await call("GET", `/api/workspaces/${workspace.id}/designs`, owner.cookie)).json().designs[0];
+    const d = await load();
+    setTitle(d, "   ");
+    expect((await save(d)).statusCode).toBe(200);
+    expect((await list()).title).toBe("Untitled design");
+    setTitle(d, "x".repeat(500));
+    expect((await save(d)).statusCode).toBe(200);
+    expect((await list()).title).toBe("x".repeat(120));
+  });
+
   it("too large", async () => {
     const { owner, design } = await setup();
     const big = JSON.stringify({ state: "A".repeat(10 * 1024 * 1024 + 4) });

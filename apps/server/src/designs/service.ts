@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, sql } from "drizzle-orm";
 import * as Y from "yjs";
 import { createDocument, docToY, yToDoc } from "@cherry/doc";
 import type { Db } from "../db/client";
@@ -11,7 +11,12 @@ export type DesignSummary = {
   id: string; workspaceId: string; title: string; width: number; height: number;
   unit: string; colorMode: string; updatedAt: string; createdBy: string;
 };
-type Row = typeof designs.$inferSelect;
+const summaryColumns = {
+  id: designs.id, workspaceId: designs.workspaceId, title: designs.title, width: designs.width,
+  height: designs.height, unit: designs.unit, colorMode: designs.colorMode,
+  updatedAt: designs.updatedAt, createdBy: designs.createdBy,
+};
+type Row = Omit<typeof designs.$inferSelect, "state" | "createdAt">;
 const summary = (d: Row): DesignSummary => ({
   id: d.id, workspaceId: d.workspaceId, title: d.title, width: d.width, height: d.height,
   unit: d.unit, colorMode: d.colorMode, updatedAt: d.updatedAt.toISOString(), createdBy: d.createdBy,
@@ -27,7 +32,7 @@ async function memberRole(db: Db, workspaceId: string, userId: string): Promise<
 
 async function loadWithRole(db: Db, id: string, userId: string): Promise<{ design: Row; role: Role }> {
   if (!UUID.test(id)) throw new WorkspaceError("not_found");
-  const [design] = await db.select().from(designs).where(eq(designs.id, id));
+  const [design] = await db.select(summaryColumns).from(designs).where(eq(designs.id, id));
   if (!design) throw new WorkspaceError("not_found");
   return { design, role: await memberRole(db, design.workspaceId, userId) };
 }
@@ -41,20 +46,22 @@ export async function createDesign(
   const [d] = await db.insert(designs).values({
     workspaceId, title: input.title, width: input.width, height: input.height,
     unit: input.unit, colorMode: input.colorMode, state, createdBy: userId,
-  }).returning();
+  }).returning(summaryColumns);
   return summary(d!);
 }
 
 export async function listDesigns(db: Db, userId: string, workspaceId: string): Promise<DesignSummary[]> {
   await memberRole(db, workspaceId, userId);
-  const rows = await db.select().from(designs).where(eq(designs.workspaceId, workspaceId))
+  const rows = await db.select(summaryColumns).from(designs).where(eq(designs.workspaceId, workspaceId))
     .orderBy(desc(designs.updatedAt)).limit(50);
   return rows.map(summary);
 }
 
 export async function openDesign(db: Db, userId: string, id: string) {
   const { design, role } = await loadWithRole(db, id, userId);
-  return { design: summary(design), role, state: b64(design.state) };
+  const [row] = await db.select({ state: designs.state }).from(designs).where(eq(designs.id, id));
+  if (!row) throw new WorkspaceError("not_found");
+  return { design: summary(design), role, state: b64(row.state) };
 }
 
 /** Merges the client's Yjs update into the stored state; rejects anything that is not a valid Cherry document. */
@@ -71,10 +78,11 @@ export async function saveDesignState(db: Db, userId: string, id: string, incomi
     if (!parsed.ok) throw new HttpError(400, "invalid_document");
     const state = Y.encodeStateAsUpdate(ydoc);
     const page = parsed.doc.pages[0]!;
+    const title = parsed.doc.title.trim().slice(0, 120) || "Untitled design";
     const [d] = await tx.update(designs).set({
-      state, title: parsed.doc.title, width: page.width, height: page.height,
-      unit: page.unit, colorMode: page.colorMode, updatedAt: new Date(),
-    }).where(eq(designs.id, id)).returning();
+      state, title, width: page.width, height: page.height,
+      unit: page.unit, colorMode: page.colorMode, updatedAt: sql`now()`,
+    }).where(eq(designs.id, id)).returning(summaryColumns);
     return { design: summary(d!), state: b64(state) };
   });
 }
