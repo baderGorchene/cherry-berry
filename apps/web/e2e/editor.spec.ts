@@ -359,3 +359,34 @@ test("workspace shapes are shared", async ({ browser }) => {
   await viewer.getByRole("tab", { name: "Workspace" }).click();
   await expect(viewer.getByRole("complementary", { name: "Shapes panel" }).getByRole("button", { name: "Badge" })).toBeVisible();
 });
+
+test("import an SVG into a design", async ({ page }) => {
+  await newSocialPost(page);
+  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/berry.svg");
+  await expect(layers(page).getByRole("button", { name: "Imported 1", exact: true })).toBeVisible();
+  await expect(layers(page).getByRole("button", { name: "Imported 2", exact: true })).toBeVisible();
+  await page.keyboard.press("Control+z");
+  await expect(layers(page).getByRole("button", { name: /Imported/ })).toHaveCount(0);
+});
+
+test("hostile SVG imports only its shape", async ({ page }) => {
+  await newSocialPost(page);
+  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/hostile.svg");
+  await expect(layers(page).getByRole("button", { name: "Imported 1", exact: true })).toBeVisible();
+  await expect(layers(page).getByRole("button", { name: "Imported 2", exact: true })).toHaveCount(0);
+  expect(await page.evaluate(() => (window as any).__pwned)).toBeUndefined();
+});
+
+test("too-large file is refused", async ({ page }) => {
+  await newSocialPost(page);
+  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  const body = '<rect width="1" height="1"/>'.repeat(Math.ceil(1_100_000 / 27));
+  await page.getByLabel("Import SVG file").setInputFiles({
+    name: "big.svg", mimeType: "image/svg+xml",
+    buffer: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${body}</svg>`),
+  });
+  await expect(page.getByRole("alert").filter({ hasText: "That file is too large (1 MB max)." })).toBeVisible();
+  await expect(layers(page).getByRole("button", { name: /Imported/ })).toHaveCount(0);
+});

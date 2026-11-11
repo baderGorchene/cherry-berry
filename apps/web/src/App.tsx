@@ -4,6 +4,7 @@ import { getSession, type User, type Workspace } from "./api";
 import Editor from "./routes/Editor";
 import Home from "./routes/Home";
 import NewDesign from "./routes/NewDesign";
+import Shapes from "./routes/Shapes";
 import SignIn from "./routes/SignIn";
 import Workspaces from "./routes/Workspaces";
 
@@ -36,6 +37,7 @@ export default function App() {
         <Route path="/sign-in" element={user ? <Navigate to="/" replace /> : <SignIn />} />
         <Route path="/workspaces" element={<RequireUser><Workspaces /></RequireUser>} />
         <Route path="/" element={<RequireUser><Home /></RequireUser>} />
+        <Route path="/shapes" element={<RequireUser><Shapes /></RequireUser>} />
         <Route path="/new" element={<RequireUser><NewDesign /></RequireUser>} />
         <Route path="/d/:id" element={<RequireUser><Editor /></RequireUser>} />
         <Route path="*" element={<Navigate to="/" replace />} />

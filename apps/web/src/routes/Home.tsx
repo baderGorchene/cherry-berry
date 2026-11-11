@@ -112,6 +112,7 @@ export default function Home() {
           <span>{ROLE[current.role ?? "viewer"]} · ID </span>
           <code data-testid="workspace-public-id" style={{ color: "var(--ink)", userSelect: "all" }}>{current.publicId}</code>
         </div>
+        <Link to="/shapes" style={{ padding: "6px 12px", fontWeight: 600 }}>Shapes</Link>
         <span style={{ flex: 1 }} />
         <button className="btn" onClick={async () => { await signOut().catch(() => {}); setUser(null); }}>Sign out</button>
       </nav>
