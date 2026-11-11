@@ -18,6 +18,7 @@ export class Autosave {
   private timer: ReturnType<typeof setTimeout> | undefined;
   private failures = 0;
   private disposed = false;
+  private closed?: () => void;
 
   constructor(private o: Opts) {}
 
@@ -34,6 +35,18 @@ export class Autosave {
     clearTimeout(this.timer);
     await this.current;
     if (this.dirty && !this.disposed) await this.run();
+  }
+
+  /**
+   * For unmount: saves pending edits, keeps retrying network failures in the background, and
+   * resolves (disposed) once everything is saved or the server rejects the save.
+   */
+  close(): Promise<void> {
+    return new Promise((resolve) => {
+      this.closed = () => { this.dispose(); resolve(); };
+      if (this.pending) void this.flush();
+      else this.closed();
+    });
   }
 
   dispose(): void {
@@ -70,13 +83,14 @@ export class Autosave {
       if (this.disposed) return;
       this.o.onRemote(merged);
       if (this.dirty) { this.emit("unsaved"); this.schedule(this.o.debounceMs ?? 800); }
-      else this.emit("saved");
+      else { this.emit("saved"); this.closed?.(); }
     } catch (e) {
       this.dirty = true;
       this.current = null;
       if (this.disposed) return;
       if (e instanceof ApiError && e.status < 500) {
         this.emit("error", errorMessage(e)); // a later markDirty tries again
+        this.closed?.();
         return;
       }
       const delays = this.o.retryMs ?? [1000, 3000, 10000];

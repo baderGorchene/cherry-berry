@@ -41,8 +41,8 @@ export function useDesign(id: string): DesignState {
         window.addEventListener("beforeunload", onUnload);
         cleanup = () => {
           ydoc.off("update", onUpdate);
-          window.removeEventListener("beforeunload", onUnload);
-          void autosave.flush().finally(() => autosave.dispose());
+          // Pending edits keep saving (and guarding unload) after in-app navigation until they land or are rejected.
+          void autosave.close().then(() => window.removeEventListener("beforeunload", onUnload));
         };
       },
       (e) => !cancelled && setS({

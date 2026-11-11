@@ -109,6 +109,36 @@ describe("Autosave", () => {
     expect(a.pending).toBe(false);
   });
 
+  it("close keeps retrying a failing save and resolves once it is sent", async () => {
+    const { a, saveFn } = setup(async () => merged);
+    saveFn.mockRejectedValueOnce(new TypeError("fetch failed")).mockRejectedValueOnce(new TypeError("fetch failed"));
+    a.markDirty();
+    let closed = false;
+    void a.close().then(() => { closed = true; }); // unmount before the debounced save
+    await vi.advanceTimersByTimeAsync(0);
+    expect(saveFn).toHaveBeenCalledTimes(1);
+    expect(closed).toBe(false);
+    expect(a.pending).toBe(true); // the unload guard stays up
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(saveFn).toHaveBeenCalledTimes(2);
+    expect(closed).toBe(false);
+    await vi.advanceTimersByTimeAsync(3000); // network back
+    expect(saveFn).toHaveBeenCalledTimes(3);
+    expect(closed).toBe(true);
+    expect(a.pending).toBe(false);
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(saveFn).toHaveBeenCalledTimes(3);
+  });
+
+  it("close gives up on a rejected save", async () => {
+    const { a, saveFn } = setup(async () => merged);
+    saveFn.mockRejectedValue(new ApiError(400, "invalid_document"));
+    a.markDirty();
+    await a.close();
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(saveFn).toHaveBeenCalledTimes(1);
+  });
+
   it("dispose stops retries", async () => {
     const { a, saveFn } = setup(async () => merged);
     saveFn.mockRejectedValue(new TypeError("fetch failed"));
