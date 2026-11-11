@@ -371,12 +371,15 @@ test("import an SVG into a design", async ({ page }) => {
 });
 
 test("hostile SVG imports only its shape", async ({ page }) => {
+  const requests: string[] = [];
+  page.on("request", (r) => requests.push(r.url()));
   await newSocialPost(page);
   await page.getByRole("button", { name: "Shapes", exact: true }).click();
   await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/hostile.svg");
   await expect(layers(page).getByRole("button", { name: "Imported 1", exact: true })).toBeVisible();
   await expect(layers(page).getByRole("button", { name: "Imported 2", exact: true })).toHaveCount(0);
   expect(await page.evaluate(() => (window as any).__pwned)).toBeUndefined();
+  expect(requests.filter((u) => u.includes("example.invalid"))).toEqual([]);
 });
 
 test("too-large file is refused", async ({ page }) => {

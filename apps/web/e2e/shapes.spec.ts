@@ -9,6 +9,12 @@ test("shapes page imports and saves", async ({ browser }) => {
   await expect(a).toHaveURL(/\/shapes$/);
 
   await a.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/berry.svg");
+  const inside = await a.locator("aside[aria-label='New shape'] svg").evaluate((svg) => {
+    const [x, y, w, h] = svg.getAttribute("viewBox")!.split(" ").map(Number) as [number, number, number, number];
+    const b = (svg.querySelector("path") as SVGPathElement).getBBox(), t = 1;
+    return b.x >= x - t && b.y >= y - t && b.x + b.width <= x + w + t && b.y + b.height <= y + h + t;
+  });
+  expect(inside).toBe(true);
   await a.getByLabel("Name").fill("Berry");
   await a.getByLabel("Tags").fill("fruit");
   await a.getByLabel("Share with").selectOption({ label: "Everyone (public)" });

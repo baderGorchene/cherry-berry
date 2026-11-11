@@ -15,15 +15,28 @@ const MAX_LENGTH = 1_000_000;
 const MAX_PATHS = 2000;
 const DEFAULT_FILL: Paint = { type: "solid", color: "#22142A", opacity: 1 };
 
-/** Parses to a detached DOM (nothing runs), then drops everything that can execute or fetch. */
+const BANNED = new Set(["script", "foreignobject", "image", "use", "style"]);
+const SHAPES = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"]);
+
+/** Parses to a detached DOM (nothing runs), then drops everything that can execute or fetch. Names are matched case-insensitively because Paper lowercases them. */
 function sanitize(svg: string): Element {
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
   const root = doc.documentElement;
   if (!root || root.localName !== "svg" || doc.querySelector("parsererror")) throw new InvalidSvg("no_shapes");
-  root.querySelectorAll("script, foreignObject, image, use").forEach((e) => e.remove());
-  for (const e of [root, ...root.querySelectorAll("*")]) {
-    for (const a of [...e.attributes]) if (/^on/i.test(a.name)) e.removeAttribute(a.name);
-  }
+  let shapes = 0;
+  const walk = (e: Element) => {
+    for (const a of [...e.attributes]) {
+      const href = /^(xlink:)?href$/i.test(a.name) && !a.value.trim().startsWith("#");
+      if (/^on/i.test(a.name) || href || /url\(\s*(?!#)/i.test(a.value)) e.removeAttribute(a.name);
+    }
+    for (const c of [...e.children]) {
+      const n = c.localName.toLowerCase();
+      if (BANNED.has(n)) { c.remove(); continue; }
+      if (SHAPES.has(n) && ++shapes > MAX_PATHS) throw new InvalidSvg("too_complex");
+      walk(c);
+    }
+  };
+  walk(root);
   return root;
 }
 

@@ -1,5 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" onload="window.__pwned=1" width="100" height="100">
   <script>window.__pwned=1</script>
+  <style>rect { fill: url(http://example.invalid/s) }</style>
   <image href="http://example.invalid/x.png" width="50" height="50"/>
-  <rect x="10" y="10" width="80" height="60" fill="#8E1EA2" onclick="window.__pwned=1"/>
+  <IMAGE href="http://example.invalid/a.png" width="50" height="50"/>
+  <defs><rect id="r" width="5" height="5"/></defs>
+  <Use href="#r"/>
+  <rect x="10" y="10" width="80" height="60" fill="url(http://example.invalid/f)" onclick="window.__pwned=1"/>
 </svg>

@@ -1,14 +1,13 @@
 import { useState } from "react";
 import type { CherryNode } from "@cherry/doc";
 import { nodeToPath } from "@cherry/vector";
-import { errorMessage, saveShape, type Visibility } from "../api";
+import { errorMessage, saveShape } from "../api";
+import { ShapeFields, shapePayload, useShapeForm } from "./shapeForm";
 
 function Dialog({ node, workspaceId, viewer, onClose, onSaved }: {
   node: CherryNode; workspaceId: string; viewer: boolean; onClose(): void; onSaved(): void;
 }) {
-  const [name, setName] = useState(node.name);
-  const [tags, setTags] = useState("");
-  const [visibility, setVisibility] = useState<Visibility>("private");
+  const [form, setForm] = useShapeForm(node.name);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -19,11 +18,7 @@ function Dialog({ node, workspaceId, viewer, onClose, onSaved }: {
     const stroke = node.kind === "rect" || node.kind === "ellipse" || node.kind === "path" ? node.stroke : undefined;
     setBusy(true);
     try {
-      await saveShape({
-        name: name.trim(), tags: tags.split(",").map((t) => t.trim()).filter(Boolean), visibility,
-        ...(visibility === "workspace" ? { workspaceId } : {}),
-        d: outline.d, fillRule: outline.fillRule, ...(fill ? { fill } : {}), ...(stroke ? { stroke } : {}),
-      });
+      await saveShape(shapePayload(form, workspaceId, { d: outline.d, fillRule: outline.fillRule, fill, stroke }));
       onSaved();
     } catch (e) {
       setError(errorMessage(e));
@@ -36,22 +31,10 @@ function Dialog({ node, workspaceId, viewer, onClose, onSaved }: {
       <form role="dialog" aria-modal="true" aria-label="Save shape" className="ed-dialog"
         onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <h2 className="ed-ph">Save shape</h2>
-        <label className="ed-f"><b>Name</b>
-          <input autoFocus required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="ed-f"><b>Tags</b>
-          <input value={tags} placeholder="comma, separated" onChange={(e) => setTags(e.target.value)} />
-        </label>
-        <label className="ed-f"><b>Share with</b>
-          <select value={visibility} onChange={(e) => setVisibility(e.target.value as Visibility)}>
-            <option value="private">Only me</option>
-            <option value="workspace" disabled={viewer}>This workspace</option>
-            <option value="public">Everyone (public)</option>
-          </select>
-        </label>
+        <ShapeFields value={form} onChange={setForm} viewer={viewer} label="ed-f" autoFocus />
         {error && <p role="alert" className="ed-err">{error}</p>}
         <div className="ed-actions">
-          <button type="submit" className="ed-mini" disabled={busy || !name.trim()}>Save</button>
+          <button type="submit" className="ed-mini" disabled={busy || !form.name.trim()}>Save</button>
           <button type="button" className="ed-mini" onClick={onClose}>Cancel</button>
         </div>
       </form>

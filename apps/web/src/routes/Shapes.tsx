@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { parsePath, pathBounds, transformPath } from "@cherry/vector";
 import { Link, Navigate } from "react-router";
 import {
-  ApiError, deleteShape, errorMessage, listShapes, myWorkspaces, saveShape, signOut,
-  type Shape, type Visibility, type Workspace,
+  ApiError, deleteShape, errorMessage, myWorkspaces, saveShape, signOut, type Shape, type Workspace,
 } from "../api";
 import { currentWorkspace, useSession } from "../App";
 import { readSvg, ShapeThumb, TABS } from "../editor/ShapesPanel";
+import { ShapeFields, shapePayload, useShapeForm, useShapeList } from "../editor/shapeForm";
 import { SHAPES } from "../editor/Toolbar";
 
 const MAX_D = 100_000;
@@ -17,14 +18,9 @@ export default function Shapes() {
   const [list, setList] = useState<Workspace[] | null>(null);
   const [tab, setTab] = useState<(typeof TABS)[number][0]>("basic");
   const [text, setText] = useState("");
-  const [q, setQ] = useState("");
-  const [tries, setTries] = useState(0);
-  const [res, setRes] = useState<{ shapes: Shape[] } | { error: string } | null>(null);
   const [preview, setPreview] = useState<Shape | null>(null);
   const [fileError, setFileError] = useState("");
-  const [name, setName] = useState("");
-  const [tags, setTags] = useState("");
-  const [visibility, setVisibility] = useState<Visibility>("private");
+  const [form, setForm] = useShapeForm();
   const [formError, setFormError] = useState("");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -35,15 +31,7 @@ export default function Shapes() {
     });
   }, []);
   const ws = list && currentWorkspace.pick(list);
-
-  useEffect(() => { const t = setTimeout(() => setQ(text.trim()), 250); return () => clearTimeout(t); }, [text]);
-  useEffect(() => {
-    if (tab === "basic" || !ws) return;
-    let stale = false;
-    setRes(null);
-    listShapes(tab, { workspaceId: ws.id, q }).then((r) => !stale && setRes(r), (e) => !stale && setRes({ error: errorMessage(e) }));
-    return () => { stale = true; };
-  }, [tab, q, tries, ws?.id]);
+  const { res, setRes, retry } = useShapeList(tab === "basic" ? null : tab, ws?.id, text);
 
   if (list === null) return <p className="muted" style={{ padding: 24 }}>Loading…</p>;
   if (!ws) return <Navigate to="/workspaces" replace />;
@@ -55,12 +43,13 @@ export default function Shapes() {
     if ("error" in r) { setPreview(null); return setFileError(r.error); }
     setFileError("");
     const filled = r.paths.find((p) => p.fill);
-    // Dimensions are measured by the server on save; the preview only needs a padded box.
+    const joined = r.paths.map((p) => p.d).join(" ");
+    const b = pathBounds(parsePath(joined));
     setPreview({
-      d: r.paths.map((p) => p.d).join(" "), fillRule: r.paths[0]!.fillRule, fill: filled?.fill ?? null,
-      stroke: filled ? null : (r.paths.find((p) => p.stroke)?.stroke ?? null), width: 100, height: 100,
+      d: transformPath(joined, [1, 0, 0, 1, -b.x, -b.y]), fillRule: r.paths[0]!.fillRule, fill: filled?.fill ?? null,
+      stroke: filled ? null : (r.paths.find((p) => p.stroke)?.stroke ?? null), width: b.width, height: b.height,
     } as Shape);
-    setName((n) => n || file.name.replace(/\.svg$/i, ""));
+    setForm((f) => ({ ...f, name: f.name || file.name.replace(/\.svg$/i, "") }));
   };
 
   const save = async () => {
@@ -68,13 +57,8 @@ export default function Shapes() {
     if (preview.d.length > MAX_D) return setFormError("That SVG is too detailed to save as one shape.");
     setBusy(true); setFormError("");
     try {
-      await saveShape({
-        name: name.trim(), tags: tags.split(",").map((t) => t.trim()).filter(Boolean), visibility,
-        ...(visibility === "workspace" ? { workspaceId: ws.id } : {}),
-        d: preview.d, fillRule: preview.fillRule,
-        ...(preview.fill ? { fill: preview.fill } : {}), ...(preview.stroke ? { stroke: preview.stroke } : {}),
-      });
-      setSaved(true); setPreview(null); setName(""); setTags(""); setTab("mine"); setTries((n) => n + 1);
+      await saveShape(shapePayload(form, ws.id, preview));
+      setSaved(true); setPreview(null); setForm({ name: "", tags: "", visibility: form.visibility }); setTab("mine"); retry();
     } catch (e) {
       setFormError(errorMessage(e));
     }
@@ -85,7 +69,7 @@ export default function Shapes() {
     if (!confirm(`Delete "${s.name}"? This can't be undone.`)) return;
     try {
       await deleteShape(s.id);
-      setTries((n) => n + 1);
+      retry();
     } catch (e) {
       setRes({ error: errorMessage(e) });
     }
@@ -124,7 +108,7 @@ export default function Shapes() {
             <>
               <input className="inp" type="search" aria-label="Search shapes" placeholder="Search shapes" value={text} onChange={(e) => setText(e.target.value)} />
               {!res ? <p className="muted">Loading…</p> : "error" in res ? (
-                <div><p role="alert" className="field-error">{res.error}</p><button className="btn" onClick={() => setTries(tries + 1)}>Retry</button></div>
+                <div><p role="alert" className="field-error">{res.error}</p><button className="btn" onClick={retry}>Retry</button></div>
               ) : !res.shapes.length ? <p className="muted">No shapes yet</p> : (
                 <ul style={grid}>
                   {res.shapes.map((s) => (
@@ -155,17 +139,9 @@ export default function Shapes() {
           </section>
           {preview && (
             <form onSubmit={(e) => { e.preventDefault(); void save(); }} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              <label><b>Name</b><input className="inp" required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} /></label>
-              <label><b>Tags</b><input className="inp" value={tags} placeholder="comma, separated" onChange={(e) => setTags(e.target.value)} /></label>
-              <label><b>Share with</b>
-                <select className="inp" value={visibility} onChange={(e) => setVisibility(e.target.value as Visibility)}>
-                  <option value="private">Only me</option>
-                  <option value="workspace" disabled={ws.role === "viewer"}>This workspace</option>
-                  <option value="public">Everyone (public)</option>
-                </select>
-              </label>
+              <ShapeFields value={form} onChange={setForm} viewer={ws.role === "viewer"} input="inp" />
               {formError && <p role="alert" className="field-error">{formError}</p>}
-              <button type="submit" className="btn btn-p" disabled={busy || !name.trim()}>Save shape</button>
+              <button type="submit" className="btn btn-p" disabled={busy || !form.name.trim()}>Save shape</button>
             </form>
           )}
           {saved && <p role="status" className="muted">Saved to your shapes</p>}

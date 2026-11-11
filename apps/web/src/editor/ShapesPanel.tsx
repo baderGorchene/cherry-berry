@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import * as Y from "yjs";
 import { addNode, type CherryNode, type Page } from "@cherry/doc";
 import { InvalidSvg, parsePath, pathBounds, scalePath, svgToPaths, transformPath } from "@cherry/vector";
-import { errorMessage, listShapes, type Shape } from "../api";
+import type { Shape } from "../api";
+import { useShapeList } from "./shapeForm";
 import type { Tool } from "./Canvas";
 import { SHAPES } from "./Toolbar";
 
@@ -81,19 +82,7 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
   const fileRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<TabId>("basic");
   const [text, setText] = useState("");
-  const [q, setQ] = useState("");
-  const [tries, setTries] = useState(0);
-  const [res, setRes] = useState<{ shapes: Shape[] } | { error: string } | null>(null);
-
-  useEffect(() => { const t = setTimeout(() => setQ(text.trim()), 250); return () => clearTimeout(t); }, [text]);
-  useEffect(() => {
-    if (tab === "basic") return;
-    let stale = false;
-    setRes(null);
-    listShapes(tab, { workspaceId, q }).then((r) => !stale && setRes(r), (e) => !stale && setRes({ error: errorMessage(e) }));
-    return () => { stale = true; };
-  }, [tab, q, tries, workspaceId]);
-
+  const { res, retry } = useShapeList(tab === "basic" ? null : tab, workspaceId, text);
   const [importError, setImportError] = useState("");
   const onFile = async (file: File | undefined) => {
     if (!file) return;
@@ -136,7 +125,7 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
           <input type="search" aria-label="Search shapes" placeholder="Search shapes" value={text} onChange={(e) => setText(e.target.value)} />
           {!res ? <p className="muted" style={{ fontSize: 13 }}>Loading…</p>
             : "error" in res ? (
-              <div><p role="alert" className="ed-err">{res.error}</p><button className="ed-mini" onClick={() => setTries(tries + 1)}>Retry</button></div>
+              <div><p role="alert" className="ed-err">{res.error}</p><button className="ed-mini" onClick={retry}>Retry</button></div>
             ) : !res.shapes.length ? <p className="muted" style={{ fontSize: 13 }}>No shapes yet</p>
               : (
                 <div className="ed-shapegrid">
