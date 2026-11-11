@@ -8,10 +8,33 @@ export const REMOTE = "remote";
 const META_KEYS = ["format", "version", "id", "title", "createdAt"] as const;
 const PAGE_KEYS = ["id", "name", "width", "height", "unit", "colorMode", "bleed", "background"] as const;
 
+type YMap = Y.Map<unknown>;
+
+/**
+ * Ordered collections (pages, a page's nodes, a group's children) are Y.Maps of id → item Y.Map,
+ * each item carrying a numeric `order`. Moving an item only sets its `order`, so concurrent moves
+ * and edits merge cleanly. Readers sort by (order, id).
+ */
+export function ordered(list: Y.Map<YMap>): YMap[] {
+  return [...list.values()].sort((a, b) =>
+    (a.get("order") as number) - (b.get("order") as number) || ((a.get("id") as string) < (b.get("id") as string) ? -1 : 1));
+}
+
+/** Builds an ordered collection from items already in order. */
+export function toYList<T extends { id: string }>(items: T[], toY: (item: T) => YMap): Y.Map<YMap> {
+  const list = new Y.Map<YMap>();
+  items.forEach((item, i) => {
+    const m = toY(item);
+    m.set("order", i);
+    list.set(item.id, m);
+  });
+  return list;
+}
+
 export function toYNode(node: CherryNode): Y.Map<unknown> {
   const m = new Y.Map<unknown>();
   for (const [k, v] of Object.entries(node)) {
-    if (k === "children") m.set(k, Y.Array.from((v as CherryNode[]).map(toYNode)));
+    if (k === "children") m.set(k, toYList(v as CherryNode[], toYNode));
     else if (v !== undefined) m.set(k, v);
   }
   return m;
@@ -20,7 +43,8 @@ export function toYNode(node: CherryNode): Y.Map<unknown> {
 export function fromYNode(m: Y.Map<unknown>): unknown {
   const out: Record<string, unknown> = {};
   m.forEach((v, k) => {
-    out[k] = v instanceof Y.Array ? v.map((c) => fromYNode(c as Y.Map<unknown>)) : v;
+    if (k === "order") return;
+    out[k] = v instanceof Y.Map ? ordered(v as Y.Map<YMap>).map(fromYNode) : v;
   });
   return out;
 }
@@ -29,12 +53,14 @@ export function docToY(doc: CherryDocument, ydoc: Y.Doc = new Y.Doc()): Y.Doc {
   ydoc.transact(() => {
     const meta = ydoc.getMap("meta");
     for (const k of META_KEYS) meta.set(k, doc[k]);
-    ydoc.getArray("pages").push(doc.pages.map((p) => {
+    const pages = ydoc.getMap<YMap>("pages");
+    doc.pages.forEach((p, i) => {
       const pm = new Y.Map<unknown>();
       for (const k of PAGE_KEYS) pm.set(k, p[k]);
-      pm.set("nodes", Y.Array.from(p.nodes.map(toYNode)));
-      return pm;
-    }));
+      pm.set("nodes", toYList(p.nodes, toYNode));
+      pm.set("order", i);
+      pages.set(p.id, pm);
+    });
   }, REMOTE);
   return ydoc;
 }
@@ -43,10 +69,9 @@ export function yToDoc(ydoc: Y.Doc): ParseResult {
   try {
     const raw = {
       ...ydoc.getMap("meta").toJSON(),
-      pages: ydoc.getArray("pages").map((p) => {
-        const pm = p as Y.Map<unknown>;
-        const { nodes, ...rest } = Object.fromEntries(pm.entries());
-        return { ...rest, nodes: (nodes as Y.Array<Y.Map<unknown>> | undefined)?.map(fromYNode) };
+      pages: ordered(ydoc.getMap<YMap>("pages")).map((pm) => {
+        const { nodes, order: _, ...rest } = Object.fromEntries(pm.entries());
+        return { ...rest, nodes: nodes instanceof Y.Map ? ordered(nodes as Y.Map<YMap>).map(fromYNode) : undefined };
       }),
     };
     const r = CherryDocument.safeParse(raw);

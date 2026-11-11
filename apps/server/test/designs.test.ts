@@ -91,7 +91,7 @@ describe("designs", () => {
     res = await call("PUT", url, owner.cookie, { state: Buffer.from([1, 2, 3, 250, 9, 8, 7, 200]).toString("base64") });
     expect([res.statusCode, res.json()]).toEqual([400, { error: "invalid_document" }]);
     const d = toYDoc(before);
-    d.transact(() => d.getArray("pages").delete(0, 1));
+    d.transact(() => d.getMap("pages").clear());
     res = await call("PUT", url, owner.cookie, { state: b64(Y.encodeStateAsUpdate(d)) });
     expect([res.statusCode, res.json()]).toEqual([400, { error: "invalid_document" }]);
     const after = (await call("GET", `/api/designs/${design.id}`, owner.cookie)).json().state as string;

@@ -33,7 +33,7 @@ describe("yjs binding", () => {
   });
   it("reports invalid content", () => {
     const y = docToY(doc);
-    y.getArray("pages").delete(0, 1);
+    y.getMap("pages").clear();
     expect(yToDoc(y)).toMatchObject({ ok: false, error: "invalid_document" });
   });
   it("empty Y.Doc is invalid, not a throw", () => {
