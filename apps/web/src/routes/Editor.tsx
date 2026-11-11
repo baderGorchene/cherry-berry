@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import * as Y from "yjs";
-import type { AnchorRef } from "@cherry/vector";
+import type { AnchorRef, BoolOp } from "@cherry/vector";
 import {
   duplicateNodes, fromPx, removeNodes, reorderNode, setTitle, updateNode, yToDoc, type CherryDocument, type CherryNode,
 } from "@cherry/doc";
@@ -11,7 +11,7 @@ import { NUDGE, clampZoom, fitZoom } from "../editor/geometry";
 import Layers from "../editor/Layers";
 import Pages from "../editor/Pages";
 import type { PathKeys } from "../editor/PathEditor";
-import { editModel } from "../editor/pathEdit";
+import { combinable, combine, convertToPath, editModel } from "../editor/pathEdit";
 import PathPanel from "../editor/PathPanel";
 import Properties from "../editor/Properties";
 import Toolbar from "../editor/Toolbar";
@@ -22,6 +22,8 @@ type Ready = Extract<DesignState, { state: "ready" }>;
 const TOOL_KEYS: Record<string, Tool> = { v: "select", t: "text", r: "rect", o: "ellipse", l: "line", p: "pen" };
 // In path edit mode only the vector tools are armed by key; Shift+C (convert) is checked separately.
 const EDIT_KEYS: Record<string, Tool> = { a: "direct", p: "pen", "+": "add-anchor", "=": "add-anchor" };
+
+const BOOL_KEYS: Record<string, BoolOp> = { u: "union", s: "subtract", i: "intersect", e: "exclude" };
 
 const STATUS: Record<Ready["status"], string> = {
   saved: "Saved", saving: "Saving…", unsaved: "Unsaved changes", offline: "Offline — retrying", error: "Not saved",
@@ -68,6 +70,8 @@ function Shell({ d }: { d: Ready }) {
     if (page.id !== sel.pageId || selected.length !== sel.selected.length) setSel({ pageId: page.id, selected });
   }, [doc]);
 
+  const [message, setMessage] = useState("");
+  useEffect(() => setMessage(""), [sel.selected.join()]);
   const [tool, setTool] = useState<Tool>("select");
   const [vp, setVp] = useState({ width: 0, height: 0 });
   const [zoomSet, setZoomSet] = useState<number | null>(null); // null = fit to viewport
@@ -104,6 +108,7 @@ function Shell({ d }: { d: Ready }) {
     else if (mod && key === "-") { stop(); zoomTo(zoom / 1.2); }
     else if (mod && key === "0") { stop(); zoomTo(null); }
     else if (mod && key === "a") { stop(); select(page.nodes.filter((n) => !n.hidden && !n.locked).map((n) => n.id)); }
+    else if (mod && e.altKey && key in BOOL_KEYS) { stop(); if (!readOnly && !editingPath) runCombine(BOOL_KEYS[key]!); }
     else if (key === "escape") { if (editingPath) exitEdit(); else { select([]); setTool("select"); } }
     else if (readOnly) return;
     else if (key === "enter") {
@@ -148,6 +153,11 @@ function Shell({ d }: { d: Ready }) {
   /** One committed action = one undo step, even within captureTimeout of the last. */
   const act = (fn: () => void) => { undo.stopCapturing(); fn(); undo.stopCapturing(); };
   const selectedNodes = sel.selected.map((s) => findNode(page.nodes, s)).filter((n): n is CherryNode => !!n);
+  const operands = page.nodes.filter((n) => sel.selected.includes(n.id) && combinable(n));
+  const runCombine = (op: BoolOp) => {
+    if (operands.length >= 2) setMessage(combine(ydoc, page.id, op, operands, act, select) ?? "");
+  };
+  const runConvert = (n: CherryNode) => setMessage(convertToPath(ydoc, page.id, n, act) ?? "");
   const status = d.status === "error" ? `Not saved: ${d.statusMessage ?? ""}` : STATUS[d.status];
 
   return (
@@ -193,7 +203,8 @@ function Shell({ d }: { d: Ready }) {
           onAnchors={setAnchors} onEditPath={enterEdit} />
         {editNode
           ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
-          : <Properties ydoc={ydoc} pageId={page.id} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act} />}
+          : <Properties ydoc={ydoc} pageId={page.id} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act}
+            combinable={operands.length >= 2} message={message} onCombine={runCombine} onConvert={runConvert} />}
       </div>
     </div>
   );

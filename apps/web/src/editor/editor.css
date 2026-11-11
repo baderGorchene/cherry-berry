@@ -92,3 +92,11 @@
   position: absolute; margin: 0; padding: 0; border: 0; outline: 1px dashed var(--berry); background: transparent;
   resize: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: break-word;
 }
+
+.ed-wide { grid-column: 1 / -1; }
+.ed-ops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ed-op {
+  display: flex; align-items: center; gap: 6px; min-height: 34px; padding: 0 8px; font: 500 13px Inter, sans-serif;
+  color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+}
+.ed-op:hover { color: var(--berry); border-color: var(--blush); }

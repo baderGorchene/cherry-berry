@@ -250,3 +250,51 @@ test("a save rejected as invalid offers a reload to the latest version", async (
   await expect(row(other, "Page 1")).toHaveCount(0);
   await expect(status(other)).toHaveText("Saved");
 });
+
+/** Places a rectangle `dx` px right of the canvas center and waits out Konva's double-click window. */
+async function placeAt(page: Page, dx: number) {
+  await page.getByRole("button", { name: "Rectangle (R)" }).click();
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2);
+  await page.waitForTimeout(450);
+}
+
+test("a selected rectangle shows a usable Corner radius field", async ({ page }) => {
+  await newSocialPost(page);
+  await place(page, "Rectangle (R)");
+  await expect(page.getByLabel("Corner radius")).toBeVisible();
+});
+
+test("union combines two shapes", async ({ page }) => {
+  await newSocialPost(page);
+  await placeAt(page, -20);
+  await placeAt(page, 20);
+  await page.keyboard.press("Control+A");
+  await page.getByRole("button", { name: "Union" }).click();
+  await expect(layers(page).getByRole("button", { name: "Union", exact: true })).toHaveCount(1);
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Control+Z");
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(2);
+});
+
+test("disjoint intersect explains itself", async ({ page }) => {
+  await newSocialPost(page);
+  await placeAt(page, -300);
+  await placeAt(page, 300);
+  await page.keyboard.press("Control+A");
+  await page.getByRole("button", { name: "Intersect" }).click();
+  await expect(page.getByText("These shapes don't overlap.")).toBeVisible();
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(2);
+});
+
+test("convert to path keeps the layer", async ({ page }) => {
+  await newSocialPost(page);
+  await place(page, "Rectangle (R)");
+  await page.getByRole("button", { name: "Convert to path" }).click();
+  await expect(page.getByLabel("Corner radius")).toHaveCount(0);
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(1);
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  await page.waitForTimeout(450);
+  await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.getByText("Editing path", { exact: true })).toBeVisible();
+});

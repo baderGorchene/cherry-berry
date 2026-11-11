@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import * as Y from "yjs";
 import { LOCAL, updateNode, type CherryNode, type Page } from "@cherry/doc";
-import { scalePath } from "@cherry/vector";
+import { scalePath, type BoolOp } from "@cherry/vector";
 import { withTextHeight } from "./Canvas";
 
 const FONTS = ["Inter", "Space Grotesk", "Georgia", "Arial", "Times New Roman", "Courier New"];
@@ -12,8 +12,8 @@ type Paint = { type: "solid"; color: string; opacity: number };
 type Patch = Record<string, unknown>;
 
 /** Text field that shows the live value and commits once on Enter or blur. */
-function Field<T extends number | string>({ label, value, unit, disabled, parse, format, onCommit }: {
-  label: string; value: T; unit?: string; disabled: boolean;
+function Field<T extends number | string>({ label, value, unit, disabled, wide, parse, format, onCommit }: {
+  label: string; value: T; unit?: string; disabled: boolean; wide?: boolean;
   parse(s: string): T | undefined; format(v: T): string; onCommit(v: T): void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
@@ -24,7 +24,7 @@ function Field<T extends number | string>({ label, value, unit, disabled, parse,
     if (v !== undefined && v !== value) onCommit(v);
   };
   return (
-    <label className="ed-f">
+    <label className={wide ? "ed-f ed-wide" : "ed-f"}>
       <b>{label}</b>
       <input aria-label={label} value={draft ?? format(value)} disabled={disabled}
         onChange={(e) => setDraft(e.target.value)} onBlur={commit}
@@ -37,7 +37,7 @@ function Field<T extends number | string>({ label, value, unit, disabled, parse,
 const parseNum = (s: string) => (s === "" || !Number.isFinite(Number(s)) ? undefined : Number(s));
 const parseHex = (s: string) => (s === "" ? "" : HEX.test(s) ? s.toUpperCase() : undefined);
 
-export function Num(p: { label: string; value: number; unit?: string; disabled: boolean; onCommit(v: number): void }) {
+export function Num(p: { label: string; value: number; unit?: string; disabled: boolean; wide?: boolean; onCommit(v: number): void }) {
   return <Field {...p} parse={parseNum} format={round2} />;
 }
 
@@ -59,8 +59,16 @@ function ColorField({ label, color, disabled, onCommit }: {
   );
 }
 
-export default function Properties({ ydoc, pageId, unit, nodes, readOnly, act }: {
+const OPS: { op: BoolOp; label: string; icon: ReactNode }[] = [
+  { op: "union", label: "Union", icon: <><circle cx="10" cy="10" r="8" fill="#8E1EA2" /><circle cx="18" cy="10" r="8" fill="#8E1EA2" /></> },
+  { op: "subtract", label: "Subtract", icon: <><mask id="bo-sub"><rect width="28" height="20" fill="#fff" /><circle cx="18" cy="10" r="8" fill="#000" /></mask><circle cx="10" cy="10" r="8" fill="#8E1EA2" mask="url(#bo-sub)" /><circle cx="18" cy="10" r="8" fill="none" stroke="#C654C3" strokeDasharray="2 2" /></> },
+  { op: "intersect", label: "Intersect", icon: <><clipPath id="bo-int"><circle cx="18" cy="10" r="8" /></clipPath><circle cx="10" cy="10" r="8" fill="none" stroke="#C654C3" strokeDasharray="2 2" /><circle cx="18" cy="10" r="8" fill="none" stroke="#C654C3" strokeDasharray="2 2" /><circle cx="10" cy="10" r="8" fill="#8E1EA2" clipPath="url(#bo-int)" /></> },
+  { op: "exclude", label: "Exclude", icon: <path fill="#8E1EA2" fillRule="evenodd" d="M10 2a8 8 0 1 0 0 16a8 8 0 1 0 0-16zM18 2a8 8 0 1 0 0 16a8 8 0 1 0 0-16z" /> },
+];
+
+export default function Properties({ ydoc, pageId, unit, nodes, readOnly, act, combinable, message, onCombine, onConvert }: {
   ydoc: Y.Doc; pageId: string; unit: Page["unit"]; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
+  combinable: boolean; message: string; onCombine(op: BoolOp): void; onConvert(n: CherryNode): void;
 }) {
   if (nodes.length === 0) return (
     <aside aria-label="Properties" className="ed-props">
@@ -85,6 +93,19 @@ export default function Properties({ ydoc, pageId, unit, nodes, readOnly, act }:
             <Num label="Y" unit={unit} value={minY} disabled={readOnly} onCommit={(v) => move(0, v - minY)} />
           </div>
         </section>
+        {combinable && !readOnly && (
+          <section className="ed-sec">
+            <h2 className="ed-ph">Combine</h2>
+            <div className="ed-ops">
+              {OPS.map(({ op, label, icon }) => (
+                <button key={op} className="ed-op" title={`${label} (Ctrl+Alt+${label[0]})`} onClick={() => onCombine(op)}>
+                  <svg width="28" height="20" viewBox="0 0 28 20" aria-hidden="true">{icon}</svg>{label}
+                </button>
+              ))}
+            </div>
+            {message && <p role="status" className="muted" style={{ fontSize: 13 }}>{message}</p>}
+          </section>
+        )}
       </aside>
     );
   }
@@ -115,11 +136,18 @@ export default function Properties({ ydoc, pageId, unit, nodes, readOnly, act }:
           <Num label="Opacity" unit="%" value={n.opacity * 100} disabled={readOnly}
             onCommit={(o) => set(n, { opacity: Math.min(100, Math.max(0, o)) / 100 })} />
           {n.kind === "rect" && (
-            <Num label="Corner radius" unit={unit} value={n.cornerRadius} disabled={readOnly}
+            <Num label="Corner radius" unit={unit} wide value={n.cornerRadius} disabled={readOnly}
               onCommit={(r) => set(n, { cornerRadius: Math.max(0, r) })} />
           )}
         </div>
       </section>
+
+      {(n.kind === "rect" || n.kind === "ellipse") && !readOnly && (
+        <section className="ed-sec">
+          <button className="ed-mini" onClick={() => onConvert(n)}>Convert to path</button>
+          {message && <p role="status" className="muted" style={{ fontSize: 13 }}>{message}</p>}
+        </section>
+      )}
 
       {n.kind === "text" && (
         <section className="ed-sec">
