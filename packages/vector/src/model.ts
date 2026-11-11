@@ -31,18 +31,36 @@ function anchorKind(i: Pt, o: Pt): Anchor["kind"] {
   return Math.abs(li - lo) <= 1e-6 ? "symmetric" : "smooth";
 }
 
-function fromItem(item: paper.PathItem): PathModel {
-  const paths = (item instanceof scope().CompoundPath ? item.children : [item]) as paper.Path[];
-  return paths.map((p) => ({
-    closed: p.closed,
-    anchors: p.segments.map((s) => {
-      const i = { x: s.handleIn.x, y: s.handleIn.y }, o = { x: s.handleOut.x, y: s.handleOut.y };
-      return { x: s.point.x, y: s.point.y, in: i, out: o, kind: anchorKind(i, o) };
-    }),
-  }));
+/** Internal: one Paper segment as an anchor, kind derived from its handles. */
+export function toAnchor(s: paper.Segment): Anchor {
+  const i = { x: s.handleIn.x, y: s.handleIn.y }, o = { x: s.handleOut.x, y: s.handleOut.y };
+  return { x: s.point.x, y: s.point.y, in: i, out: o, kind: anchorKind(i, o) };
 }
 
-function toItem(m: PathModel): paper.CompoundPath {
+const SAME = 1e-9;
+const same = (a: Pt, b: Pt) => Math.abs(a.x - b.x) <= SAME && Math.abs(a.y - b.y) <= SAME;
+const merge = (a: Anchor, b: Anchor): Anchor => ({ x: a.x, y: a.y, in: a.in, out: b.out, kind: anchorKind(a.in, b.out) });
+
+/** Paper emits zero-length segments (e.g. a fully rounded rect); fold coincident neighbours into one anchor. */
+function collapse(anchors: Anchor[], closed: boolean): Anchor[] {
+  const out: Anchor[] = [];
+  for (const a of anchors) {
+    const last = out[out.length - 1];
+    if (last && same(last, a)) out[out.length - 1] = merge(last, a);
+    else out.push(a);
+  }
+  if (closed && out.length > 1 && same(out[out.length - 1]!, out[0]!)) out[0] = merge(out.pop()!, out[0]!);
+  return out;
+}
+
+/** Internal: Paper item → model. */
+export function fromItem(item: paper.PathItem): PathModel {
+  const paths = (item instanceof scope().CompoundPath ? item.children : [item]) as paper.Path[];
+  return paths.map((p) => ({ closed: p.closed, anchors: collapse(p.segments.map(toAnchor), p.closed) }));
+}
+
+/** Internal: model → Paper item (not inserted). */
+export function toItem(m: PathModel): paper.CompoundPath {
   const s = scope();
   return new s.CompoundPath({
     insert: false,

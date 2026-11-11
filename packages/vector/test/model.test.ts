@@ -32,6 +32,17 @@ describe("path model", () => {
     expect(pathBounds(parsePath(d))).toEqual({ x: 0, y: 0, width: 100, height: 50 });
     expect(d).toContain("C");
   });
+  it("pill rect has no coincident consecutive anchors", () => {
+    const d = nodeToPath(rect({ cornerRadius: 25 }), "local")!.d;
+    expect(pathBounds(parsePath(d))).toEqual({ x: 0, y: 0, width: 100, height: 50 });
+    for (const { anchors, closed } of parsePath(d)) {
+      const n = anchors.length;
+      for (let i = 0; i < (closed ? n : n - 1); i++) {
+        const a = anchors[i]!, b = anchors[(i + 1) % n]!;
+        expect(Math.abs(a.x - b.x) > 1e-9 || Math.abs(a.y - b.y) > 1e-9, `anchors ${i},${(i + 1) % n}`).toBe(true);
+      }
+    }
+  });
   it("page space applies rotation", () => {
     const b = pathBounds(parsePath(nodeToPath(rect({ rotation: 90 }), "page")!.d));
     expect(b.x).toBeCloseTo(25, 6);
