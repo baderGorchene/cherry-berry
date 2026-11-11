@@ -3,6 +3,8 @@ import { createAuth, createRequireUser } from "./auth";
 import type { Config } from "./config";
 import type { Db } from "./db/client";
 import { HttpError } from "./errors";
+import { registerWorkspaceRoutes } from "./workspaces/routes";
+import rateLimit from "@fastify/rate-limit";
 
 export async function buildApp(config: Config, deps: { db: Db }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
@@ -40,6 +42,7 @@ export async function buildApp(config: Config, deps: { db: Db }): Promise<Fastif
     },
   });
 
-  void requireUser; // consumed by workspace routes (Task 6)
+  await app.register(rateLimit, { global: false });
+  registerWorkspaceRoutes(app, deps.db, requireUser);
   return app;
 }
