@@ -45,6 +45,33 @@ export const joinOpen = (id: string) =>
 export const acceptInvitation = (token: string) =>
   api<{ workspace: Workspace }>(`/api/invitations/${encodeURIComponent(token)}/accept`, { method: "POST" });
 
+export type Design = {
+  id: string; workspaceId: string; title: string; width: number; height: number;
+  unit: string; colorMode: string; updatedAt: string; createdBy: string;
+};
+export type NewDesign = { title: string; width: number; height: number; unit: string; colorMode: string; bleed?: number };
+
+export const createDesign = (workspaceId: string, body: NewDesign) =>
+  api<{ design: Design }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/designs`, { body });
+export const listDesigns = (workspaceId: string) =>
+  api<{ designs: Design[] }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/designs`);
+export const getDesign = (id: string) =>
+  api<{ design: Design; role: Role; state: string }>(`/api/designs/${encodeURIComponent(id)}`);
+export const saveDesign = (id: string, state: string) =>
+  api<{ design: Design; state: string }>(`/api/designs/${encodeURIComponent(id)}/state`, { method: "PUT", body: { state } });
+
+export function toBase64(u8: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
+  return btoa(s);
+}
+export function fromBase64(s: string): Uint8Array {
+  const bin = atob(s);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+
 const COPY: Record<string, string> = {
   wrong_password: "That password doesn't match this workspace.",
   not_found: "No workspace with that ID.",
@@ -59,6 +86,9 @@ const COPY: Record<string, string> = {
   INVALID_EMAIL_OR_PASSWORD: "Wrong email or password.",
   USER_ALREADY_EXISTS: "An account with that email already exists. Sign in instead.",
   PASSWORD_TOO_SHORT: "Use a password of at least 8 characters.",
+  too_large: "This design is too large to save.",
+  forbidden: "You have view-only access to this design.",
+  invalid_document: "This change couldn't be saved because the design became invalid.",
 };
 
 /** Human copy for an error thrown by `api`. */
