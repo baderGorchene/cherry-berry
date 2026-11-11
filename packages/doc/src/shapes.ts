@@ -54,15 +54,3 @@ export function createText(at: { x: number; y: number }, width: number): CherryN
     align: "left", fill: solid("#22142A"),
   };
 }
-
-// ponytail: absolute M L H V C Q Z only; Phase 3 brings full path support.
-export function scalePath(d: string, sx: number, sy: number): string {
-  const out: string[] = [];
-  for (const [, cmd, args] of d.matchAll(/([A-Za-z])([^A-Za-z]*)/g)) {
-    if (!"MLHVCQZ".includes(cmd!)) throw new Error(`unsupported path command: ${cmd}`);
-    const nums = (args!.match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi) ?? []).map(Number);
-    const scaled = nums.map((n, i) => num(n * (cmd === "H" ? sx : cmd === "V" ? sy : i % 2 ? sy : sx)));
-    out.push(cmd + scaled.join(" "));
-  }
-  return out.join(" ");
-}

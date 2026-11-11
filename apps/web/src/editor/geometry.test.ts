@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { createShape, createText, scalePath, type CherryNode } from "@cherry/doc";
+import { createShape, createText, type CherryNode } from "@cherry/doc";
+import { scalePath } from "@cherry/vector";
 import { fitZoom, fromKonvaTransform, toKonvaAttrs } from "./geometry";
 
 const rect = { ...createShape("rect", { x: 10, y: 20, width: 100, height: 50 }), rotation: 30 } as CherryNode;

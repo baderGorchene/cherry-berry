@@ -226,6 +226,9 @@ importers:
       '@cherry/doc':
         specifier: workspace:*
         version: link:../../packages/doc
+      '@cherry/vector':
+        specifier: workspace:*
+        version: link:../../packages/vector
       konva:
         specifier: ^10.9.1
         version: 10.9.1
@@ -278,6 +281,25 @@ importers:
       zod:
         specifier: ^4.6.7
         version: 4.6.7
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.6
+        version: 26.6.6
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.1.0
+        version: 5.1.0(@types/node@26.6.6)(vite@8.3.7(@types/node@26.6.6)(esbuild@0.28.2)(tsx@4.23.15))
+
+  packages/vector:
+    dependencies:
+      '@cherry/doc':
+        specifier: workspace:*
+        version: link:../doc
+      paper:
+        specifier: ^0.17.0
+        version: 0.17.0
     devDependencies:
       '@types/node':
         specifier: ^26.6.6
@@ -1695,6 +1717,10 @@ packages:
     resolution: {integrity: sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==}
     engines: {node: '>=14.0.0'}
 
+  paper@0.17.0:
+    resolution: {integrity: sha512-AWHQVUNScPN/swbCg0wwb2bTerMieraol76Fpn1s+7Zw7R6mMyI0QltMkj/XOS3Jv+9785q0p4eLsYggn63ZQw==}
+    engines: {node: '>=8.0.0'}
+
   pg-cloudflare@1.4.1:
     resolution: {integrity: sha512-6PQbsFWZcp9EmJEwy5cGQ2La+AMWpP46lgbb8X+U/XsHIUweYDNCpeuKck5RxL2MdVFi7krbbEi5nX4Zh7JhrQ==}
 
@@ -2928,6 +2954,8 @@ snapshots:
   obug@3.0.0: {}
 
   on-exit-leak-free@2.1.2: {}
+
+  paper@0.17.0: {}
 
   pg-cloudflare@1.4.1:
     optional: true

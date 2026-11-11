@@ -1,4 +1,5 @@
-import { scalePath, toPx, type CherryNode, type Page } from "@cherry/doc";
+import { toPx, type CherryNode, type Page } from "@cherry/doc";
+import { scalePath } from "@cherry/vector";
 
 export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 8;

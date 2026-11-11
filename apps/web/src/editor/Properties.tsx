@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as Y from "yjs";
-import { LOCAL, scalePath, updateNode, type CherryNode, type Page } from "@cherry/doc";
+import { LOCAL, updateNode, type CherryNode, type Page } from "@cherry/doc";
+import { scalePath } from "@cherry/vector";
 import { withTextHeight } from "./Canvas";
 
 const FONTS = ["Inter", "Space Grotesk", "Georgia", "Arial", "Times New Roman", "Courier New"];

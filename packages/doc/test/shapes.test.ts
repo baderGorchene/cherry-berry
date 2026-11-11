@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CherryNode } from "../src/schema";
-import { createShape, createText, scalePath, type BasicShape } from "../src/shapes";
+import { createShape, createText, type BasicShape } from "../src/shapes";
 import { fromPx, toPx } from "../src/units";
 
 const kinds: BasicShape[] = ["rect", "ellipse", "triangle", "line", "star", "arrow"];
@@ -29,12 +29,6 @@ describe("shapes", () => {
     const n = createShape("line", box);
     expect(n).toMatchObject({ kind: "path", d: "M0 0 L100 0", height: 0, stroke: { width: 1 } });
     expect((n as { fill?: unknown }).fill).toBeUndefined();
-  });
-  it("scales a path", () => {
-    expect(scalePath("M0 0 L10 20 C1 2 3 4 5 6 Z", 2, 3)).toBe("M0 0 L20 60 C2 6 6 12 10 18 Z");
-  });
-  it("rejects relative commands", () => {
-    expect(() => scalePath("m0 0 l1 1", 2, 2)).toThrow(/unsupported path command: m/);
   });
   it("text defaults", () => {
     const n = createText({ x: 5, y: 5 }, 300);
