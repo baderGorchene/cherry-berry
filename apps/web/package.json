@@ -13,8 +13,10 @@
   },
   "dependencies": {
     "@cherry/doc": "workspace:*",
+    "konva": "^10.9.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "react-konva": "^19.3.2",
     "react-router": "^8.5.1",
     "yjs": "^13.6.33"
   },

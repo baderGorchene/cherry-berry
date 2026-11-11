@@ -45,6 +45,37 @@ test("each committed field is one undo step", async ({ page }) => {
   await expect(layers(page).getByRole("button", { name: "Hide Rectangle" })).toBeVisible();
 });
 
+test("drag moves a shape", async ({ page }) => {
+  await newSocialPost(page);
+  await page.getByRole("button", { name: "Rectangle (R)" }).click();
+  const x = page.getByLabel("X", { exact: true });
+  await expect(x).toHaveValue("405");
+  // The new rectangle sits at the page center, which fit-zoom puts at the canvas center.
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(cx + 25, cy, { steps: 5 });
+  await page.mouse.move(cx + 50, cy, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => Number(await x.inputValue())).toBeGreaterThan(405);
+});
+
+test("text tool", async ({ page }) => {
+  await newSocialPost(page);
+  await page.keyboard.press("T");
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await expect(page.getByLabel("Edit text")).toBeFocused();
+  await page.keyboard.type("Hello");
+  await page.keyboard.press("Escape");
+  const layer = layers(page).getByRole("button", { name: "Hello", exact: true });
+  await expect(layer).toBeVisible();
+  await expect(status(page)).toHaveText("Saved");
+  await page.reload();
+  await expect(layer).toBeVisible();
+});
+
 test("recent designs load error offers retry", async ({ page }) => {
   await signUp(page, unique("rd"));
   await page.route("**/api/workspaces/*/designs", (r) => r.fulfill({ status: 500, body: "{}" }));

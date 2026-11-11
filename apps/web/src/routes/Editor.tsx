@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import * as Y from "yjs";
-import { removeNodes, setTitle, yToDoc, type CherryDocument, type CherryNode } from "@cherry/doc";
+import {
+  duplicateNodes, fromPx, removeNodes, reorderNode, setTitle, updateNode, yToDoc, type CherryDocument, type CherryNode,
+} from "@cherry/doc";
 import "../editor/editor.css";
+import Canvas, { type Tool } from "../editor/Canvas";
+import { clampZoom, fitZoom } from "../editor/geometry";
 import Layers from "../editor/Layers";
 import Pages from "../editor/Pages";
 import Properties from "../editor/Properties";
@@ -11,7 +15,8 @@ import { useDesign, type DesignState } from "../editor/useDesign";
 import { useYValue } from "../editor/useYValue";
 
 type Ready = Extract<DesignState, { state: "ready" }>;
-type Page = CherryDocument["pages"][number];
+const NUDGE: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+const TOOL_KEYS: Record<string, Tool> = { v: "select", t: "text", r: "rect", o: "ellipse", l: "line" };
 
 const STATUS: Record<Ready["status"], string> = {
   saved: "Saved", saving: "Saving…", unsaved: "Unsaved changes", offline: "Offline — retrying", error: "Not saved",
@@ -41,18 +46,6 @@ export default function Editor() {
   return <Shell d={d} key={d.ydoc.guid} />;
 }
 
-/** Center stage. Task 7 swaps this for the Konva canvas. */
-function CanvasArea({ page }: { page: Page }) {
-  return (
-    <main className="ed-stage">
-      <div className="ed-fit">
-        <div aria-label={`${page.name} canvas`} className="ed-page"
-          style={{ aspectRatio: `${page.width} / ${page.height}`, ["--ar" as string]: page.width / page.height, background: page.background.color }} />
-      </div>
-    </main>
-  );
-}
-
 function Shell({ d }: { d: Ready }) {
   const { ydoc, undo, readOnly } = d;
   const last = useRef<CherryDocument | null>(null);
@@ -70,24 +63,55 @@ function Shell({ d }: { d: Ready }) {
     if (page.id !== sel.pageId || selected.length !== sel.selected.length) setSel({ pageId: page.id, selected });
   }, [doc]);
 
-  const selRef = useRef(sel);
-  selRef.current = sel;
+  const [tool, setTool] = useState<Tool>("select");
+  const [vp, setVp] = useState({ width: 0, height: 0 });
+  const [zoomSet, setZoomSet] = useState<number | null>(null); // null = fit to viewport
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const zoom = zoomSet ?? fitZoom(page, vp);
+  const zoomTo = (z: number | null) => { setZoomSet(z === null ? null : clampZoom(z)); if (z === null) setPan({ x: 0, y: 0 }); };
+
+  const onKey = useRef<(e: KeyboardEvent) => void>(null);
+  onKey.current = (e) => {
+    if (typing(e.target)) return;
+    const mod = e.ctrlKey || e.metaKey;
+    const key = e.key.toLowerCase();
+    const ids = sel.selected;
+    const stop = () => e.preventDefault();
+    if (mod && (key === "=" || key === "+")) { stop(); zoomTo(zoom * 1.2); }
+    else if (mod && key === "-") { stop(); zoomTo(zoom / 1.2); }
+    else if (mod && key === "0") { stop(); zoomTo(null); }
+    else if (mod && key === "a") { stop(); select(page.nodes.filter((n) => !n.hidden && !n.locked).map((n) => n.id)); }
+    else if (key === "escape") { select([]); setTool("select"); }
+    else if (readOnly) return;
+    else if (mod && key === "z") { stop(); if (e.shiftKey) undo.redo(); else undo.undo(); }
+    else if (mod && key === "y") { stop(); undo.redo(); }
+    else if (mod && key === "d") {
+      stop();
+      let copies: string[] = [];
+      if (ids.length) { act(() => { copies = duplicateNodes(ydoc, page.id, ids, fromPx(10, page.unit)); }); select(copies); }
+    }
+    else if (mod && (e.key === "]" || e.key === "[")) {
+      stop();
+      // Move the topmost first when going forward (bottom-most first going back) so neighbours don't swap back.
+      const order = page.nodes.map((n) => n.id).filter((id) => ids.includes(id));
+      const to = e.key === "]" ? "forward" : "backward";
+      if (order.length) act(() => (to === "forward" ? order.reverse() : order).forEach((id) => reorderNode(ydoc, page.id, id, to)));
+    }
+    else if (e.key in NUDGE) {
+      const movable = selectedNodes.filter((n) => !n.locked);
+      if (!movable.length) return;
+      stop();
+      const [dx, dy] = NUDGE[e.key]!.map((v) => v * (e.shiftKey ? 10 : 1));
+      act(() => movable.forEach((n) => updateNode(ydoc, page.id, n.id, { x: n.x + dx!, y: n.y + dy! })));
+    }
+    else if ((e.key === "Delete" || e.key === "Backspace") && ids.length) { stop(); act(() => removeNodes(ydoc, page.id, ids)); }
+    else if (!mod && !e.altKey && key in TOOL_KEYS) setTool(TOOL_KEYS[key]!);
+  };
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (readOnly || typing(e.target)) return;
-      const mod = e.ctrlKey || e.metaKey;
-      const key = e.key.toLowerCase();
-      if (mod && key === "z") { e.preventDefault(); if (e.shiftKey) undo.redo(); else undo.undo(); }
-      else if (mod && key === "y") { e.preventDefault(); undo.redo(); }
-      else if ((e.key === "Delete" || e.key === "Backspace") && selRef.current.selected.length) {
-        e.preventDefault();
-        const { pageId, selected } = selRef.current;
-        undo.stopCapturing(); removeNodes(ydoc, pageId, selected); undo.stopCapturing();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [ydoc, undo, readOnly]);
+    const h = (e: KeyboardEvent) => onKey.current!(e);
+    window.addEventListener("keydown", h);
+    return () => window.removeEventListener("keydown", h);
+  }, []);
 
   const select = (selected: string[]) => setSel({ pageId: page.id, selected });
   /** One committed action = one undo step, even within captureTimeout of the last. */
@@ -116,15 +140,21 @@ function Shell({ d }: { d: Ready }) {
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M15 14l5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h3" /></svg>
         </button>
         <span style={{ flex: 1 }} />
-        <span className="ed-f ed-zoom">Zoom <strong>Fit</strong></span>
+        <div className="ed-zoom" role="group" aria-label="Zoom">
+          <button className="ed-mini" aria-label="Zoom out" title="Zoom out (Ctrl+-)" onClick={() => zoomTo(zoom / 1.2)}>−</button>
+          <span className="ed-f" title="Zoom level">{Math.round(zoom * 100)}%</span>
+          <button className="ed-mini" aria-label="Zoom in" title="Zoom in (Ctrl+=)" onClick={() => zoomTo(zoom * 1.2)}>+</button>
+          <button className="ed-mini" title="Fit (Ctrl+0)" onClick={() => zoomTo(null)}>Fit</button>
+        </div>
       </header>
       <div className="ed-body">
-        <Toolbar ydoc={ydoc} page={page} readOnly={readOnly} act={act} onInserted={(nid) => select([nid])} />
+        <Toolbar ydoc={ydoc} page={page} readOnly={readOnly} tool={tool} act={act} onTool={setTool} onInserted={(nid) => select([nid])} />
         <aside aria-label="Layers" className="ed-left">
           <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} act={act} onSelect={select} />
           <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
         </aside>
-        <CanvasArea page={page} />
+        <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} tool={tool} zoom={zoom} pan={pan}
+          act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp} />
         <Properties ydoc={ydoc} pageId={page.id} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act} />
       </div>
     </div>

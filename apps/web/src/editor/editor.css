@@ -69,11 +69,13 @@
 .ed-color { display: flex; gap: 8px; align-items: center; }
 .ed-color .ed-f { flex: 1; }
 .ed-color input[type="color"] { width: 34px; height: 34px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: #fff; flex: none; }
-.ed-zoom { min-height: 40px; }
+.ed-zoom { display: flex; align-items: center; gap: 4px; }
+.ed-zoom .ed-mini { min-width: 32px; min-height: 34px; }
+.ed-zoom .ed-f { min-width: 64px; justify-content: center; }
 
-.ed-stage { flex: 999 1 420px; min-width: 0; display: flex; padding: 40px 24px; }
-.ed-fit { flex: 1; container-type: size; display: flex; align-items: center; justify-content: center; }
-.ed-page {
-  width: min(100cqw, 100cqh * var(--ar)); box-shadow: 0 20px 50px rgba(34, 20, 42, .22);
-  border: 1px solid var(--line);
+.ed-stage { flex: 999 1 420px; min-width: 0; position: relative; overflow: hidden; }
+.ed-stage > div { position: absolute; inset: 0; }
+.ed-text {
+  position: absolute; margin: 0; padding: 0; border: 0; outline: 1px dashed var(--berry); background: transparent;
+  resize: none; overflow: hidden; white-space: pre-wrap; overflow-wrap: break-word;
 }
