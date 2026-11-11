@@ -9,7 +9,7 @@ Requires Node 22+ and pnpm 9+.
 ```bash
 pnpm i
 cp .env.example .env   # then set AUTH_SECRET: openssl rand -base64 32
-pnpm db:up   # Postgres + MinIO via Docker Compose
+pnpm db:up   # Postgres via Docker Compose
 pnpm dev
 ```
 
