@@ -57,21 +57,22 @@ function ColorField({ label, color, disabled, onCommit }: {
   );
 }
 
-export default function Properties({ ydoc, pageId, unit, nodes, readOnly }: {
-  ydoc: Y.Doc; pageId: string; unit: string; nodes: CherryNode[]; readOnly: boolean;
+export default function Properties({ ydoc, pageId, unit, nodes, readOnly, act }: {
+  ydoc: Y.Doc; pageId: string; unit: string; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
 }) {
   if (nodes.length === 0) return (
     <aside aria-label="Properties" className="ed-props">
       <p className="muted" style={{ fontSize: 13 }}>Select a layer to edit its properties.</p>
     </aside>
   );
-  const set = (n: CherryNode, patch: Patch) => updateNode(ydoc, pageId, n.id, patch as Partial<CherryNode>);
+  const update = (n: CherryNode, patch: Patch) => updateNode(ydoc, pageId, n.id, patch as Partial<CherryNode>);
+  const set = (n: CherryNode, patch: Patch) => act(() => update(n, patch));
 
   if (nodes.length > 1) {
     const minX = Math.min(...nodes.map((n) => n.x));
     const minY = Math.min(...nodes.map((n) => n.y));
     const move = (dx: number, dy: number) =>
-      ydoc.transact(() => nodes.forEach((n) => set(n, { x: n.x + dx, y: n.y + dy })), LOCAL);
+      act(() => ydoc.transact(() => nodes.forEach((n) => update(n, { x: n.x + dx, y: n.y + dy })), LOCAL));
     return (
       <aside aria-label="Properties" className="ed-props">
         <section className="ed-sec">
@@ -133,7 +134,7 @@ export default function Properties({ ydoc, pageId, unit, nodes, readOnly }: {
                 {[400, 500, 600, 700].map((w) => <option key={w}>{w}</option>)}
               </select>
             </label>
-            <Num label="Line height" value={n.lineHeight} disabled={readOnly} onCommit={(lineHeight) => set(n, { lineHeight })} />
+            <Num label="Line height" value={n.lineHeight} disabled={readOnly} onCommit={(lineHeight) => lineHeight > 0 && set(n, { lineHeight })} />
             <Num label="Letter spacing" value={n.letterSpacing} disabled={readOnly} onCommit={(letterSpacing) => set(n, { letterSpacing })} />
           </div>
           <label className="ed-f"><b>Align</b>

@@ -28,11 +28,13 @@ export function InlineName({ name, label, editable, className, pressed, onClick,
 
 type Props = {
   ydoc: Y.Doc; pageId: string; nodes: CherryNode[]; selected: string[]; readOnly: boolean;
-  onSelect(ids: string[]): void;
+  act(fn: () => void): void; onSelect(ids: string[]): void;
 };
 
-export default function Layers({ ydoc, pageId, nodes, selected, readOnly, onSelect }: Props) {
+export default function Layers({ ydoc, pageId, nodes, selected, readOnly, act, onSelect }: Props) {
+  const set = (id: string, patch: Partial<CherryNode>) => act(() => updateNode(ydoc, pageId, id, patch));
   const one = selected.length === 1 ? selected[0]! : null;
+  const move = (to: "forward" | "backward") => one && act(() => reorderNode(ydoc, pageId, one, to));
   const click = (id: string, e: MouseEvent) => {
     if (!e.shiftKey) return onSelect([id]);
     onSelect(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
@@ -43,11 +45,13 @@ export default function Layers({ ydoc, pageId, nodes, selected, readOnly, onSele
         <span aria-hidden="true" className="ed-glyph">{GLYPH[n.kind]}</span>
         <InlineName name={n.name} label={n.name} editable={!readOnly} pressed={selected.includes(n.id)}
           className={`ed-lay${selected.includes(n.id) ? " ed-lay-on" : ""}`}
-          onClick={(e) => click(n.id, e)} onRename={(name) => updateNode(ydoc, pageId, n.id, { name })} />
-        <button className="ed-mini" disabled={readOnly} onClick={() => updateNode(ydoc, pageId, n.id, { hidden: !n.hidden })}>
+          onClick={(e) => click(n.id, e)} onRename={(name) => set(n.id, { name })} />
+        <button className="ed-mini" disabled={readOnly} aria-label={`${n.hidden ? "Show" : "Hide"} ${n.name}`}
+          onClick={() => set(n.id, { hidden: !n.hidden })}>
           {n.hidden ? "Show" : "Hide"}
         </button>
-        <button className="ed-mini" disabled={readOnly} onClick={() => updateNode(ydoc, pageId, n.id, { locked: !n.locked })}>
+        <button className="ed-mini" disabled={readOnly} aria-label={`${n.locked ? "Unlock" : "Lock"} ${n.name}`}
+          onClick={() => set(n.id, { locked: !n.locked })}>
           {n.locked ? "Unlock" : "Lock"}
         </button>
       </li>,
@@ -61,8 +65,8 @@ export default function Layers({ ydoc, pageId, nodes, selected, readOnly, onSele
         ? <p className="muted" style={{ fontSize: 13, padding: "0 8px" }}>No layers yet. Add a shape or text from the tools.</p>
         : <ul className="ed-list">{rows(nodes, 0)}</ul>}
       <div className="ed-actions">
-        <button className="ed-mini" disabled={readOnly || !one} onClick={() => one && reorderNode(ydoc, pageId, one, "forward")}>Bring forward</button>
-        <button className="ed-mini" disabled={readOnly || !one} onClick={() => one && reorderNode(ydoc, pageId, one, "backward")}>Send backward</button>
+        <button className="ed-mini" disabled={readOnly || !one} onClick={() => move("forward")}>Bring forward</button>
+        <button className="ed-mini" disabled={readOnly || !one} onClick={() => move("backward")}>Send backward</button>
       </div>
     </section>
   );

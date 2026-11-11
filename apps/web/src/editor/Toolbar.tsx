@@ -18,10 +18,10 @@ const SHAPES: { kind: BasicShape; label: string; icon: ReactNode }[] = [
   { kind: "arrow", label: "Arrow", icon: svg(<path d="M4 12h14M13 6l6 6-6 6" />) },
 ];
 
-export default function Toolbar({ ydoc, page, readOnly, onInserted }: {
-  ydoc: Y.Doc; page: Page; readOnly: boolean; onInserted(id: string): void;
+export default function Toolbar({ ydoc, page, readOnly, act, onInserted }: {
+  ydoc: Y.Doc; page: Page; readOnly: boolean; act(fn: () => void): void; onInserted(id: string): void;
 }) {
-  const insert = (node: CherryNode) => { addNode(ydoc, page.id, node); onInserted(node.id); };
+  const insert = (node: CherryNode) => { act(() => addNode(ydoc, page.id, node)); onInserted(node.id); };
   const addShape = (kind: BasicShape) => {
     const s = Math.min(page.width, page.height) * 0.25;
     insert(createShape(kind, { x: (page.width - s) / 2, y: (page.height - s) / 2, width: s, height: s }));

@@ -81,7 +81,8 @@ function Shell({ d }: { d: Ready }) {
       else if (mod && key === "y") { e.preventDefault(); undo.redo(); }
       else if ((e.key === "Delete" || e.key === "Backspace") && selRef.current.selected.length) {
         e.preventDefault();
-        removeNodes(ydoc, selRef.current.pageId, selRef.current.selected);
+        const { pageId, selected } = selRef.current;
+        undo.stopCapturing(); removeNodes(ydoc, pageId, selected); undo.stopCapturing();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -89,6 +90,8 @@ function Shell({ d }: { d: Ready }) {
   }, [ydoc, undo, readOnly]);
 
   const select = (selected: string[]) => setSel({ pageId: page.id, selected });
+  /** One committed action = one undo step, even within captureTimeout of the last. */
+  const act = (fn: () => void) => { undo.stopCapturing(); fn(); undo.stopCapturing(); };
   const selectedNodes = sel.selected.map((s) => findNode(page.nodes, s)).filter((n): n is CherryNode => !!n);
   const status = d.status === "error" ? `Not saved: ${d.statusMessage ?? ""}` : STATUS[d.status];
 
@@ -100,7 +103,7 @@ function Shell({ d }: { d: Ready }) {
         </Link>
         <div className="ed-title">
           <input aria-label="Design title" key={doc.title} defaultValue={doc.title} disabled={readOnly} maxLength={120}
-            onBlur={(e) => { const t = e.currentTarget.value.trim(); if (t && t !== doc.title) setTitle(ydoc, t); else e.currentTarget.value = doc.title; }}
+            onBlur={(e) => { const t = e.currentTarget.value.trim(); if (t && t !== doc.title) act(() => setTitle(ydoc, t)); else e.currentTarget.value = doc.title; }}
             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
           <span className="muted">
             {page.width} × {page.height} {page.unit} · {page.colorMode.toUpperCase()} · {readOnly ? <span>View only</span> : <span role="status">{status}</span>}
@@ -116,13 +119,13 @@ function Shell({ d }: { d: Ready }) {
         <span className="ed-f ed-zoom">Zoom <strong>Fit</strong></span>
       </header>
       <div className="ed-body">
-        <Toolbar ydoc={ydoc} page={page} readOnly={readOnly} onInserted={(nid) => select([nid])} />
+        <Toolbar ydoc={ydoc} page={page} readOnly={readOnly} act={act} onInserted={(nid) => select([nid])} />
         <aside aria-label="Layers" className="ed-left">
-          <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} onSelect={select} />
-          <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
+          <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} act={act} onSelect={select} />
+          <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
         </aside>
         <CanvasArea page={page} />
-        <Properties ydoc={ydoc} pageId={page.id} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} />
+        <Properties ydoc={ydoc} pageId={page.id} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act} />
       </div>
     </div>
   );

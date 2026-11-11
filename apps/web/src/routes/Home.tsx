@@ -43,7 +43,8 @@ export default function Home() {
   const [list, setList] = useState<Workspace[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [currentId, setCurrentId] = useState(currentWorkspace.get());
-  const [designs, setDesigns] = useState<Design[] | null>(null);
+  const [designs, setDesigns] = useState<Design[] | "error" | null>(null);
+  const [designsTry, setDesignsTry] = useState(0);
   const [busy, setBusy] = useState(false);
   const [createError, setCreateError] = useState("");
 
@@ -59,9 +60,15 @@ export default function Home() {
   const current = list && (list.find((w) => w.id === currentId) ?? list[0]);
   useEffect(() => {
     if (!current) return;
+    let cancelled = false;
     setDesigns(null);
-    listDesigns(current.id).then((r) => setDesigns(r.designs), () => setDesigns([]));
-  }, [current?.id]);
+    listDesigns(current.id).then((r) => !cancelled && setDesigns(r.designs), (e) => {
+      if (cancelled) return;
+      if (e instanceof ApiError && e.status === 401) setUser(null);
+      else setDesigns("error");
+    });
+    return () => { cancelled = true; };
+  }, [current?.id, designsTry]);
 
   if (loadError) return (
     <div className="card" style={{ maxWidth: 420, margin: "48px auto" }}>
@@ -150,7 +157,12 @@ export default function Home() {
 
         <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <h2 style={{ fontSize: 22 }}>Recent designs</h2>
-          {designs === null ? <p className="muted">Loading…</p> : designs.length === 0 ? (
+          {designs === null ? <p className="muted">Loading…</p> : designs === "error" ? (
+            <div className="card" style={{ alignItems: "flex-start" }}>
+              <p role="alert">Couldn't load your designs.</p>
+              <button className="btn" onClick={() => setDesignsTry((n) => n + 1)}>Retry</button>
+            </div>
+          ) : designs.length === 0 ? (
             <div className="card" style={{ alignItems: "flex-start" }}>
               <p className="muted">No designs yet. Pick a size above to start your first one.</p>
               <Link to="/workspaces" style={{ fontSize: 14 }}>Join or create another workspace</Link>

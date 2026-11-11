@@ -15,7 +15,7 @@ const status = (page: Page) => page.getByRole("status");
 test("create from preset, add a shape, edit it, reload", async ({ page }) => {
   await newSocialPost(page);
   await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  await expect(layers(page).getByRole("button", { name: /Rectangle/ })).toBeVisible();
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
 
   const x = page.getByLabel("X", { exact: true });
   await x.fill("100");
@@ -24,14 +24,42 @@ test("create from preset, add a shape, edit it, reload", async ({ page }) => {
   await expect(status(page)).toHaveText("Saved");
 
   await page.reload();
-  await layers(page).getByRole("button", { name: /Rectangle/ }).click();
+  await layers(page).getByRole("button", { name: "Rectangle", exact: true }).click();
   await expect(page.getByLabel("X", { exact: true })).toHaveValue("100");
+});
+
+test("each committed field is one undo step", async ({ page }) => {
+  await newSocialPost(page);
+  await page.getByRole("button", { name: "Rectangle (R)" }).click();
+  const x = page.getByLabel("X", { exact: true });
+  const y = page.getByLabel("Y", { exact: true });
+  await x.fill("100");
+  await x.press("Enter");
+  await y.fill("50");
+  await y.press("Enter");
+  await layers(page).getByRole("button", { name: "Rectangle", exact: true }).click();
+  await page.keyboard.press("Control+Z");
+  await expect(y).toHaveValue("405");
+  await expect(x).toHaveValue("100");
+  await page.keyboard.press("Control+Z");
+  await expect(x).toHaveValue("405");
+  await expect(layers(page).getByRole("button", { name: "Hide Rectangle" })).toBeVisible();
+});
+
+test("recent designs load error offers retry", async ({ page }) => {
+  await signUp(page, unique("rd"));
+  await page.route("**/api/workspaces/*/designs", (r) => r.fulfill({ status: 500, body: "{}" }));
+  await createWorkspace(page, "Flaky Lab");
+  await expect(page.getByText("Couldn't load your designs.")).toBeVisible();
+  await page.unroute("**/api/workspaces/*/designs");
+  await page.getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByText("No designs yet.", { exact: false })).toBeVisible();
 });
 
 test("undo and redo", async ({ page }) => {
   await newSocialPost(page);
   await page.getByRole("button", { name: "Ellipse (O)" }).click();
-  const layer = layers(page).getByRole("button", { name: /Ellipse/ });
+  const layer = layers(page).getByRole("button", { name: "Ellipse", exact: true });
   await expect(layer).toBeVisible();
   await page.keyboard.press("Control+Z");
   await expect(layer).toHaveCount(0);
