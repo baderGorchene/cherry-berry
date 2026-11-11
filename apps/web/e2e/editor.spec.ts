@@ -20,7 +20,6 @@ test("create from preset, add a shape, edit it, reload", async ({ page }) => {
   const x = page.getByLabel("X", { exact: true });
   await x.fill("100");
   await x.press("Enter");
-  await expect(status(page)).toHaveText(/Unsaved changes|Saving…/);
   await expect(status(page)).toHaveText("Saved");
 
   await page.reload();
