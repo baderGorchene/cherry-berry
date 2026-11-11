@@ -17,9 +17,16 @@ export function shapeNode(s: Shape, page: Page): CherryNode {
     id: crypto.randomUUID(), kind: "path", name: s.name,
     x: (page.width - width) / 2, y: (page.height - height) / 2, width, height, rotation: 0, opacity: 1,
     locked: false, hidden: false, d: scalePath(s.d, f, f), fillRule: s.fillRule,
-    fill: s.fill ?? { type: "solid", color: "#8E1EA2", opacity: 1 },
+    ...(s.fill ? { fill: s.fill } : s.stroke ? {} : { fill: { type: "solid" as const, color: "#8E1EA2", opacity: 1 } }),
     ...(s.stroke ? { stroke: { ...s.stroke, width: s.stroke.width * f } } : {}),
   };
+}
+
+/** Thumbnail viewBox; a zero-width or zero-height shape (a straight line) is padded so it doesn't render blank. */
+export function thumbBox(s: Pick<Shape, "width" | "height">): string {
+  const pad = s.width && s.height ? 0 : (Math.max(s.width, s.height) || 1) * 0.1;
+  const w = Math.max(s.width, pad), h = Math.max(s.height, pad);
+  return `${(s.width - w) / 2} ${(s.height - h) / 2} ${w} ${h}`;
 }
 
 export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, onTool, onSelect }: {
@@ -74,8 +81,9 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
                 <div className="ed-shapegrid">
                   {res.shapes.map((s) => (
                     <button key={s.id} className="ed-shape" disabled={readOnly} title={s.name} onClick={() => insert(s)}>
-                      <svg viewBox={`0 0 ${s.width} ${s.height}`} width="40" height="40" aria-hidden="true">
-                        <path d={s.d} fill={s.fill?.color ?? "currentColor"} fillRule={s.fillRule} />
+                      <svg viewBox={thumbBox(s)} overflow="visible" width="40" height="40" aria-hidden="true">
+                        <path d={s.d} fillRule={s.fillRule} fill={s.fill?.color ?? "none"} fillOpacity={s.fill?.opacity}
+                          {...(s.stroke ? { stroke: s.stroke.paint.color, strokeOpacity: s.stroke.paint.opacity, strokeWidth: s.stroke.width } : {})} />
                       </svg>
                       <span>{s.name}</span>
                     </button>
