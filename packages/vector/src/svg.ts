@@ -15,16 +15,16 @@ const MAX_LENGTH = 1_000_000;
 const MAX_PATHS = 2000;
 const DEFAULT_FILL: Paint = { type: "solid", color: "#22142A", opacity: 1 };
 
-const ELEMENTS = new Set(["svg", "g", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "defs", "clippath"]);
+const ELEMENTS = new Set(["svg", "g", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "defs"]);
 const SHAPES = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"]);
 const ATTRS = new Set(("id d x y width height cx cy r rx ry x1 y1 x2 y2 points transform viewbox preserveaspectratio fill stroke " +
-  "stroke-width fill-rule clip-rule fill-opacity stroke-opacity opacity clip-path display visibility").split(" "));
-const NUM = "[-+]?[\d.]+(?:e[-+]?\d+)?";
+  "stroke-width fill-rule fill-opacity stroke-opacity opacity display visibility").split(" "));
+const NUM = String.raw`[-+]?[\d.]+(?:e[-+]?\d+)?`;
+const COLOR = /^(?:rgb|rgba|hsl|hsla)\([\d.,%\s]+\)$/i;
 const SAFE_VALUE: Record<string, RegExp> = {
-  transform: new RegExp(`^(?:\s*(?:matrix|translate|scale|rotate|skewX|skewY)\(\s*${NUM}(?:[\s,]+${NUM})*\s*\))+\s*$`, "i"),
-  "clip-path": /^url\(#[\w-]+\)$/,
-  fill: /^(?:rgb|rgba|hsl|hsla)\([\d.,%\s]+\)$/i,
-  stroke: /^(?:rgb|rgba|hsl|hsla)\([\d.,%\s]+\)$/i,
+  transform: new RegExp(String.raw`^(?:\s*(?:matrix|translate|scale|rotate|skewX|skewY)\(\s*${NUM}(?:[\s,]+${NUM})*\s*\))+\s*$`, "i"),
+  fill: COLOR,
+  stroke: COLOR,
 };
 
 /**
@@ -39,7 +39,7 @@ function sanitize(svg: string): Element {
   const walk = (e: Element) => {
     for (const a of [...e.attributes]) {
       const n = a.localName.toLowerCase();
-      const ok = !a.namespaceURI && ATTRS.has(n) && (!/[\(&]/.test(a.value) || SAFE_VALUE[n]?.test(a.value));
+      const ok = !a.namespaceURI && ATTRS.has(n) && (!/[\\(&]/.test(a.value) || SAFE_VALUE[n]?.test(a.value));
       if (!ok) e.removeAttributeNode(a);
       else if (n === "viewbox" && a.localName !== "viewBox") { e.removeAttributeNode(a); e.setAttribute("viewBox", a.value); }
     }

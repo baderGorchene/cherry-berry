@@ -370,6 +370,18 @@ test("import an SVG into a design", async ({ page }) => {
   await expect(layers(page).getByRole("button", { name: /Imported/ })).toHaveCount(0);
 });
 
+test("import keeps the SVG's transforms", async ({ page }) => {
+  await newSocialPost(page);
+  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/transformed.svg");
+  const width = async (name: string) => {
+    await layers(page).getByRole("button", { name, exact: true }).click();
+    return Number(await page.getByLabel("W", { exact: true }).inputValue());
+  };
+  const w1 = await width("Imported 1");
+  expect((await width("Imported 2")) / w1).toBeCloseTo(3, 1);
+});
+
 test("hostile SVG imports only its plain shapes", async ({ page }) => {
   const requests: string[] = [];
   page.on("request", (r) => requests.push(r.url()));
@@ -377,8 +389,8 @@ test("hostile SVG imports only its plain shapes", async ({ page }) => {
   await page.getByRole("button", { name: "Shapes", exact: true }).click();
   await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/hostile.svg");
   await expect(layers(page).getByRole("button", { name: "Imported 1", exact: true })).toBeVisible();
-  await expect(layers(page).getByRole("button", { name: "Imported 4", exact: true })).toBeVisible();
-  await expect(layers(page).getByRole("button", { name: "Imported 5", exact: true })).toHaveCount(0);
+  await expect(layers(page).getByRole("button", { name: "Imported 5", exact: true })).toBeVisible();
+  await expect(layers(page).getByRole("button", { name: "Imported 6", exact: true })).toHaveCount(0);
   await page.waitForTimeout(500);
   expect(await page.evaluate(() => (window as any).__pwned)).toBeUndefined();
   expect(requests.filter((u) => u.includes("example.invalid"))).toEqual([]);
