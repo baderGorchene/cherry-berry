@@ -34,3 +34,11 @@ export async function setupTestApp(): Promise<{
     async close() { await app.close(); await close(); },
   };
 }
+
+/** Signs up `email` (password "berrypass1") and returns its session cookie and user id. */
+export async function signUp(app: FastifyInstance, email: string, name = email.split("@")[0]!): Promise<{ cookie: string; userId: string }> {
+  const res = await app.inject({ method: "POST", url: "/api/auth/sign-up/email", payload: { email, password: "berrypass1", name } });
+  if (res.statusCode !== 200) throw new Error(`signUp failed: ${res.statusCode} ${res.body}`);
+  const cookie = [res.headers["set-cookie"]].flat().map((c) => String(c).split(";")[0]).join("; ");
+  return { cookie, userId: res.json().user.id };
+}

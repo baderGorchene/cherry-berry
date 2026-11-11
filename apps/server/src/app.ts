@@ -1,9 +1,45 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import { createAuth, createRequireUser } from "./auth";
 import type { Config } from "./config";
 import type { Db } from "./db/client";
+import { HttpError } from "./errors";
 
 export async function buildApp(config: Config, deps: { db: Db }): Promise<FastifyInstance> {
   const app = Fastify({ logger: false });
+  const auth = createAuth(config, deps.db);
+  const requireUser = createRequireUser(auth);
+
+  app.setErrorHandler((err, _req, reply) => {
+    if (err instanceof HttpError) return reply.status(err.statusCode).send({ error: err.code });
+    const e = err as { statusCode?: number; validation?: unknown };
+    if (e.statusCode === 429) return reply.status(429).send({ error: "rate_limited" });
+    if (e.validation || e.statusCode === 400) return reply.status(400).send({ error: "invalid_body" });
+    app.log.error(err);
+    return reply.status(500).send({ error: "internal" });
+  });
+
   app.get("/api/health", async () => ({ status: "ok" }));
+
+  // Better Auth speaks Fetch Request/Response; bridge it onto Fastify.
+  app.route({
+    method: ["GET", "POST"],
+    url: "/api/auth/*",
+    async handler(request, reply) {
+      const headers = new Headers();
+      for (const [k, v] of Object.entries(request.headers)) if (v !== undefined) headers.set(k, String(v));
+      const res = await auth.handler(new Request(new URL(request.url, config.publicUrl), {
+        method: request.method,
+        headers,
+        body: request.method === "GET" || request.body === undefined ? undefined : JSON.stringify(request.body),
+      }));
+      reply.status(res.status);
+      res.headers.forEach((v, k) => { if (k !== "set-cookie") reply.header(k, v); });
+      const cookies = res.headers.getSetCookie();
+      if (cookies.length) reply.header("set-cookie", cookies);
+      return reply.send(res.body ? await res.text() : null);
+    },
+  });
+
+  void requireUser; // consumed by workspace routes (Task 6)
   return app;
 }
