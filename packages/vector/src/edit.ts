@@ -1,5 +1,5 @@
 import type { CherryNode } from "@cherry/doc";
-import { pathBounds, toAnchor, toItem, toPathData, type Anchor, type PathModel, type Pt } from "./model";
+import { parsePath, pathBounds, toAnchor, toItem, toPathData, type Anchor, type PathModel, type Pt } from "./model";
 import { scope } from "./paper";
 
 export type AnchorRef = { sub: number; i: number };
@@ -70,11 +70,14 @@ export function insertAnchor(m: PathModel, sub: number, segment: number, t: numb
     // t at (or beyond) an end: that end's anchor already exists.
     return { model: copy(m), ref: { sub, i: t < 0.5 ? segment : (segment + 1) % n } };
   }
-  // Read the segments directly (no collapse) and keep the user's kinds on the existing anchors.
+  // Read the segments directly (no collapse) and keep the user's kinds on the existing anchors,
+  // except that the split shortens the neighbours' facing handles: a symmetric neighbour becomes smooth.
   const anchors = path.segments.map((s, j) => {
     const a = toAnchor(s);
     if (j === segment + 1) return a;
-    return { ...a, kind: sp.anchors[j <= segment ? j : j - 1]!.kind };
+    const kind = sp.anchors[j <= segment ? j : j - 1]!.kind;
+    const unequal = Math.abs(len(a.in) - len(a.out)) > 1e-6;
+    return { ...a, kind: kind === "symmetric" && unequal ? "smooth" : kind };
   });
   const model = copy(m);
   model[sub]!.anchors = anchors;
@@ -117,12 +120,16 @@ export function hitSegment(m: PathModel, p: Pt, tolerance: number): { sub: numbe
  * under the node's unchanged rotation (degrees clockwise about the box centre, y-down).
  */
 export function normalizeEdit(node: PathNode, m: PathModel): { d: string; x: number; y: number; width: number; height: number } {
-  const { x: bx, y: by, width: bw, height: bh } = pathBounds(m);
+  const { x: bx, y: by } = pathBounds(m);
   const all = m.flatMap((sp, sub) => sp.anchors.map((_, i) => ({ sub, i })));
-  const shifted = moveAnchors(m, all, -bx, -by);
+  const d = toPathData(moveAnchors(m, all, -bx, -by));
+  // width/height are measured on the serialized (4-decimal) d, so they equal its bounds exactly.
+  // Its min is 0 exactly when the extremes sit on anchors; a curve's interior extreme is off the
+  // 1e-4 grid, so there it can be off 0 by < 5e-5 (no shift of a rounded d can remove that).
+  const { width: bw, height: bh } = pathBounds(parsePath(d));
   const r = (node.rotation * Math.PI) / 180, cos = Math.cos(r), sin = Math.sin(r);
   const vx = bx + bw / 2 - node.width / 2, vy = by + bh / 2 - node.height / 2; // l1 − l0
   const cx = node.x + node.width / 2 + vx * cos - vy * sin;
   const cy = node.y + node.height / 2 + vx * sin + vy * cos;
-  return { d: toPathData(shifted), x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh };
+  return { d, x: cx - bw / 2, y: cy - bh / 2, width: bw, height: bh };
 }

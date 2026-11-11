@@ -76,6 +76,11 @@ describe("anchors", () => {
     const b0 = pathBounds(m), b1 = pathBounds(model);
     for (const k of ["x", "y", "width", "height"] as const) expect(b1[k]).toBeCloseTo(b0[k], 6);
   });
+  it("insertAnchor demotes shortened symmetric neighbours to smooth", () => {
+    const { model } = insertAnchor(circle(), 0, 0, 0.5);
+    expect(model[0]!.anchors[0]!.kind).toBe("smooth");
+    expect(model[0]!.anchors[2]!.kind).toBe("smooth");
+  });
   it("removeAnchors to nothing", () => {
     expect(removeAnchors(parsePath("M0 0 L10 0"), [{ sub: 0, i: 0 }, { sub: 0, i: 1 }])).toEqual([]);
   });
@@ -119,5 +124,19 @@ describe("normalizeEdit", () => {
     const b = pathBounds(parsePath(out.d));
     expect(b.x).toBe(0);
     expect(b.y).toBe(0);
+  });
+  it("returned d's bounds are exactly 0 0 width height (curved, rotated)", () => {
+    const node = {
+      id: "p", name: "p", kind: "path", x: 3.3, y: 7.7, width: 10, height: 10, rotation: 17,
+      opacity: 1, locked: false, hidden: false, d: "M0 0 C3.3333 -1.7 7.1111 1.3 10 0 L10 10 Z", fillRule: "nonzero",
+    } as PathNode;
+    let m = moveHandle(parsePath(node.d), { sub: 0, i: 0 }, "out", { x: 1.23456789, y: -7.3456789 }, true);
+    m = moveAnchors(m, [{ sub: 0, i: 1 }], 0.123456789, 0.987654321);
+    const out = normalizeEdit(node, m);
+    const b = pathBounds(parsePath(out.d));
+    expect({ width: b.width, height: b.height }).toEqual({ width: out.width, height: out.height });
+    // The interior curve extreme is off the 4-decimal grid, so 0 holds only to rounding.
+    expect(Math.abs(b.x)).toBeLessThan(5e-5);
+    expect(Math.abs(b.y)).toBeLessThan(5e-5);
   });
 });
