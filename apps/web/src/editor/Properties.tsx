@@ -2,6 +2,7 @@ import { useState, type ReactNode } from "react";
 import * as Y from "yjs";
 import { LOCAL, updateNode, type CherryNode, type Page } from "@cherry/doc";
 import { scalePath, type BoolOp } from "@cherry/vector";
+import ReuseShape from "./SaveShapeDialog";
 import { withTextHeight } from "./Canvas";
 
 const FONTS = ["Inter", "Space Grotesk", "Georgia", "Arial", "Times New Roman", "Courier New"];
@@ -66,8 +67,8 @@ const OPS: { op: BoolOp; label: string; icon: ReactNode }[] = [
   { op: "exclude", label: "Exclude", icon: <path fill="#8E1EA2" fillRule="evenodd" d="M10 2a8 8 0 1 0 0 16a8 8 0 1 0 0-16zM18 2a8 8 0 1 0 0 16a8 8 0 1 0 0-16z" /> },
 ];
 
-export default function Properties({ ydoc, pageId, unit, nodes, readOnly, act, combinable, canConvert, message, onCombine, onConvert }: {
-  ydoc: Y.Doc; pageId: string; unit: Page["unit"]; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
+export default function Properties({ ydoc, pageId, workspaceId, unit, nodes, readOnly, act, combinable, canConvert, message, onCombine, onConvert }: {
+  ydoc: Y.Doc; pageId: string; workspaceId: string; unit: Page["unit"]; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
   combinable: boolean; canConvert: boolean; message: string; onCombine(op: BoolOp): void; onConvert(n: CherryNode): void;
 }) {
   if (nodes.length === 0) return (
@@ -192,6 +193,9 @@ export default function Properties({ ydoc, pageId, unit, nodes, readOnly, act, c
           <Num label="Stroke width" unit={unit} value={stroke?.width ?? 0} disabled={readOnly}
             onCommit={(w) => set(n, { stroke: { paint: stroke?.paint ?? paint("#22142A"), width: Math.max(0, w) } })} />
         </section>
+      )}
+      {(n.kind === "rect" || n.kind === "ellipse" || n.kind === "path") && (
+        <ReuseShape key={n.id} node={n} workspaceId={workspaceId} viewer={readOnly} />
       )}
     </aside>
   );

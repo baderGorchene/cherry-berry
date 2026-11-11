@@ -1,3 +1,5 @@
+import type { Paint, Stroke } from "@cherry/doc";
+
 export class ApiError extends Error {
   constructor(public status: number, public code: string) { super(code); }
 }
@@ -60,6 +62,26 @@ export const getDesign = (id: string) =>
 export const saveDesign = (id: string, state: string) =>
   api<{ design: Design; state: string }>(`/api/designs/${encodeURIComponent(id)}/state`, { method: "PUT", body: { state } });
 
+export type Visibility = "private" | "workspace" | "public";
+export type Shape = {
+  id: string; name: string; tags: string[]; visibility: Visibility; workspaceId: string | null;
+  d: string; width: number; height: number; fillRule: "nonzero" | "evenodd";
+  fill: Paint | null; stroke: Stroke | null; createdBy: string; createdAt: string; mine: boolean;
+};
+export type NewShape = {
+  name: string; tags: string[]; visibility: Visibility; workspaceId?: string;
+  d: string; fillRule: "nonzero" | "evenodd"; fill?: Paint; stroke?: Stroke;
+};
+
+export const saveShape = (body: NewShape) => api<{ shape: Shape }>("/api/shapes", { body });
+export const listShapes = (scope: "mine" | "workspace" | "public", opts: { workspaceId?: string; q?: string } = {}) => {
+  const qs = new URLSearchParams({ scope });
+  if (opts.workspaceId) qs.set("workspaceId", opts.workspaceId);
+  if (opts.q) qs.set("q", opts.q);
+  return api<{ shapes: Shape[] }>(`/api/shapes?${qs}`);
+};
+export const deleteShape = (id: string) => api<void>(`/api/shapes/${encodeURIComponent(id)}`, { method: "DELETE" });
+
 export function toBase64(u8: Uint8Array): string {
   let s = "";
   for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
@@ -82,6 +104,7 @@ const COPY: Record<string, string> = {
   invitation_invalid: "That invitation link isn't valid or has expired.",
   invitation_used: "That invitation has already been used.",
   invitation_wrong_email: "That invitation was sent to a different email address.",
+  invalid_shape: "That shape couldn't be read. Try simplifying it.",
   invalid_body: "Please check the fields and try again.",
   INVALID_EMAIL_OR_PASSWORD: "Wrong email or password.",
   USER_ALREADY_EXISTS: "An account with that email already exists. Sign in instead.",

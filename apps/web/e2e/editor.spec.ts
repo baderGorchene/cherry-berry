@@ -325,3 +325,37 @@ test("long-label fields are visible and fillable", async ({ page }) => {
   await sw.press("Enter");
   await expect(sw).toHaveValue("7");
 });
+
+async function saveSelectedShape(page: Page, name: string, share: string) {
+  await page.getByRole("button", { name: "Save as custom shape" }).click();
+  const dialog = page.getByRole("dialog", { name: "Save shape" });
+  await dialog.getByLabel("Name").fill(name);
+  await dialog.getByLabel("Share with").selectOption({ label: share });
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(page.getByText("Saved to your shapes")).toBeVisible();
+}
+
+test("save a shape and drop it into another design", async ({ page }) => {
+  await newSocialPost(page);
+  await drawTriangle(page);
+  await saveSelectedShape(page, "Peak", "Only me");
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Social post/ }).click();
+  await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
+  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await page.getByRole("tab", { name: "My shapes" }).click();
+  await page.getByRole("complementary", { name: "Shapes panel" }).getByRole("button", { name: "Peak" }).click();
+  await expect(layers(page).getByRole("button", { name: "Peak", exact: true })).toBeVisible();
+});
+
+test("workspace shapes are shared", async ({ browser }) => {
+  const owner = await (await browser.newContext()).newPage();
+  await newSocialPost(owner);
+  await drawTriangle(owner);
+  await saveSelectedShape(owner, "Badge", "This workspace");
+  const viewer = await openAsViewer(browser, owner);
+  await viewer.getByRole("button", { name: "Shapes", exact: true }).click();
+  await viewer.getByRole("tab", { name: "Workspace" }).click();
+  await expect(viewer.getByRole("complementary", { name: "Shapes panel" }).getByRole("button", { name: "Badge" })).toBeVisible();
+});

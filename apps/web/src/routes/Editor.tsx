@@ -13,6 +13,7 @@ import Pages from "../editor/Pages";
 import type { PathKeys } from "../editor/PathEditor";
 import { combinable, combine, convertToPath, editModel } from "../editor/pathEdit";
 import PathPanel from "../editor/PathPanel";
+import ShapesPanel from "../editor/ShapesPanel";
 import Properties from "../editor/Properties";
 import Toolbar from "../editor/Toolbar";
 import { useDesign, type DesignState } from "../editor/useDesign";
@@ -73,6 +74,7 @@ function Shell({ d }: { d: Ready }) {
   const [message, setMessage] = useState("");
   useEffect(() => setMessage(""), [sel.selected.join()]);
   const [tool, setTool] = useState<Tool>("select");
+  const [shapesOpen, setShapesOpen] = useState(false);
   const [vp, setVp] = useState({ width: 0, height: 0 });
   const [zoomSet, setZoomSet] = useState<number | null>(null); // null = fit to viewport
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -192,7 +194,10 @@ function Shell({ d }: { d: Ready }) {
         {editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>}
       </header>
       <div className="ed-body">
-        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} onTool={setTool} />
+        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} shapesOpen={shapesOpen} onTool={setTool} onShapes={() => setShapesOpen(!shapesOpen)} />
+        {shapesOpen && !editNode && (
+          <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onTool={setTool} onSelect={select} />
+        )}
         <aside aria-label="Layers" className="ed-left">
           <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} act={act} onSelect={select} />
           <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
@@ -203,7 +208,7 @@ function Shell({ d }: { d: Ready }) {
           onAnchors={setAnchors} onEditPath={enterEdit} />
         {editNode
           ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
-          : <Properties ydoc={ydoc} pageId={page.id} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act}
+          : <Properties ydoc={ydoc} pageId={page.id} workspaceId={d.design.workspaceId} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act}
             combinable={operands.length >= 2} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} />}
       </div>
     </div>
