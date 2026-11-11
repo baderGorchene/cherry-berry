@@ -18,11 +18,11 @@ const CreateBody = z.object({
     .transform((t) => [...new Set(t)]),
   visibility: z.enum(["private", "workspace", "public"]),
   workspaceId: z.string().optional(),
-  d: z.string(),
+  d: z.string().max(100_000),
   fillRule: z.enum(["nonzero", "evenodd"]),
   fill: Paint.optional(),
   stroke: Stroke.optional(),
-});
+}).refine((v) => v.visibility !== "workspace" || v.workspaceId);
 const ListQuery = z.object({
   scope: z.enum(["mine", "workspace", "public"]),
   workspaceId: z.string().optional(),
@@ -33,8 +33,13 @@ const IdParams = z.object({ id: z.string() });
 export function registerShapeRoutes(
   app: FastifyInstance, db: Db, requireUser: (req: FastifyRequest) => Promise<SessionUser>,
 ) {
-  // Keyed by session cookie (falling back to IP) so the limit is per user, not per address.
-  const limit = { max: 30, timeWindow: "1 minute", keyGenerator: (req: FastifyRequest) => req.headers.cookie ?? req.ip };
+  // Keyed by the authenticated user id (IP only when there is no session), so extra cookies can't mint a new bucket.
+  const limit = {
+    max: 30, timeWindow: "1 minute",
+    keyGenerator: async (req: FastifyRequest) => {
+      try { return (await requireUser(req)).id; } catch { return req.ip; }
+    },
+  };
 
   app.post("/api/shapes", { config: { rateLimit: limit } }, async (req, reply) => {
     const user = await requireUser(req);

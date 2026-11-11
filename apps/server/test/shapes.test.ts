@@ -82,9 +82,44 @@ describe("shapes", () => {
   });
 
   it("workspace admin can delete a member's workspace shape", async () => {
+    const { ada, bo, ws } = await workspaceWith("admin");
+    const { shape } = (await call("POST", "/api/shapes", ada.cookie, body({ visibility: "workspace", workspaceId: ws }))).json();
+    expect((await call("DELETE", `/api/shapes/${shape.id}`, bo.cookie)).statusCode).toBe(204);
+  });
+
+  it("an editor cannot delete another member's workspace shape", async () => {
     const { ada, bo, ws } = await workspaceWith("editor");
-    const { shape } = (await call("POST", "/api/shapes", bo.cookie, body({ visibility: "workspace", workspaceId: ws }))).json();
-    expect((await call("DELETE", `/api/shapes/${shape.id}`, ada.cookie)).statusCode).toBe(204);
+    const { shape } = (await call("POST", "/api/shapes", ada.cookie, body({ visibility: "workspace", workspaceId: ws }))).json();
+    expect((await call("DELETE", `/api/shapes/${shape.id}`, bo.cookie)).statusCode).toBe(403);
+  });
+
+  it("workspace visibility without a workspaceId is invalid_body", async () => {
+    const ada = await signUp(t.app, "ada@example.com");
+    const res = await call("POST", "/api/shapes", ada.cookie, body({ visibility: "workspace" }));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_body");
+  });
+
+  it("rejects paths whose normalized form exceeds the cap", async () => {
+    const ada = await signUp(t.app, "ada@example.com");
+    const d = "M0 0" + " h9".repeat(33000);
+    expect(d.length).toBeLessThanOrEqual(100_000);
+    const res = await call("POST", "/api/shapes", ada.cookie, body({ d }));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_shape");
+    const big = await call("POST", "/api/shapes", ada.cookie, body({ d: "M0 0" + " h9".repeat(40000) }));
+    expect(big.json().error).toBe("invalid_body");
+  });
+
+  it("rate-limits per user, not per cookie header", async () => {
+    const ada = await signUp(t.app, "ada@example.com");
+    const bo = await signUp(t.app, "bo@example.com");
+    const post = (cookie: string, i: number) => call("POST", "/api/shapes", `${cookie}; junk=${i}`, body());
+    for (let i = 0; i < 30; i++) expect((await post(ada.cookie, i)).statusCode).toBe(201);
+    const over = await post(ada.cookie, 99);
+    expect(over.statusCode).toBe(429);
+    expect(over.json().error).toBe("rate_limited");
+    expect((await post(bo.cookie, 0)).statusCode).toBe(201);
   });
 
   it("search by name or tag", async () => {

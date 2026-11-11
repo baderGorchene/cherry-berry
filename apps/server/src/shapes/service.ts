@@ -20,6 +20,8 @@ const toShape = (r: Row, userId: string): Shape => ({
   createdBy: r.createdBy, createdAt: r.createdAt.toISOString(), mine: r.createdBy === userId,
 });
 
+const MAX_NORMALIZED_D = 200_000;
+
 /** Re-serializes `d`, moves its bounds to the origin and measures it; the client never supplies a size. */
 function normalize(d: string): { d: string; width: number; height: number } {
   try {
@@ -27,7 +29,7 @@ function normalize(d: string): { d: string; width: number; height: number } {
     const b = pathBounds(m);
     const out = transformPath(toPathData(m), [1, 0, 0, 1, -b.x, -b.y]);
     const { width, height } = pathBounds(parsePath(out));
-    if (!(width > 0 || height > 0)) throw new Error("empty");
+    if (!(width > 0 || height > 0) || out.length > MAX_NORMALIZED_D) throw new Error("invalid");
     return { d: out, width, height };
   } catch {
     throw new WorkspaceError("invalid_shape");
