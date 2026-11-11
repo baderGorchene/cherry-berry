@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router";
-import { getSession, type User } from "./api";
+import { getSession, type User, type Workspace } from "./api";
+import Editor from "./routes/Editor";
 import Home from "./routes/Home";
+import NewDesign from "./routes/NewDesign";
 import SignIn from "./routes/SignIn";
 import Workspaces from "./routes/Workspaces";
 
@@ -13,6 +15,8 @@ const CURRENT_KEY = "cherry.currentWorkspace";
 export const currentWorkspace = {
   get: (): string | null => { try { return localStorage.getItem(CURRENT_KEY); } catch { return null; } },
   set: (id: string) => { try { localStorage.setItem(CURRENT_KEY, id); } catch { /* storage unavailable */ } },
+  /** The remembered workspace if still a member, else the first one. */
+  pick: (list: Workspace[]): Workspace | undefined => list.find((w) => w.id === currentWorkspace.get()) ?? list[0],
 };
 
 function RequireUser({ children }: { children: ReactNode }) {
@@ -32,6 +36,8 @@ export default function App() {
         <Route path="/sign-in" element={user ? <Navigate to="/" replace /> : <SignIn />} />
         <Route path="/workspaces" element={<RequireUser><Workspaces /></RequireUser>} />
         <Route path="/" element={<RequireUser><Home /></RequireUser>} />
+        <Route path="/new" element={<RequireUser><NewDesign /></RequireUser>} />
+        <Route path="/d/:id" element={<RequireUser><Editor /></RequireUser>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Session.Provider>

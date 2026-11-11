@@ -1,36 +1,92 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
-import { myWorkspaces, signOut, type Workspace } from "../api";
+import {
+  ApiError, createDesign, errorMessage, listDesigns, myWorkspaces, signOut,
+  type Design, type NewDesign, type Workspace,
+} from "../api";
 import { currentWorkspace, useSession } from "../App";
 import { initials } from "./Workspaces";
 
-// ponytail: presets are display-only until the editor exists (Phase 2).
-const PRESETS = [
-  { name: "Social post", size: "1080 × 1080 px", w: 60, h: 60, bg: "var(--blush)" },
-  { name: "A4 print", size: "210 × 297 mm · CMYK", w: 44, h: 64, bg: "var(--orchid)" },
-  { name: "Presentation", size: "1920 × 1080 px", w: 96, h: 54, bg: "var(--berry)" },
-  { name: "Story", size: "1080 × 1920 px", w: 40, h: 70, bg: "var(--petal)" },
-  { name: "Business card", size: "85 × 55 mm · CMYK", w: 84, h: 48, bg: "#fff" },
+const PRESETS: { name: string; size: string; w: number; h: number; bg: string; body: NewDesign }[] = [
+  { name: "Social post", size: "1080 × 1080 px", w: 60, h: 60, bg: "var(--blush)",
+    body: { title: "Untitled design", width: 1080, height: 1080, unit: "px", colorMode: "rgb" } },
+  { name: "A4 print", size: "210 × 297 mm · CMYK", w: 44, h: 64, bg: "var(--orchid)",
+    body: { title: "Untitled design", width: 210, height: 297, unit: "mm", colorMode: "cmyk", bleed: 3 } },
+  { name: "Presentation", size: "1920 × 1080 px", w: 96, h: 54, bg: "var(--berry)",
+    body: { title: "Untitled design", width: 1920, height: 1080, unit: "px", colorMode: "rgb" } },
+  { name: "Story", size: "1080 × 1920 px", w: 40, h: 70, bg: "var(--petal)",
+    body: { title: "Untitled design", width: 1080, height: 1920, unit: "px", colorMode: "rgb" } },
+  { name: "Business card", size: "85 × 55 mm · CMYK", w: 84, h: 48, bg: "#fff",
+    body: { title: "Untitled design", width: 85, height: 55, unit: "mm", colorMode: "cmyk", bleed: 3 } },
 ];
 
 const ROLE: Record<string, string> = { owner: "Owner", admin: "Admin", editor: "Editor", viewer: "Viewer" };
+
+const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
+export function edited(iso: string, now = Date.now()): string {
+  const s = (new Date(iso).getTime() - now) / 1000;
+  const steps: [Intl.RelativeTimeFormatUnit, number][] = [["second", 60], ["minute", 60], ["hour", 24], ["day", 7], ["week", 4.35], ["month", 12]];
+  let v = s;
+  for (const [unit, size] of steps) {
+    if (Math.abs(v) < size) return `Edited ${unit === "second" ? "just now" : rtf.format(Math.round(v), unit)}`;
+    v /= size;
+  }
+  return `Edited ${rtf.format(Math.round(v), "year")}`;
+}
+
+const tile = { padding: 14, gap: 10, textAlign: "left", font: "inherit", color: "inherit", textDecoration: "none" } as const;
+const thumbBox = { height: 84, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--tint)", borderRadius: 10 } as const;
 
 export default function Home() {
   const { user, setUser } = useSession();
   const navigate = useNavigate();
   const [list, setList] = useState<Workspace[] | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [currentId, setCurrentId] = useState(currentWorkspace.get());
+  const [designs, setDesigns] = useState<Design[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [createError, setCreateError] = useState("");
 
-  useEffect(() => { myWorkspaces().then((r) => setList(r.workspaces), () => setList([])); }, []);
+  const load = () => {
+    setLoadError(false);
+    myWorkspaces().then((r) => setList(r.workspaces), (e) => {
+      if (e instanceof ApiError && e.status === 401) setUser(null);
+      else setLoadError(true);
+    });
+  };
+  useEffect(load, []);
 
+  const current = list && (list.find((w) => w.id === currentId) ?? list[0]);
+  useEffect(() => {
+    if (!current) return;
+    setDesigns(null);
+    listDesigns(current.id).then((r) => setDesigns(r.designs), () => setDesigns([]));
+  }, [current?.id]);
+
+  if (loadError) return (
+    <div className="card" style={{ maxWidth: 420, margin: "48px auto" }}>
+      <p role="alert">Couldn't load your workspaces.</p>
+      <button className="btn btn-p" onClick={load}>Retry</button>
+    </div>
+  );
   if (list === null) return <p className="muted" style={{ padding: 24 }}>Loading…</p>;
-  if (list.length === 0) return <Navigate to="/workspaces" replace />;
-  const current = list.find((w) => w.id === currentId) ?? list[0]!;
+  if (!current) return <Navigate to="/workspaces" replace />;
+  const viewOnly = current.role === "viewer";
 
   const switchTo = (id: string) => {
     if (id === "__new") return navigate("/workspaces");
     currentWorkspace.set(id);
     setCurrentId(id);
+  };
+  const create = async (body: NewDesign) => {
+    setBusy(true); setCreateError("");
+    try {
+      const { design } = await createDesign(current.id, body);
+      navigate(`/d/${design.id}`);
+    } catch (e) {
+      setCreateError(errorMessage(e));
+      setBusy(false);
+    }
   };
 
   return (
@@ -65,11 +121,13 @@ export default function Home() {
 
         <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <h2 style={{ fontSize: 28, letterSpacing: "-0.01em" }}>Start something</h2>
+          {createError && <p role="alert" className="field-error">{createError}</p>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 14 }}>
             {PRESETS.map((p) => (
-              <button key={p.name} type="button" className="card" title="The editor arrives in the next release"
-                style={{ padding: 14, gap: 10, textAlign: "left", cursor: "pointer", font: "inherit", color: "inherit" }}>
-                <span style={{ height: 84, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--tint)", borderRadius: 10 }}>
+              <button key={p.name} type="button" className="card" disabled={viewOnly || busy}
+                title={viewOnly ? "View-only access" : undefined} onClick={() => create(p.body)}
+                style={{ ...tile, cursor: viewOnly ? "default" : "pointer", opacity: viewOnly ? 0.6 : 1 }}>
+                <span style={thumbBox}>
                   <span style={{ width: p.w, height: p.h, background: p.bg, borderRadius: 5, border: p.bg === "#fff" ? "2px solid var(--berry)" : 0 }} />
                 </span>
                 <span>
@@ -78,15 +136,47 @@ export default function Home() {
                 </span>
               </button>
             ))}
+            {viewOnly ? null : (
+              <Link to="/new" className="card" style={{ ...tile, borderStyle: "dashed" }}>
+                <span style={{ ...thumbBox, background: "none", color: "var(--berry)", fontSize: 32 }} aria-hidden="true">+</span>
+                <span>
+                  <strong style={{ display: "block", fontSize: 14 }}>Custom size</strong>
+                  <span className="muted" style={{ fontSize: 13 }}>px, mm, in</span>
+                </span>
+              </Link>
+            )}
           </div>
         </section>
 
         <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <h2 style={{ fontSize: 22 }}>Recent designs</h2>
-          <div className="card" style={{ alignItems: "flex-start" }}>
-            <p className="muted">No designs yet. Pick a size above to start your first one.</p>
-            <Link to="/workspaces" style={{ fontSize: 14 }}>Join or create another workspace</Link>
-          </div>
+          {designs === null ? <p className="muted">Loading…</p> : designs.length === 0 ? (
+            <div className="card" style={{ alignItems: "flex-start" }}>
+              <p className="muted">No designs yet. Pick a size above to start your first one.</p>
+              <Link to="/workspaces" style={{ fontSize: 14 }}>Join or create another workspace</Link>
+            </div>
+          ) : (
+            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 20 }}>
+              {designs.map((d) => (
+                <li key={d.id}>
+                  <Link to={`/d/${d.id}`} className="card" style={{ ...tile, height: "100%" }}>
+                    <span style={{ ...thumbBox, height: 140 }}>
+                      <span style={{
+                        background: "#fff", border: "1px solid var(--line)", borderRadius: 4,
+                        aspectRatio: `${d.width} / ${d.height}`, [d.width >= d.height ? "width" : "height"]: "70%",
+                      }} />
+                    </span>
+                    <span>
+                      <strong style={{ display: "block", fontSize: 14 }}>{d.title}</strong>
+                      <span className="muted" style={{ fontSize: 13 }}>
+                        {d.width} × {d.height} {d.unit} · {edited(d.updatedAt)}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </main>
     </div>
