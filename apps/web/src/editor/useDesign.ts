@@ -35,8 +35,8 @@ export function useDesign(id: string): DesignState {
           onRemote: (u) => Y.applyUpdate(ydoc, u, REMOTE),
           onStatus: (status, statusMessage) => !cancelled && setS({ ...base, status, statusMessage }),
         });
-        const onUpdate = (_: Uint8Array, origin: unknown) => { if (origin === LOCAL) autosave.markDirty(); };
-        const onUnload = (e: BeforeUnloadEvent) => { if (autosave.pending) e.preventDefault(); };
+        const onUpdate = (_: Uint8Array, origin: unknown) => { if (origin === LOCAL || origin === undo) autosave.markDirty(); };
+        const onUnload = (e: BeforeUnloadEvent) => { if (autosave.pending) { e.preventDefault(); e.returnValue = ""; } };
         ydoc.on("update", onUpdate);
         window.addEventListener("beforeunload", onUnload);
         cleanup = () => {

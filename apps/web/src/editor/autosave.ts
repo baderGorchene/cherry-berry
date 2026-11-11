@@ -26,7 +26,7 @@ export class Autosave {
   markDirty(): void {
     if (this.disposed) return;
     this.dirty = true;
-    this.o.onStatus("unsaved");
+    this.emit("unsaved");
     if (!this.current) this.schedule(this.o.debounceMs ?? 800);
   }
 
@@ -41,14 +41,24 @@ export class Autosave {
     clearTimeout(this.timer);
   }
 
+  private last?: string;
+  private emit(s: SaveStatus, message?: string) {
+    const key = `${s}|${message ?? ""}`;
+    if (key === this.last) return;
+    this.last = key;
+    this.o.onStatus(s, message);
+  }
+
   private schedule(ms: number) {
     clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.run(), ms);
   }
 
   private run(): Promise<void> {
+    clearTimeout(this.timer);
+    if (this.current) return this.current; // single flight
     this.dirty = false; // edits made while saving set it again
-    this.o.onStatus("saving");
+    this.emit("saving");
     return (this.current = this.attempt());
   }
 
@@ -59,18 +69,18 @@ export class Autosave {
       this.current = null;
       if (this.disposed) return;
       this.o.onRemote(merged);
-      if (this.dirty) { this.o.onStatus("unsaved"); this.schedule(this.o.debounceMs ?? 800); }
-      else this.o.onStatus("saved");
+      if (this.dirty) { this.emit("unsaved"); this.schedule(this.o.debounceMs ?? 800); }
+      else this.emit("saved");
     } catch (e) {
       this.dirty = true;
       this.current = null;
       if (this.disposed) return;
       if (e instanceof ApiError && e.status < 500) {
-        this.o.onStatus("error", errorMessage(e)); // a later markDirty tries again
+        this.emit("error", errorMessage(e)); // a later markDirty tries again
         return;
       }
       const delays = this.o.retryMs ?? [1000, 3000, 10000];
-      this.o.onStatus("offline");
+      this.emit("offline");
       this.schedule(delays[Math.min(this.failures++, delays.length - 1)]!);
     }
   }

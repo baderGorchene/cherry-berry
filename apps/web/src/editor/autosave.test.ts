@@ -32,7 +32,7 @@ describe("Autosave", () => {
     expect(saveFn).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(800);
     expect(saveFn).toHaveBeenCalledTimes(1);
-    expect(statuses).toEqual(["unsaved", "unsaved", "unsaved", "saving", "saved"]);
+    expect(statuses).toEqual(["unsaved", "saving", "saved"]);
     expect(a.pending).toBe(false);
   });
 
@@ -84,5 +84,38 @@ describe("Autosave", () => {
     a.markDirty();
     await vi.advanceTimersByTimeAsync(800);
     expect(onRemote).toHaveBeenCalledWith(merged);
+  });
+
+  it("flush saves immediately without breaking single flight", async () => {
+    let inFlight = 0, max = 0;
+    const releases: (() => void)[] = [];
+    const { a, saveFn } = setup(() => {
+      max = Math.max(max, ++inFlight);
+      return new Promise((r) => releases.push(() => { inFlight--; r(merged); }));
+    });
+    a.markDirty();
+    await vi.advanceTimersByTimeAsync(800);
+    a.markDirty(); // edit during save
+    const flushed = a.flush();
+    releases[0]!();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(saveFn).toHaveBeenCalledTimes(2); // flush saved now, no debounce wait
+    await vi.advanceTimersByTimeAsync(5000); // stale timer must not start a third
+    releases[1]!();
+    await flushed;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(saveFn).toHaveBeenCalledTimes(2);
+    expect(max).toBe(1);
+    expect(a.pending).toBe(false);
+  });
+
+  it("dispose stops retries", async () => {
+    const { a, saveFn } = setup(async () => merged);
+    saveFn.mockRejectedValue(new TypeError("fetch failed"));
+    a.markDirty();
+    await vi.advanceTimersByTimeAsync(800);
+    a.dispose();
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(saveFn).toHaveBeenCalledTimes(1);
   });
 });
