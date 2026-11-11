@@ -22,15 +22,18 @@ function locate(list: List, id: string): Located | undefined {
 
 /**
  * An `order` that sorts at `index` among `items` (already in order, without the item being placed).
- * ponytail: float midpoints; about 50 inserts into the same ever-shrinking gap run out of double
- * precision and the item then ties with a neighbour (broken by id). Renumber the list if that ever matters.
+ * Float midpoints; when a gap runs out of double precision (~50 inserts into it) the siblings are
+ * renumbered 0..n-1 in the caller's transaction, so it stays one undo step.
  */
 function orderAt(items: YMap[], index: number): number {
   const o = (i: number) => items[i]!.get("order") as number;
   if (!items.length) return 0;
   if (index <= 0) return o(0) - 1;
   if (index >= items.length) return o(items.length - 1) + 1;
-  return (o(index - 1) + o(index)) / 2;
+  const mid = (o(index - 1) + o(index)) / 2;
+  if (mid > o(index - 1) && mid < o(index)) return mid;
+  items.forEach((m, i) => m.set("order", i));
+  return index - 0.5;
 }
 
 /** Inserts `item` into `list` at `index` of the current order. */

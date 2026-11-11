@@ -3,7 +3,7 @@ import * as Y from "yjs";
 import { createDocument } from "../src/create";
 import type { CherryDocument, CherryNode } from "../src/schema";
 import { docToY, yToDoc, REMOTE } from "../src/y";
-import { addPage, createUndoManager, getPageIds, movePage, reorderNode, updateNode } from "../src/ops";
+import { addPage, createUndoManager, duplicateNodes, getPageIds, movePage, reorderNode, updateNode } from "../src/ops";
 
 const base = { rotation: 0, opacity: 1, locked: false, hidden: false };
 const rect = (id: string): CherryNode =>
@@ -76,5 +76,20 @@ describe("concurrent edits merge", () => {
     um.undo();
     expect(order()).toEqual(["a", "b", "c"]);
     expect(getPageIds(a)[0]).toBe(pid);
+  });
+});
+
+describe("order precision", () => {
+  it("60 repeated duplicates into the same gap keep the layer above on top", () => {
+    const d = createDocument({ title: "T", width: 100, height: 100, unit: "px", colorMode: "rgb" });
+    d.pages[0]!.nodes = [rect("a"), rect("top")];
+    const y = docToY(d);
+    const pid = d.pages[0]!.id;
+    let cur = "a";
+    const made: string[] = [];
+    for (let i = 0; i < 60; i++) { cur = duplicateNodes(y, pid, [cur], 0)[0]!; made.push(cur); }
+    const r = yToDoc(y);
+    if (!r.ok) throw new Error(r.detail);
+    expect(ids(r.doc.pages[0]!.nodes)).toEqual(["a", ...made, "top"]);
   });
 });
