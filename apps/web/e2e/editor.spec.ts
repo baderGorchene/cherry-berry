@@ -19,6 +19,18 @@ async function place(page: Page, tool: string) {
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
 const status = (page: Page) => page.getByRole("status");
 
+/** Pen-draws a closed triangle around the canvas center; returns its first anchor and an inside point (screen px). */
+async function drawTriangle(page: Page) {
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
+  const pts = [[cx - 100, cy - 60], [cx + 100, cy - 60], [cx, cy + 80]] as const;
+  await page.keyboard.press("P");
+  for (const [x, y] of pts) await page.mouse.click(x, y);
+  await page.mouse.click(pts[0][0], pts[0][1]);
+  await expect(layers(page).getByRole("button", { name: "Path", exact: true })).toBeVisible();
+  return { first: { x: pts[0][0], y: pts[0][1] }, inside: { x: cx, y: cy - 10 } };
+}
+
 test("create from preset, add a shape, edit it, reload", async ({ page }) => {
   await newSocialPost(page);
   await place(page, "Rectangle (R)");
@@ -148,6 +160,66 @@ test("viewer is read-only", async ({ browser }) => {
   await viewer.goto(designUrl);
   await expect(viewer.getByText("View only")).toBeVisible();
   await expect(viewer.getByRole("button", { name: "Rectangle (R)" })).toBeDisabled();
+});
+
+test("pen draws a closed path", async ({ page }) => {
+  await newSocialPost(page);
+  await drawTriangle(page);
+  const layer = layers(page).getByRole("button", { name: "Path", exact: true });
+  await page.keyboard.press("Control+Z");
+  await expect(layer).toHaveCount(0);
+  await page.keyboard.press("Control+Shift+Z");
+  await expect(layer).toBeVisible();
+  await expect(status(page)).toHaveText("Saved");
+  await page.reload();
+  await expect(layer).toBeVisible();
+});
+
+test("editing a point is one undo step", async ({ page }) => {
+  await newSocialPost(page);
+  const { first, inside } = await drawTriangle(page);
+  await page.mouse.dblclick(inside.x, inside.y);
+  await expect(page.getByText("Editing path", { exact: true })).toBeVisible();
+  await page.mouse.click(first.x, first.y); // select the first anchor
+  const x = page.getByRole("complementary", { name: "Path properties" }).getByLabel("X", { exact: true });
+  const x0 = await x.inputValue();
+  await page.mouse.move(first.x, first.y);
+  await page.mouse.down();
+  await page.mouse.move(first.x + 20, first.y, { steps: 5 });
+  await page.mouse.move(first.x + 40, first.y, { steps: 5 });
+  await page.mouse.up();
+  await expect.poll(async () => Number(await x.inputValue())).toBeGreaterThan(Number(x0));
+  await page.keyboard.press("Control+Z");
+  await expect(x).toHaveValue(x0);
+  await expect(layers(page).getByRole("button", { name: "Path", exact: true })).toBeVisible();
+});
+
+test("viewer cannot edit paths", async ({ browser }) => {
+  const owner = await (await browser.newContext()).newPage();
+  await newSocialPost(owner);
+  const { inside } = await drawTriangle(owner);
+  await expect(status(owner)).toHaveText("Saved");
+  const designUrl = new URL(owner.url()).pathname;
+  const { workspaces } = await (await owner.request.get("/api/workspaces/mine")).json();
+  const viewerEmail = unique("pathviewer");
+  const res = await owner.request.post(`/api/workspaces/${workspaces[0].id}/invitations`, {
+    data: { email: viewerEmail, role: "viewer" },
+  });
+  expect(res.status()).toBe(201);
+  const { token } = await res.json();
+
+  const viewer = await (await browser.newContext()).newPage();
+  await signUp(viewer, viewerEmail);
+  await viewer.getByLabel("Invitation link").fill(token);
+  await viewer.getByRole("button", { name: "Accept invitation" }).click();
+  await expect(viewer).toHaveURL(/\/$/);
+  await viewer.goto(designUrl);
+  await expect(viewer.getByText("View only")).toBeVisible();
+  await expect(layers(viewer).getByRole("button", { name: "Path", exact: true })).toBeVisible();
+  // Same viewport size as the owner, so the path sits at the same screen point.
+  await viewer.mouse.dblclick(inside.x, inside.y);
+  await viewer.keyboard.press("Enter");
+  await expect(viewer.getByText("Editing path", { exact: true })).toHaveCount(0);
 });
 
 test("broken design id", async ({ page }) => {

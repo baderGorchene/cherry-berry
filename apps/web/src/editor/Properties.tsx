@@ -37,7 +37,7 @@ function Field<T extends number | string>({ label, value, unit, disabled, parse,
 const parseNum = (s: string) => (s === "" || !Number.isFinite(Number(s)) ? undefined : Number(s));
 const parseHex = (s: string) => (s === "" ? "" : HEX.test(s) ? s.toUpperCase() : undefined);
 
-function Num(p: { label: string; value: number; unit?: string; disabled: boolean; onCommit(v: number): void }) {
+export function Num(p: { label: string; value: number; unit?: string; disabled: boolean; onCommit(v: number): void }) {
   return <Field {...p} parse={parseNum} format={round2} />;
 }
 

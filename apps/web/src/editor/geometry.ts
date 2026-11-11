@@ -3,7 +3,8 @@ import { scalePath } from "@cherry/vector";
 
 export const MIN_ZOOM = 0.05;
 export const MAX_ZOOM = 8;
-export const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
+export const NUDGE: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+export const clampZoom =(z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 
 /** Konva rotates around (x, y) minus offset, so put the origin at the box center. */
 export function toKonvaAttrs(node: CherryNode) {

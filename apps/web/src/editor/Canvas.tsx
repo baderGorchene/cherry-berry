@@ -3,14 +3,16 @@ import Konva from "konva";
 import { Ellipse, Group, Layer, Path, Rect, Stage, Text, Transformer } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import * as Y from "yjs";
+import type { AnchorRef } from "@cherry/vector";
 import {
   PT_PX, UNIT_PX, addNode, createShape, createText, removeNodes, toPx, updateNode,
   type BasicShape, type CherryNode, type Page,
 } from "@cherry/doc";
 import { fromKonvaTransform, toKonvaAttrs } from "./geometry";
+import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
 import TextEditor from "./TextEditor";
 
-export type Tool = "select" | "text" | BasicShape;
+export type Tool = "select" | "text" | "pen" | "direct" | "add-anchor" | "convert-anchor" | BasicShape;
 type Pt = { x: number; y: number };
 type Drag = { kind: "marquee" | "create"; from: Pt; to: Pt; shift: boolean };
 type Unit = Page["unit"];
@@ -74,10 +76,15 @@ function NodeView({ n, unit, top, editing, ...events }: {
   }
 }
 
-export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan, act, onSelect, onTool, onPan, onZoom, onViewport }: {
+export default function Canvas({
+  ydoc, page, selected, readOnly, tool, zoom, pan, editingPath, anchors, pathKeys,
+  act, onSelect, onTool, onPan, onZoom, onViewport, onAnchors, onEditPath,
+}: {
   ydoc: Y.Doc; page: Page; selected: string[]; readOnly: boolean; tool: Tool; zoom: number; pan: Pt;
+  editingPath: string | null; anchors: AnchorRef[]; pathKeys: PathKeys;
   act(fn: () => void): void; onSelect(ids: string[]): void; onTool(t: Tool): void;
   onPan(p: Pt): void; onZoom(z: number): void; onViewport(v: { width: number; height: number }): void;
+  onAnchors(a: AnchorRef[]): void; onEditPath(id: string): void;
 }) {
   const box = useRef<HTMLElement>(null);
   const nodesRef = useRef<Konva.Group>(null);
@@ -87,6 +94,8 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
   const [editing, setEditing] = useState<string | null>(null);
   // A text placed by the Text tool lives here until its first commit, so an empty one never reaches the doc.
   const [draft, setDraft] = useState<TextNode | null>(null);
+  // The edited path as it follows an anchor or handle drag, drawn in place of the stored node.
+  const [edited, setEdited] = useState<CherryNode | null>(null);
 
   useEffect(() => {
     const ro = new ResizeObserver(([e]) => {
@@ -101,13 +110,16 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
   const scale = toPx(1, page.unit) * zoom;
   const origin = { x: (vp.width - page.width * scale) / 2 + pan.x, y: (vp.height - page.height * scale) / 2 + pan.y };
   const top = (id: string) => page.nodes.find((n) => n.id === id);
+  const pathNode = editingPath ? top(editingPath) : undefined;
+  const pathMode = !readOnly && (tool === "pen" || !!pathNode);
+  const pathInput: PathInput = useRef<{ down(e: MouseEvent): void; hover(e: MouseEvent | null): void }>(null);
   const selectable = (n: CherryNode) => !n.hidden && !n.locked;
 
   // Attach the transformer to the selected Konva nodes after each render.
   useEffect(() => {
     const tr = trRef.current, group = nodesRef.current;
     if (!tr || !group) return;
-    tr.nodes(group.getChildren((k) => selected.includes(k.id()) && !!top(k.id()) && selectable(top(k.id())!) && k.id() !== editing));
+    tr.nodes(pathMode ? [] : group.getChildren((k) => selected.includes(k.id()) && !!top(k.id()) && selectable(top(k.id())!) && k.id() !== editing));
   });
 
   const commitKonva = (ks: Konva.Node[]) => {
@@ -136,6 +148,7 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
 
   const onDown = (e: KonvaEventObject<MouseEvent>) => {
     if (e.evt.button !== 0 || editing) return;
+    if (pathMode) return pathInput.current?.down(e.evt);
     const p = pointer();
     if (tool !== "select" && !readOnly) return setDrag({ kind: "create", from: p, to: p, shift: false });
     const hit = hitOf(e.target);
@@ -148,7 +161,10 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
     setDrag({ kind: "marquee", from: p, to: p, shift: e.evt.shiftKey });
   };
 
-  const onMove = () => { if (drag) setDrag({ ...drag, to: pointer() }); };
+  const onMove = (e: KonvaEventObject<MouseEvent>) => {
+    if (drag) setDrag({ ...drag, to: pointer() });
+    if (pathMode) pathInput.current?.hover(e.evt);
+  };
 
   const onUp = () => {
     if (!drag) return;
@@ -227,8 +243,9 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
 
   return (
     <main ref={box} className="ed-stage" aria-label={`${page.name} canvas`}
-      style={{ cursor: tool === "select" || readOnly ? "default" : "crosshair" }}>
-      <Stage width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove} onWheel={onWheel}>
+      style={{ cursor: tool === "select" || tool === "direct" || readOnly ? "default" : "crosshair" }}>
+      <Stage width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove}
+        onMouseLeave={() => pathInput.current?.hover(null)} onWheel={onWheel}>
         <Layer>
           <Group x={origin.x} y={origin.y} scaleX={scale} scaleY={scale}>
             {page.bleed > 0 && (
@@ -239,12 +256,22 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
               shadowColor="rgba(34,20,42,.22)" shadowBlur={50} shadowOffsetY={20} shadowForStrokeEnabled={false} />
             <Group ref={nodesRef}>
               {page.nodes.map((n) => (
-                <NodeView key={n.id} n={n} unit={page.unit} top editing={editing}
+                <NodeView key={n.id} n={edited?.id === n.id ? edited : n} unit={page.unit} top editing={editing}
                   draggable={!readOnly && tool === "select" && !n.locked}
                   onDragEnd={(e) => commitKonva([...new Set([e.target, ...(trRef.current?.nodes() ?? [])])])}
-                  onDblClick={() => { if (!readOnly && n.kind === "text") { onSelect([n.id]); setEditing(n.id); } }} />
+                  onDblClick={() => {
+                    if (readOnly || pathMode) return;
+                    if (n.kind !== "text") return onEditPath(n.id);
+                    onSelect([n.id]);
+                    setEditing(n.id);
+                  }} />
               ))}
             </Group>
+            {pathMode && (
+              <PathEditor key={pathNode?.id ?? "new"} ydoc={ydoc} page={page} node={pathNode} tool={tool} scale={scale}
+                anchors={anchors} act={act} keys={pathKeys} input={pathInput} onAnchors={onAnchors} onCreated={(id) => onSelect([id])}
+                onTool={onTool} onPreview={setEdited} />
+            )}
             {preview && (
               <Rect {...preview} stroke="#8E1EA2" strokeWidth={1} strokeScaleEnabled={false}
                 fill={drag!.kind === "marquee" ? "rgba(142,30,162,.08)" : undefined} dash={drag!.kind === "create" ? [4, 4] : undefined} listening={false} />

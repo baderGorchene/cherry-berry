@@ -16,23 +16,33 @@ const SHAPES: { kind: BasicShape; label: string; icon: ReactNode }[] = [
   { kind: "arrow", label: "Arrow", icon: svg(<path d="M4 12h14M13 6l6 6-6 6" />) },
 ];
 
+const PEN = svg(<><path d="M12 19l7-7 3 3-7 7z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z" /><circle cx="11" cy="11" r="2" /></>);
+
 /** Every button arms a tool; Text and shape tools then place on the canvas (click, or drag out a box). */
-export default function Toolbar({ readOnly, tool, onTool }: { readOnly: boolean; tool: Tool; onTool(t: Tool): void }) {
-  const on = (t: Tool) => ({
+export default function Toolbar({ readOnly, tool, editing, onTool }: {
+  readOnly: boolean; tool: Tool; editing: boolean; onTool(t: Tool): void;
+}) {
+  const on = (t: Tool, label: string) => ({
     className: `ed-ib${tool === t ? " ed-ib-on" : ""}`, "aria-pressed": tool === t, disabled: readOnly, onClick: () => onTool(t),
+    "aria-label": label, title: label,
   });
+  if (editing) return (
+    <nav aria-label="Vector tools" className="ed-rail">
+      <button {...on("direct", "Direct select (A)")}>{svg(<path d="M5 3l14 8-6 2-2 6z" fill="currentColor" />)}</button>
+      <button {...on("pen", "Pen (P)")}>{PEN}</button>
+      <button {...on("add-anchor", "Add anchor point (+)")}>
+        {svg(<><rect x="8" y="8" width="8" height="8" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></>)}
+      </button>
+      <button {...on("convert-anchor", "Convert anchor point (Shift+C)")}>{svg(<path d="M3 20L12 4l9 16" />)}</button>
+    </nav>
+  );
   return (
     <nav aria-label="Tools" className="ed-rail">
-      <button {...on("select")} aria-label="Select (V)" title="Select (V)">
-        {svg(<path d="M5 3l14 8-6 2-2 6z" />)}
-      </button>
-      <button {...on("text")} aria-label="Text (T)" title="Text (T)">
-        {svg(<path d="M5 5h14M12 5v14" />)}
-      </button>
+      <button {...on("select", "Select (V)")}>{svg(<path d="M5 3l14 8-6 2-2 6z" />)}</button>
+      <button {...on("text", "Text (T)")}>{svg(<path d="M5 5h14M12 5v14" />)}</button>
+      <button {...on("pen", "Pen (P)")}>{PEN}</button>
       {SHAPES.map((s) => (
-        <button key={s.kind} {...on(s.kind)} aria-label={s.label} title={s.label}>
-          {s.icon}
-        </button>
+        <button key={s.kind} {...on(s.kind, s.label)}>{s.icon}</button>
       ))}
     </nav>
   );

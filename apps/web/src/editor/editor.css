@@ -73,6 +73,19 @@
 .ed-zoom .ed-mini { min-width: 32px; min-height: 34px; }
 .ed-zoom .ed-f { min-width: 64px; justify-content: center; }
 
+.ed-pill { padding: 6px 12px; border-radius: 999px; background: var(--berry); color: #fff; font: 600 12px Inter, sans-serif; }
+.ed-done {
+  min-height: 34px; padding: 0 14px; border: 0; border-radius: 8px; background: var(--berry); color: #fff;
+  font: 600 13px Inter, sans-serif; cursor: pointer;
+}
+.ed-done:focus-visible, .ed-seg button:focus-visible { outline: 3px solid var(--blush); outline-offset: 1px; }
+.ed-seg { display: flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.ed-seg button {
+  flex: 1; min-height: 34px; border: 0; background: #fff; font: 600 12px Inter, sans-serif; color: var(--muted); cursor: pointer;
+}
+.ed-seg button[aria-pressed="true"] { background: var(--berry); color: #fff; }
+.ed-f input[type="checkbox"] { width: auto; accent-color: var(--berry); }
+
 .ed-stage { flex: 999 1 420px; min-width: 0; position: relative; overflow: hidden; }
 .ed-stage > div { position: absolute; inset: 0; }
 .ed-text {

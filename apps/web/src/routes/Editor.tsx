@@ -1,22 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import * as Y from "yjs";
+import type { AnchorRef } from "@cherry/vector";
 import {
   duplicateNodes, fromPx, removeNodes, reorderNode, setTitle, updateNode, yToDoc, type CherryDocument, type CherryNode,
 } from "@cherry/doc";
 import "../editor/editor.css";
 import Canvas, { type Tool } from "../editor/Canvas";
-import { clampZoom, fitZoom } from "../editor/geometry";
+import { NUDGE, clampZoom, fitZoom } from "../editor/geometry";
 import Layers from "../editor/Layers";
 import Pages from "../editor/Pages";
+import { editModel, type PathKeys } from "../editor/PathEditor";
+import PathPanel from "../editor/PathPanel";
 import Properties from "../editor/Properties";
 import Toolbar from "../editor/Toolbar";
 import { useDesign, type DesignState } from "../editor/useDesign";
 import { useYValue } from "../editor/useYValue";
 
 type Ready = Extract<DesignState, { state: "ready" }>;
-const NUDGE: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
-const TOOL_KEYS: Record<string, Tool> = { v: "select", t: "text", r: "rect", o: "ellipse", l: "line" };
+const TOOL_KEYS: Record<string, Tool> = { v: "select", t: "text", r: "rect", o: "ellipse", l: "line", p: "pen" };
+// In path edit mode only the vector tools are armed by key; Shift+C (convert) is checked separately.
+const EDIT_KEYS: Record<string, Tool> = { a: "direct", p: "pen", "+": "add-anchor", "=": "add-anchor" };
 
 const STATUS: Record<Ready["status"], string> = {
   saved: "Saved", saving: "Saving…", unsaved: "Unsaved changes", offline: "Offline — retrying", error: "Not saved",
@@ -70,9 +74,27 @@ function Shell({ d }: { d: Ready }) {
   const zoom = zoomSet ?? fitZoom(page, vp);
   const zoomTo = (z: number | null) => { setZoomSet(z === null ? null : clampZoom(z)); if (z === null) setPan({ x: 0, y: 0 }); };
 
+  // Point-edit mode: the path being edited and its selected anchors.
+  const [editingPath, setEditingPath] = useState<string | null>(null);
+  const [anchors, setAnchors] = useState<AnchorRef[]>([]);
+  const editNode = editingPath ? page.nodes.find((n) => n.id === editingPath) : undefined;
+  const pathKeys: PathKeys = useRef<(e: KeyboardEvent) => boolean>(null);
+  const enterEdit = (id: string) => {
+    const n = page.nodes.find((x) => x.id === id);
+    if (readOnly || !n || n.locked || n.hidden || !editModel(n)) return;
+    select([id]);
+    setEditingPath(id);
+    setAnchors([]);
+    setTool("direct");
+  };
+  const exitEdit = () => { setEditingPath(null); setAnchors([]); setTool("select"); };
+  // Leave edit mode when the node is gone (undo, remote delete, page switch) or can no longer be point-edited.
+  useEffect(() => { if (editingPath && !(editNode && editModel(editNode))) exitEdit(); }, [doc, page.id, editingPath]);
+
   const onKey = useRef<(e: KeyboardEvent) => void>(null);
   onKey.current = (e) => {
     if (typing(e.target)) return;
+    if (pathKeys.current?.(e)) return e.preventDefault(); // pen finish, anchor delete/nudge
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
     const ids = sel.selected;
@@ -81,8 +103,11 @@ function Shell({ d }: { d: Ready }) {
     else if (mod && key === "-") { stop(); zoomTo(zoom / 1.2); }
     else if (mod && key === "0") { stop(); zoomTo(null); }
     else if (mod && key === "a") { stop(); select(page.nodes.filter((n) => !n.hidden && !n.locked).map((n) => n.id)); }
-    else if (key === "escape") { select([]); setTool("select"); }
+    else if (key === "escape") { if (editingPath) exitEdit(); else { select([]); setTool("select"); } }
     else if (readOnly) return;
+    else if (key === "enter") {
+      if (!editingPath && selectedNodes.length === 1 && selectedNodes[0]!.kind === "path") { stop(); enterEdit(selectedNodes[0]!.id); }
+    }
     else if (mod && key === "z") { stop(); if (e.shiftKey) undo.redo(); else undo.undo(); }
     else if (mod && key === "y") { stop(); undo.redo(); }
     else if (mod && key === "d") {
@@ -105,7 +130,12 @@ function Shell({ d }: { d: Ready }) {
       act(() => movable.forEach((n) => updateNode(ydoc, page.id, n.id, { x: n.x + dx!, y: n.y + dy! })));
     }
     else if ((e.key === "Delete" || e.key === "Backspace") && ids.length) { stop(); act(() => removeNodes(ydoc, page.id, ids)); }
-    else if (!mod && !e.altKey && key in TOOL_KEYS) setTool(TOOL_KEYS[key]!);
+    else if (mod || e.altKey) return;
+    else if (editingPath) {
+      if (key === "c" && e.shiftKey) setTool("convert-anchor");
+      else if (key in EDIT_KEYS) setTool(EDIT_KEYS[key]!);
+    }
+    else if (key in TOOL_KEYS) setTool(TOOL_KEYS[key]!);
   };
   useEffect(() => {
     const h = (e: KeyboardEvent) => onKey.current!(e);
@@ -140,6 +170,7 @@ function Shell({ d }: { d: Ready }) {
         <button className="ed-ib" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={readOnly} onClick={() => undo.redo()}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M15 14l5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h3" /></svg>
         </button>
+        {editNode && <span className="ed-pill">Editing path</span>}
         <span style={{ flex: 1 }} />
         <div className="ed-zoom" role="group" aria-label="Zoom">
           <button className="ed-mini" aria-label="Zoom out" title="Zoom out (Ctrl+-)" onClick={() => zoomTo(zoom / 1.2)}>−</button>
@@ -147,16 +178,21 @@ function Shell({ d }: { d: Ready }) {
           <button className="ed-mini" aria-label="Zoom in" title="Zoom in (Ctrl+=)" onClick={() => zoomTo(zoom * 1.2)}>+</button>
           <button className="ed-mini" title="Fit (Ctrl+0)" onClick={() => zoomTo(null)}>Fit</button>
         </div>
+        {editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>}
       </header>
       <div className="ed-body">
-        <Toolbar readOnly={readOnly} tool={tool} onTool={setTool} />
+        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} onTool={setTool} />
         <aside aria-label="Layers" className="ed-left">
           <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} act={act} onSelect={select} />
           <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
         </aside>
         <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} tool={tool} zoom={zoom} pan={pan}
-          act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp} />
-        <Properties ydoc={ydoc} pageId={page.id} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act} />
+          editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys}
+          act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
+          onAnchors={setAnchors} onEditPath={enterEdit} />
+        {editNode
+          ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
+          : <Properties ydoc={ydoc} pageId={page.id} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act} />}
       </div>
     </div>
   );
