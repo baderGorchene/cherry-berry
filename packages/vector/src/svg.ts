@@ -15,10 +15,22 @@ const MAX_LENGTH = 1_000_000;
 const MAX_PATHS = 2000;
 const DEFAULT_FILL: Paint = { type: "solid", color: "#22142A", opacity: 1 };
 
-const BANNED = new Set(["script", "foreignobject", "image", "use", "style"]);
+const ELEMENTS = new Set(["svg", "g", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "defs", "clippath"]);
 const SHAPES = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon"]);
+const ATTRS = new Set(("id d x y width height cx cy r rx ry x1 y1 x2 y2 points transform viewbox preserveaspectratio fill stroke " +
+  "stroke-width fill-rule clip-rule fill-opacity stroke-opacity opacity clip-path display visibility").split(" "));
+const NUM = "[-+]?[\d.]+(?:e[-+]?\d+)?";
+const SAFE_VALUE: Record<string, RegExp> = {
+  transform: new RegExp(`^(?:\s*(?:matrix|translate|scale|rotate|skewX|skewY)\(\s*${NUM}(?:[\s,]+${NUM})*\s*\))+\s*$`, "i"),
+  "clip-path": /^url\(#[\w-]+\)$/,
+  fill: /^(?:rgb|rgba|hsl|hsla)\([\d.,%\s]+\)$/i,
+  stroke: /^(?:rgb|rgba|hsl|hsla)\([\d.,%\s]+\)$/i,
+};
 
-/** Parses to a detached DOM (nothing runs), then drops everything that can execute or fetch. Names are matched case-insensitively because Paper lowercases them. */
+/**
+ * Allowlist sanitiser on a detached DOM (nothing runs): only plain geometry elements and presentation
+ * attributes survive, so nothing can fetch, script or style. Names are lowercased because Paper lowercases them.
+ */
 function sanitize(svg: string): Element {
   const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
   const root = doc.documentElement;
@@ -26,12 +38,14 @@ function sanitize(svg: string): Element {
   let shapes = 0;
   const walk = (e: Element) => {
     for (const a of [...e.attributes]) {
-      const href = /^(xlink:)?href$/i.test(a.name) && !a.value.trim().startsWith("#");
-      if (/^on/i.test(a.name) || href || /url\(\s*(?!#)/i.test(a.value)) e.removeAttribute(a.name);
+      const n = a.localName.toLowerCase();
+      const ok = !a.namespaceURI && ATTRS.has(n) && (!/[\(&]/.test(a.value) || SAFE_VALUE[n]?.test(a.value));
+      if (!ok) e.removeAttributeNode(a);
+      else if (n === "viewbox" && a.localName !== "viewBox") { e.removeAttributeNode(a); e.setAttribute("viewBox", a.value); }
     }
     for (const c of [...e.children]) {
       const n = c.localName.toLowerCase();
-      if (BANNED.has(n)) { c.remove(); continue; }
+      if (!ELEMENTS.has(n)) { c.remove(); continue; }
       if (SHAPES.has(n) && ++shapes > MAX_PATHS) throw new InvalidSvg("too_complex");
       walk(c);
     }

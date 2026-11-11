@@ -42,13 +42,18 @@ export default function Shapes() {
     const r = await readSvg(file);
     if ("error" in r) { setPreview(null); return setFileError(r.error); }
     setFileError("");
-    const filled = r.paths.find((p) => p.fill);
-    const joined = r.paths.map((p) => p.d).join(" ");
-    const b = pathBounds(parsePath(joined));
-    setPreview({
-      d: transformPath(joined, [1, 0, 0, 1, -b.x, -b.y]), fillRule: r.paths[0]!.fillRule, fill: filled?.fill ?? null,
-      stroke: filled ? null : (r.paths.find((p) => p.stroke)?.stroke ?? null), width: b.width, height: b.height,
-    } as Shape);
+    try {
+      const filled = r.paths.find((p) => p.fill);
+      const joined = r.paths.map((p) => p.d).join(" ");
+      const b = pathBounds(parsePath(joined));
+      setPreview({
+        d: transformPath(joined, [1, 0, 0, 1, -b.x, -b.y]), fillRule: r.paths[0]!.fillRule, fill: filled?.fill ?? null,
+        stroke: filled ? null : (r.paths.find((p) => p.stroke)?.stroke ?? null), width: b.width, height: b.height,
+      } as Shape);
+    } catch {
+      setPreview(null);
+      return setFileError("That SVG is too detailed to save as one shape.");
+    }
     setForm((f) => ({ ...f, name: f.name || file.name.replace(/\.svg$/i, "") }));
   };
 

@@ -89,7 +89,8 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
     const r = await readSvg(file);
     if ("error" in r) return setImportError(r.error);
     setImportError("");
-    const nodes = importNodes(r.paths, page);
+    let nodes: CherryNode[];
+    try { nodes = importNodes(r.paths, page); } catch { return setImportError("That SVG is too detailed to import."); }
     act(() => nodes.forEach((n) => addNode(ydoc, page.id, n)));
     onSelect(nodes.map((n) => n.id));
   };
