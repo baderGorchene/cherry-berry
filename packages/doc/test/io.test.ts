@@ -58,3 +58,16 @@ describe(".cherry io", () => {
     expect(r.ok && r.doc).toEqual(d);
   });
 });
+
+describe(".cherry hostile input", () => {
+  it("deeply nested groups return invalid_document instead of throwing", () => {
+    const d = createDocument({ title: "Deep", width: 10, height: 10, unit: "px", colorMode: "rgb" });
+    const open = '{"kind":"group","id":"g","name":"G","x":0,"y":0,"width":1,"height":1,"children":[';
+    const leaf = '{"kind":"rect","id":"r","name":"R","x":0,"y":0,"width":1,"height":1}';
+    const deep = open.repeat(5000) + leaf + "]}".repeat(5000);
+    const text = JSON.stringify(d).replace('"nodes":[]', `"nodes":[${deep}]`);
+    let r: ReturnType<typeof parseCherry> | undefined;
+    expect(() => { r = parseCherry(text); }).not.toThrow();
+    expect(r).toMatchObject({ ok: false });
+  });
+});

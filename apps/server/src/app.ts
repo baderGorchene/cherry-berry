@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { createAuth, createRequireUser } from "./auth";
 import type { Config } from "./config";
 import type { Db } from "./db/client";
@@ -7,7 +7,12 @@ import { registerWorkspaceRoutes } from "./workspaces/routes";
 import rateLimit from "@fastify/rate-limit";
 
 export async function buildApp(config: Config, deps: { db: Db }): Promise<FastifyInstance> {
-  const app = Fastify({ logger: false });
+  const options: FastifyServerOptions = {
+    logger: { level: config.logLevel },
+    // Fastify accepts a hop count at runtime; its types omit number.
+    trustProxy: config.trustProxy as boolean | string,
+  };
+  const app = Fastify(options);
   const auth = createAuth(config, deps.db);
   const requireUser = createRequireUser(auth);
 
@@ -29,6 +34,9 @@ export async function buildApp(config: Config, deps: { db: Db }): Promise<Fastif
     async handler(request, reply) {
       const headers = new Headers();
       for (const [k, v] of Object.entries(request.headers)) if (v !== undefined) headers.set(k, String(v));
+      // Better Auth rate-limits and records sessions by this header; never trust the client's copy.
+      // request.ip already honours TRUST_PROXY.
+      headers.set("x-forwarded-for", request.ip);
       const res = await auth.handler(new Request(new URL(request.url, config.publicUrl), {
         method: request.method,
         headers,

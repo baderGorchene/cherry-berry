@@ -15,5 +15,7 @@ export function createDb(url: string): { db: Db; close(): Promise<void> } {
     return { db: drizzlePglite(client, { schema }) as unknown as Db, close: () => client.close() };
   }
   const pool = new pg.Pool({ connectionString: url });
+  // Without a listener, an idle client dropped by a Postgres restart crashes the process.
+  pool.on("error", (err) => console.error("postgres pool error", err));
   return { db: drizzlePg(pool, { schema }) as unknown as Db, close: () => pool.end() };
 }

@@ -10,13 +10,14 @@ export function testConfig(): Config {
     DATABASE_URL: process.env.TEST_DATABASE_URL ?? "pglite:memory",
     AUTH_SECRET: "test-secret-test-secret-test-secret-123",
     PUBLIC_URL: "http://localhost:3000",
+    LOG_LEVEL: "silent",
   });
 }
 
-export async function setupTestApp(): Promise<{
+export async function setupTestApp(overrides: Partial<Config> = {}): Promise<{
   app: FastifyInstance; db: Db; reset(): Promise<void>; close(): Promise<void>;
 }> {
-  const config = testConfig();
+  const config = { ...testConfig(), ...overrides };
   const { db, close } = createDb(config.databaseUrl);
   await runMigrations(db);
   const app = await buildApp(config, { db });

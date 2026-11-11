@@ -9,7 +9,11 @@ export function parseCherry(text: string): ParseResult {
   try { raw = JSON.parse(text); } catch { return { ok: false, error: "invalid_json" }; }
   const v = (raw as { version?: unknown } | null)?.version;
   if (typeof v === "number" && v > CHERRY_FORMAT_VERSION) return { ok: false, error: "newer_version" };
-  const r = CherryDocument.safeParse(raw);
+  let r: ReturnType<typeof CherryDocument.safeParse>;
+  try { r = CherryDocument.safeParse(raw); } catch {
+    // Hostile input (e.g. thousands of nested groups) can exhaust the stack.
+    return { ok: false, error: "invalid_document", detail: "document is too deeply nested" };
+  }
   if (!r.success) {
     const i = r.error.issues[0]!;
     return { ok: false, error: "invalid_document", detail: `${i.path.join(".")}: ${i.message}` };
