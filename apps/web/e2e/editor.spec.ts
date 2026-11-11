@@ -9,12 +9,19 @@ async function newSocialPost(page: Page) {
   await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
 }
 
+/** Arms a tool from the toolbar and clicks the canvas center (the page center at fit zoom). */
+async function place(page: Page, tool: string) {
+  await page.getByRole("button", { name: tool }).click();
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+}
+
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
 const status = (page: Page) => page.getByRole("status");
 
 test("create from preset, add a shape, edit it, reload", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
+  await place(page, "Rectangle (R)");
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
 
   const x = page.getByLabel("X", { exact: true });
@@ -29,28 +36,29 @@ test("create from preset, add a shape, edit it, reload", async ({ page }) => {
 
 test("each committed field is one undo step", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
+  await place(page, "Rectangle (R)");
   const x = page.getByLabel("X", { exact: true });
   const y = page.getByLabel("Y", { exact: true });
+  const [x0, y0] = [await x.inputValue(), await y.inputValue()];
   await x.fill("100");
   await x.press("Enter");
   await y.fill("50");
   await y.press("Enter");
   await layers(page).getByRole("button", { name: "Rectangle", exact: true }).click();
   await page.keyboard.press("Control+Z");
-  await expect(y).toHaveValue("405");
+  await expect(y).toHaveValue(y0);
   await expect(x).toHaveValue("100");
   await page.keyboard.press("Control+Z");
-  await expect(x).toHaveValue("405");
+  await expect(x).toHaveValue(x0);
   await expect(layers(page).getByRole("button", { name: "Hide Rectangle" })).toBeVisible();
 });
 
 test("drag moves a shape", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
+  await place(page, "Rectangle (R)");
   const x = page.getByLabel("X", { exact: true });
-  await expect(x).toHaveValue("405");
-  // The new rectangle sits at the page center, which fit-zoom puts at the canvas center.
+  const x0 = Number(await x.inputValue());
+  // The new rectangle is centered on the canvas center.
   const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
   await page.mouse.move(cx, cy);
@@ -58,7 +66,7 @@ test("drag moves a shape", async ({ page }) => {
   await page.mouse.move(cx + 25, cy, { steps: 5 });
   await page.mouse.move(cx + 50, cy, { steps: 5 });
   await page.mouse.up();
-  await expect.poll(async () => Number(await x.inputValue())).toBeGreaterThan(405);
+  await expect.poll(async () => Number(await x.inputValue())).toBeGreaterThan(x0 + 50);
 });
 
 test("text tool", async ({ page }) => {
@@ -76,6 +84,18 @@ test("text tool", async ({ page }) => {
   await expect(layer).toBeVisible();
 });
 
+test("empty new text leaves nothing behind", async ({ page }) => {
+  await newSocialPost(page);
+  await place(page, "Text (T)");
+  await expect(page.getByLabel("Edit text")).toBeFocused();
+  await page.keyboard.press("Backspace");
+  await page.keyboard.press("Escape");
+  await expect(page.getByLabel("Edit text")).toHaveCount(0);
+  await expect(page.getByText("No layers yet.", { exact: false })).toBeVisible();
+  await page.keyboard.press("Control+Z");
+  await expect(page.getByText("No layers yet.", { exact: false })).toBeVisible();
+});
+
 test("recent designs load error offers retry", async ({ page }) => {
   await signUp(page, unique("rd"));
   await page.route("**/api/workspaces/*/designs", (r) => r.fulfill({ status: 500, body: "{}" }));
@@ -88,7 +108,7 @@ test("recent designs load error offers retry", async ({ page }) => {
 
 test("undo and redo", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "Ellipse (O)" }).click();
+  await place(page, "Ellipse (O)");
   const layer = layers(page).getByRole("button", { name: "Ellipse", exact: true });
   await expect(layer).toBeVisible();
   await page.keyboard.press("Control+Z");

@@ -14,12 +14,24 @@ export type Tool = "select" | "text" | BasicShape;
 type Pt = { x: number; y: number };
 type Drag = { kind: "marquee" | "create"; from: Pt; to: Pt; shift: boolean };
 type Unit = Page["unit"];
+type TextNode = Extract<CherryNode, { kind: "text" }>;
 
 const isLine = (n: CherryNode) => n.kind === "path" && n.height === 0;
-const konvaFont = (n: Extract<CherryNode, { kind: "text" }>, unit: Unit) => ({
+const konvaFont = (n: TextNode, unit: Unit) => ({
   text: n.text, width: n.width, fontFamily: n.fontFamily, fontSize: (n.fontSize * PT_PX) / UNIT_PX[unit],
   fontStyle: String(n.fontWeight), lineHeight: n.lineHeight, letterSpacing: n.letterSpacing, align: n.align,
 });
+const TEXT_LAYOUT = ["text", "fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "width"];
+
+/** Adds the rendered height to a patch that changes how a text node lays out (other patches pass through). */
+export function withTextHeight(n: CherryNode, patch: Partial<CherryNode>, unit: Unit): Partial<CherryNode> {
+  if (n.kind !== "text" || !TEXT_LAYOUT.some((k) => k in patch)) return patch;
+  const t = new Konva.Text(konvaFont({ ...n, ...patch } as TextNode, unit));
+  const height = t.height();
+  t.destroy();
+  return { ...patch, height };
+}
+
 const paint = (p?: { color: string; opacity: number }) => p && (p.opacity < 1 ? hexA(p.color, p.opacity) : p.color);
 const hexA = (hex: string, a: number) =>
   `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
@@ -73,6 +85,8 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
   const [vp, setVp] = useState({ width: 0, height: 0 });
   const [drag, setDrag] = useState<Drag | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
+  // A text placed by the Text tool lives here until its first commit, so an empty one never reaches the doc.
+  const [draft, setDraft] = useState<TextNode | null>(null);
 
   useEffect(() => {
     const ro = new ResizeObserver(([e]) => {
@@ -101,8 +115,10 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
       const n = top(k.id());
       if (!n) return [];
       const t = { x: k.x(), y: k.y(), rotation: k.rotation(), scaleX: k.scaleX(), scaleY: k.scaleY() };
+      // A multi-node resize can leave skew on rotated nodes; the document has no skew, so drop it.
       k.scale({ x: 1, y: 1 });
-      return [[n.id, fromKonvaTransform(n, t)] as const];
+      k.skew({ x: 0, y: 0 });
+      return [[n.id, withTextHeight(n, fromKonvaTransform(n, t), page.unit)] as const];
     });
     if (patches.length) act(() => patches.forEach(([id, p]) => updateNode(ydoc, page.id, id, p)));
   };
@@ -148,18 +164,33 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
       }).map((k) => k.id());
       return onSelect(drag.shift ? [...new Set([...selected, ...hits])] : hits);
     }
-    let node: CherryNode;
+    onTool("select");
     if (tool === "text") {
-      node = moved ? createText(r, r.width) : createText(from, page.width * 0.6);
+      const t = (moved ? createText(r, r.width) : createText(from, page.width * 0.6)) as TextNode;
+      setDraft(t);
+      return setEditing(t.id);
+    }
+    const s = Math.min(page.width, page.height) * 0.25;
+    let node: CherryNode;
+    if (tool === "line" && moved) {
+      // A dragged line runs from the press point to the release point.
+      const len = Math.hypot(to.x - from.x, to.y - from.y);
+      const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+      node = createShape("line", { x: mid.x - len / 2, y: mid.y, width: len, height: 0 });
+      node.rotation = ((Math.atan2(to.y - from.y, to.x - from.x) * 180) / Math.PI + 360) % 360;
     } else {
-      const s = Math.min(page.width, page.height) * 0.25;
       node = createShape(tool as BasicShape, moved ? r : { x: from.x - s / 2, y: from.y - s / 2, width: s, height: s });
     }
     act(() => addNode(ydoc, page.id, node));
     onSelect([node.id]);
-    onTool("select");
-    if (node.kind === "text") setEditing(node.id);
   };
+
+  // End a drag on mouseup anywhere, even outside the canvas.
+  useEffect(() => {
+    if (!drag) return;
+    window.addEventListener("mouseup", onUp);
+    return () => window.removeEventListener("mouseup", onUp);
+  }, [drag]);
 
   // Page-unit rect → stage (screen) rect, the space getClientRect() reports in.
   const rectOnScreen = (r: { x: number; y: number; width: number; height: number }) =>
@@ -171,21 +202,24 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
     else onPan({ x: pan.x - e.evt.deltaX, y: pan.y - e.evt.deltaY });
   };
 
-  const commitText = (id: string, text: string) => {
+  const commitText = (n: TextNode, text: string) => {
     setEditing(null);
-    const n = top(id);
-    if (!n || n.kind !== "text") return;
+    setDraft(null);
+    const isNew = n === draft;
     if (!text.trim()) {
-      act(() => removeNodes(ydoc, page.id, [id]));
-      return onSelect(selected.filter((s) => s !== id));
+      if (!isNew) act(() => removeNodes(ydoc, page.id, [n.id]));
+      return onSelect(selected.filter((s) => s !== n.id));
     }
-    const height = new Konva.Text(konvaFont({ ...n, text }, page.unit)).height();
     const rename = n.name === "Text" || n.name === n.text;
-    act(() => updateNode(ydoc, page.id, id, { text, height, ...(rename ? { name: text.slice(0, 40) } : {}) }));
+    const patch = withTextHeight(n, { text, ...(rename ? { name: text.slice(0, 40) } : {}) }, page.unit);
+    if (isNew) {
+      act(() => addNode(ydoc, page.id, { ...n, ...patch } as CherryNode));
+      onSelect([n.id]);
+    } else act(() => updateNode(ydoc, page.id, n.id, patch));
   };
 
   const narrow = selected.some((s) => { const n = top(s); return !!n && (n.kind === "text" || isLine(n)); });
-  const editNode = editing ? top(editing) : undefined;
+  const editNode = draft ?? (editing ? top(editing) : undefined);
   const preview = drag && {
     x: Math.min(drag.from.x, drag.to.x), y: Math.min(drag.from.y, drag.to.y),
     width: Math.abs(drag.to.x - drag.from.x), height: Math.abs(drag.to.y - drag.from.y),
@@ -194,7 +228,7 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
   return (
     <main ref={box} className="ed-stage" aria-label={`${page.name} canvas`}
       style={{ cursor: tool === "select" || readOnly ? "default" : "crosshair" }}>
-      <Stage width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove} onMouseUp={onUp} onWheel={onWheel}>
+      <Stage width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove} onWheel={onWheel}>
         <Layer>
           <Group x={origin.x} y={origin.y} scaleX={scale} scaleY={scale}>
             {page.bleed > 0 && (
@@ -226,7 +260,7 @@ export default function Canvas({ ydoc, page, selected, readOnly, tool, zoom, pan
       </Stage>
       {editNode?.kind === "text" && (
         <TextEditor key={editNode.id} node={editNode} origin={origin} scale={scale} zoom={zoom}
-          onCommit={(t) => commitText(editNode.id, t)} />
+          onCommit={(t) => commitText(editNode, t)} />
       )}
     </main>
   );

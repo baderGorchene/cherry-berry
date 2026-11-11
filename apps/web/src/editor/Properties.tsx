@@ -1,6 +1,7 @@
 import { useState } from "react";
 import * as Y from "yjs";
-import { LOCAL, scalePath, updateNode, type CherryNode } from "@cherry/doc";
+import { LOCAL, scalePath, updateNode, type CherryNode, type Page } from "@cherry/doc";
+import { withTextHeight } from "./Canvas";
 
 const FONTS = ["Inter", "Space Grotesk", "Georgia", "Arial", "Times New Roman", "Courier New"];
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -58,14 +59,15 @@ function ColorField({ label, color, disabled, onCommit }: {
 }
 
 export default function Properties({ ydoc, pageId, unit, nodes, readOnly, act }: {
-  ydoc: Y.Doc; pageId: string; unit: string; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
+  ydoc: Y.Doc; pageId: string; unit: Page["unit"]; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
 }) {
   if (nodes.length === 0) return (
     <aside aria-label="Properties" className="ed-props">
       <p className="muted" style={{ fontSize: 13 }}>Select a layer to edit its properties.</p>
     </aside>
   );
-  const update = (n: CherryNode, patch: Patch) => updateNode(ydoc, pageId, n.id, patch as Partial<CherryNode>);
+  const update = (n: CherryNode, patch: Patch) =>
+    updateNode(ydoc, pageId, n.id, withTextHeight(n, patch as Partial<CherryNode>, unit));
   const set = (n: CherryNode, patch: Patch) => act(() => update(n, patch));
 
   if (nodes.length > 1) {

@@ -1,9 +1,6 @@
 import type { ReactNode } from "react";
-import * as Y from "yjs";
-import { addNode, createShape, createText, type BasicShape, type CherryNode } from "@cherry/doc";
+import type { BasicShape } from "@cherry/doc";
 import type { Tool } from "./Canvas";
-
-type Page = { id: string; width: number; height: number };
 
 const svg = (d: ReactNode) => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"
@@ -19,28 +16,21 @@ const SHAPES: { kind: BasicShape; label: string; icon: ReactNode }[] = [
   { kind: "arrow", label: "Arrow", icon: svg(<path d="M4 12h14M13 6l6 6-6 6" />) },
 ];
 
-/** Buttons insert at the page center; the keyboard tools (V/T/R/O/L) place by clicking or dragging on the canvas. */
-export default function Toolbar({ ydoc, page, readOnly, tool, act, onTool, onInserted }: {
-  ydoc: Y.Doc; page: Page; readOnly: boolean; tool: Tool; act(fn: () => void): void; onTool(t: Tool): void; onInserted(id: string): void;
-}) {
-  const on = (t: Tool) => `ed-ib${tool === t ? " ed-ib-on" : ""}`;
-  const insert = (node: CherryNode) => { act(() => addNode(ydoc, page.id, node)); onInserted(node.id); onTool("select"); };
-  const addShape = (kind: BasicShape) => {
-    const s = Math.min(page.width, page.height) * 0.25;
-    insert(createShape(kind, { x: (page.width - s) / 2, y: (page.height - s) / 2, width: s, height: s }));
-  };
-  const addText = () => insert(createText({ x: page.width * 0.2, y: page.height / 2 }, page.width * 0.6));
-
+/** Every button arms a tool; Text and shape tools then place on the canvas (click, or drag out a box). */
+export default function Toolbar({ readOnly, tool, onTool }: { readOnly: boolean; tool: Tool; onTool(t: Tool): void }) {
+  const on = (t: Tool) => ({
+    className: `ed-ib${tool === t ? " ed-ib-on" : ""}`, "aria-pressed": tool === t, disabled: readOnly, onClick: () => onTool(t),
+  });
   return (
     <nav aria-label="Tools" className="ed-rail">
-      <button className={on("select")} aria-label="Select (V)" title="Select (V)" aria-pressed={tool === "select"} disabled={readOnly} onClick={() => onTool("select")}>
+      <button {...on("select")} aria-label="Select (V)" title="Select (V)">
         {svg(<path d="M5 3l14 8-6 2-2 6z" />)}
       </button>
-      <button className={on("text")} aria-label="Text (T)" title="Text (T)" disabled={readOnly} onClick={addText}>
+      <button {...on("text")} aria-label="Text (T)" title="Text (T)">
         {svg(<path d="M5 5h14M12 5v14" />)}
       </button>
       {SHAPES.map((s) => (
-        <button key={s.kind} className={on(s.kind)} aria-label={s.label} title={s.label} disabled={readOnly} onClick={() => addShape(s.kind)}>
+        <button key={s.kind} {...on(s.kind)} aria-label={s.label} title={s.label}>
           {s.icon}
         </button>
       ))}

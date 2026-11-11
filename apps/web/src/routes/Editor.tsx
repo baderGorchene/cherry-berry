@@ -148,7 +148,7 @@ function Shell({ d }: { d: Ready }) {
         </div>
       </header>
       <div className="ed-body">
-        <Toolbar ydoc={ydoc} page={page} readOnly={readOnly} tool={tool} act={act} onTool={setTool} onInserted={(nid) => select([nid])} />
+        <Toolbar readOnly={readOnly} tool={tool} onTool={setTool} />
         <aside aria-label="Layers" className="ed-left">
           <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} act={act} onSelect={select} />
           <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
