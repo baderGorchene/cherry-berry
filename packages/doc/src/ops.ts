@@ -74,6 +74,13 @@ function cloneFresh(node: CherryNode): CherryNode {
 
 export const getPageIds = (ydoc: Y.Doc): string[] => ordered(pagesOf(ydoc)).map((p) => p.get("id") as string);
 
+/** How the document holds a node right now: its kind and index among its siblings, or `undefined` once it's gone. */
+export function nodeInfo(ydoc: Y.Doc, pageId: string, nodeId: string): { kind: CherryNode["kind"]; index: number } | undefined {
+  const page = pageOf(ydoc, pageId);
+  const hit = page && locate(nodesOf(page), nodeId);
+  return hit && { kind: hit.node.get("kind") as CherryNode["kind"], index: ordered(hit.list).indexOf(hit.node) };
+}
+
 export function addNode(ydoc: Y.Doc, pageId: string, node: CherryNode, index?: number): void {
   withPage(ydoc, pageId, (page) => {
     const list = nodesOf(page);

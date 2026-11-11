@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, signUp, unique } from "./helpers";
+import { createWorkspace, openAsViewer, signUp, unique } from "./helpers";
 
 async function newSocialPost(page: Page) {
   await signUp(page, unique("ed"));
@@ -143,22 +143,7 @@ test("pages", async ({ page }) => {
 test("viewer is read-only", async ({ browser }) => {
   const owner = await (await browser.newContext()).newPage();
   await newSocialPost(owner);
-  const designUrl = new URL(owner.url()).pathname;
-  const { workspaces } = await (await owner.request.get("/api/workspaces/mine")).json();
-  const viewerEmail = unique("viewer");
-  const res = await owner.request.post(`/api/workspaces/${workspaces[0].id}/invitations`, {
-    data: { email: viewerEmail, role: "viewer" },
-  });
-  expect(res.status()).toBe(201);
-  const { token } = await res.json();
-
-  const viewer = await (await browser.newContext()).newPage();
-  await signUp(viewer, viewerEmail);
-  await viewer.getByLabel("Invitation link").fill(token);
-  await viewer.getByRole("button", { name: "Accept invitation" }).click();
-  await expect(viewer).toHaveURL(/\/$/);
-  await viewer.goto(designUrl);
-  await expect(viewer.getByText("View only")).toBeVisible();
+  const viewer = await openAsViewer(browser, owner);
   await expect(viewer.getByRole("button", { name: "Rectangle (R)" })).toBeDisabled();
 });
 
@@ -199,27 +184,44 @@ test("viewer cannot edit paths", async ({ browser }) => {
   await newSocialPost(owner);
   const { inside } = await drawTriangle(owner);
   await expect(status(owner)).toHaveText("Saved");
-  const designUrl = new URL(owner.url()).pathname;
-  const { workspaces } = await (await owner.request.get("/api/workspaces/mine")).json();
-  const viewerEmail = unique("pathviewer");
-  const res = await owner.request.post(`/api/workspaces/${workspaces[0].id}/invitations`, {
-    data: { email: viewerEmail, role: "viewer" },
-  });
-  expect(res.status()).toBe(201);
-  const { token } = await res.json();
-
-  const viewer = await (await browser.newContext()).newPage();
-  await signUp(viewer, viewerEmail);
-  await viewer.getByLabel("Invitation link").fill(token);
-  await viewer.getByRole("button", { name: "Accept invitation" }).click();
-  await expect(viewer).toHaveURL(/\/$/);
-  await viewer.goto(designUrl);
-  await expect(viewer.getByText("View only")).toBeVisible();
+  const viewer = await openAsViewer(browser, owner);
   await expect(layers(viewer).getByRole("button", { name: "Path", exact: true })).toBeVisible();
   // Same viewport size as the owner, so the path sits at the same screen point.
   await viewer.mouse.dblclick(inside.x, inside.y);
   await viewer.keyboard.press("Enter");
   await expect(viewer.getByText("Editing path", { exact: true })).toHaveCount(0);
+});
+
+test("the first point edit flattens a rectangle in the same undo step", async ({ page }) => {
+  await newSocialPost(page);
+  await place(page, "Rectangle (R)");
+  const half = Number(await page.getByLabel("W", { exact: true }).inputValue()) / 2;
+  const zoom = Number((await page.getByTitle("Zoom level").innerText()).replace("%", "")) / 100;
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  const cx = box.x + box.width / 2, cy = box.y + box.height / 2; // the new rectangle is centered here
+  // Konva pairs clicks within 400 ms into a double-click; keep the placement click out of that window.
+  await page.waitForTimeout(450);
+  await page.mouse.dblclick(cx, cy);
+  await expect(page.getByText("Editing path", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Corner radius")).toHaveCount(0); // path panel
+  const corner = { x: cx - half * zoom, y: cy - half * zoom };
+  await page.mouse.move(corner.x, corner.y);
+  await page.mouse.down();
+  await page.mouse.move(corner.x - 20, corner.y - 20, { steps: 5 });
+  await page.mouse.up();
+  await expect(page.getByLabel("Points")).toHaveValue("4");
+  await page.keyboard.press("Escape");
+  const radius = page.getByLabel("Corner radius");
+  const layer = layers(page).getByRole("button", { name: "Rectangle", exact: true });
+  await expect(radius).toHaveCount(0); // flattened: a path has no corner radius
+
+  await page.keyboard.press("Control+Z");
+  await expect(layer).toBeVisible();
+  await expect(radius).toHaveValue("0"); // a rectangle again
+
+  await page.keyboard.press("Control+Shift+Z");
+  await expect(radius).toHaveCount(0); // a path again
+  await expect(layer).toBeVisible();
 });
 
 test("broken design id", async ({ page }) => {

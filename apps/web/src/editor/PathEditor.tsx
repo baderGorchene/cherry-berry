@@ -2,13 +2,14 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "re
 import Konva from "konva";
 import { Circle, Group, Line, Path, Rect } from "react-konva";
 import * as Y from "yjs";
-import { LOCAL, addNode, fromPx, removeNodes, updateNode, type CherryNode, type Page } from "@cherry/doc";
+import { addNode, fromPx, type CherryNode, type Page } from "@cherry/doc";
 import {
-  InvalidPath, flatten, hitSegment, insertAnchor, moveAnchors, moveHandle, normalizeEdit, parsePath, removeAnchors,
+  hitSegment, insertAnchor, moveAnchors, moveHandle, normalizeEdit, removeAnchors,
   setAnchorKind, toPathData, type Anchor, type AnchorRef, type PathModel, type PathNode, type Pt,
 } from "@cherry/vector";
 import type { Tool } from "./Canvas";
 import { NUDGE, toKonvaAttrs } from "./geometry";
+import { anchorAt, asPath, commitEdit, editModel, rot, toLocal, toPage, validRefs } from "./pathEdit";
 
 const BERRY = "#8E1EA2";
 const ZERO: Pt = { x: 0, y: 0 };
@@ -17,35 +18,6 @@ export type PathKeys = RefObject<((e: KeyboardEvent) => boolean) | null>;
 /** Stage presses and moves, forwarded by Canvas (a full-canvas Konva hit shape misses presses until its first hit redraw). */
 export type PathInput = RefObject<{ down(e: MouseEvent): void; hover(e: MouseEvent | null): void } | null>;
 
-const asPath = (n: CherryNode): PathNode => (n.kind === "path" ? n : flatten(n)!);
-
-/** Anchor model of a path, rect or ellipse; `null` when the node can't be point-edited (other kinds, unreadable `d`). */
-export function editModel(n: CherryNode): PathModel | null {
-  if (n.kind !== "path" && n.kind !== "rect" && n.kind !== "ellipse") return null;
-  try {
-    return parsePath(asPath(n).d);
-  } catch (e) {
-    if (e instanceof InvalidPath) return null;
-    throw e;
-  }
-}
-
-const rot = (v: Pt, deg: number): Pt => {
-  const r = (deg * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
-  return { x: v.x * c - v.y * s, y: v.x * s + v.y * c };
-};
-/** Node-local point → page point (rotation about the box centre). */
-export function toPage(n: CherryNode, p: Pt): Pt {
-  const v = rot({ x: p.x - n.width / 2, y: p.y - n.height / 2 }, n.rotation);
-  return { x: n.x + n.width / 2 + v.x, y: n.y + n.height / 2 + v.y };
-}
-export function toLocal(n: CherryNode, p: Pt): Pt {
-  const v = rot({ x: p.x - n.x - n.width / 2, y: p.y - n.y - n.height / 2 }, -n.rotation);
-  return { x: v.x + n.width / 2, y: v.y + n.height / 2 };
-}
-
-export const anchorAt = (m: PathModel, r: AnchorRef): Anchor | undefined => m[r.sub]?.anchors[r.i];
-export const validRefs = (m: PathModel, refs: AnchorRef[]) => refs.filter((r) => anchorAt(m, r));
 const allRefs = (m: PathModel) => m.flatMap((sp, sub) => sp.anchors.map((_, i) => ({ sub, i })));
 const same = (a: AnchorRef, b: AnchorRef) => a.sub === b.sub && a.i === b.i;
 const dist = (a: Pt, b: Pt) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -62,24 +34,6 @@ const previewNode = (n: CherryNode, m: PathModel): CherryNode => {
   const base = asPath(n);
   return { ...base, ...normalizeEdit(base, m) };
 };
-
-/**
- * Writes `model` (plus `patch`) to `node` as one undo step. A rect or ellipse is flattened into a path with the same id
- * at the same index; an empty model removes the node.
- */
-export function commitEdit(
-  ydoc: Y.Doc, page: Page, node: CherryNode, model: PathModel, act: (fn: () => void) => void, patch: Partial<PathNode> = {},
-) {
-  act(() => ydoc.transact(() => {
-    if (!model.length) return removeNodes(ydoc, page.id, [node.id]);
-    const base = asPath(node);
-    const geo = { ...normalizeEdit(base, model), ...patch };
-    if (node.kind === "path") return updateNode(ydoc, page.id, node.id, geo);
-    const index = page.nodes.findIndex((n) => n.id === node.id);
-    removeNodes(ydoc, page.id, [node.id]);
-    addNode(ydoc, page.id, { ...base, ...geo }, index);
-  }, LOCAL));
-}
 
 type Drag =
   | { kind: "anchors"; refs: AnchorRef[]; from: Pt; to: Pt } // node-local

@@ -4,7 +4,7 @@ import { createDocument } from "../src/create";
 import type { CherryNode } from "../src/schema";
 import { docToY, yToDoc, REMOTE } from "../src/y";
 import {
-  addNode, addPage, createUndoManager, duplicateNodes, getPageIds, movePage,
+  addNode, addPage, createUndoManager, duplicateNodes, getPageIds, movePage, nodeInfo,
   removeNodes, removePage, reorderNode, updateNode,
 } from "../src/ops";
 
@@ -24,6 +24,16 @@ function setup(nodes: CherryNode[] = []) {
 const ids = (ns: CherryNode[]) => ns.map((n) => n.id);
 
 describe("ops", () => {
+  it("nodeInfo reads a node's current kind and sibling index", () => {
+    const { y, pid } = setup([rect("a"), rect("b"), group("g", [rect("c")])]);
+    expect(nodeInfo(y, pid, "b")).toEqual({ kind: "rect", index: 1 });
+    expect(nodeInfo(y, pid, "g")).toEqual({ kind: "group", index: 2 });
+    expect(nodeInfo(y, pid, "c")).toEqual({ kind: "rect", index: 0 });
+    removeNodes(y, pid, ["b"]);
+    expect(nodeInfo(y, pid, "b")).toBeUndefined();
+    expect(nodeInfo(y, "nope", "a")).toBeUndefined();
+  });
+
   it("add, update and remove a node", () => {
     const { y, doc, pid } = setup();
     addNode(y, pid, rect("a"));

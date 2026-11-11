@@ -1,7 +1,7 @@
 import * as Y from "yjs";
 import type { CherryNode, Page } from "@cherry/doc";
 import { moveAnchors, setAnchorKind, setClosed, type Anchor, type AnchorRef, type PathModel } from "@cherry/vector";
-import { anchorAt, commitEdit, editModel, toLocal, toPage, validRefs } from "./PathEditor";
+import { anchorAt, commitEdit, editModel, toLocal, toPage, validRefs } from "./pathEdit";
 import { Num } from "./Properties";
 
 const KINDS: [Anchor["kind"], string][] = [["corner", "Corner"], ["smooth", "Smooth"], ["symmetric", "Symmetric"]];
