@@ -152,3 +152,9 @@ export const assets = pgTable("assets", {
   index("assets_workspace").on(t.workspaceId),
   index("assets_created_by").on(t.createdBy),
 ]);
+
+export const assetUses = pgTable("asset_uses", {
+  designId: uuid("design_id").notNull().references(() => designs.id, { onDelete: "cascade" }),
+  assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.designId, t.assetId] }), index("asset_uses_asset").on(t.assetId)]);

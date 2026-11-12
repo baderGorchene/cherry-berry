@@ -37,6 +37,7 @@ const ListQuery = z.object({
   license: z.enum(["cc0", "cc-by", "own", "workspace-only"]).optional(),
   q: z.string().max(100).optional(),
 }).refine((v) => v.scope !== "workspace" || v.workspaceId);
+const UseBody = z.object({ assetId: z.string() });
 const IdParams = z.object({ id: z.string() });
 const HashParams = z.object({ sha256: z.string() });
 
@@ -110,6 +111,18 @@ export function registerAssetRoutes(
     const body = parse(PatchBody, req.body);
     const asset = await svc.updateAsset(db, user.id, id, (cur) => parse(Meta, { ...cur, ...body }));
     return { asset };
+  });
+
+  app.delete("/api/assets/:id", async (req, reply) => {
+    const user = await requireUser(req);
+    await svc.deleteAsset(db, storage, user.id, parse(IdParams, req.params).id);
+    return reply.status(204).send();
+  });
+
+  app.post("/api/designs/:id/assets", async (req, reply) => {
+    const user = await requireUser(req);
+    await svc.recordUse(db, user.id, parse(IdParams, req.params).id, parse(UseBody, req.body).assetId);
+    return reply.status(204).send();
   });
 
   const serve = (thumb: boolean) => async (req: FastifyRequest, reply: FastifyReply) => {

@@ -243,3 +243,110 @@ describe("patch", () => {
     expect((await call("PATCH", `/api/assets/${a.id}`, ada.cookie, { license: "cc-by", attribution: "Jo" })).json().asset.license).toBe("cc-by");
   });
 });
+
+describe("uses and deletion", () => {
+  const send = (method: "POST" | "DELETE", url: string, cookie: string, payload?: object) =>
+    t.app.inject({ method, url, headers: { cookie }, ...(payload ? { payload } : {}) });
+  const newDesign = async (cookie: string, ws: string) => (await send("POST", `/api/workspaces/${ws}/designs`, cookie,
+    { title: "D", width: 100, height: 100, unit: "px", colorMode: "rgb" })).json().design.id as string;
+  const use = (cookie: string, design: string, assetId: string) => send("POST", `/api/designs/${design}/assets`, cookie, { assetId });
+  const ids = async (url: string, cookie: string) => (await call("GET", url, cookie)).json().assets.map((a: { id: string }) => a.id);
+
+  it("a design's viewer can load a private asset used in the design", async () => {
+    const { ada, bo, ws } = await workspaceWith("viewer");
+    const cy = await signUp(t.app, "cy@example.com");
+    const bytes = await png();
+    const a = (await upload(ada.cookie, bytes)).json().asset;
+    const sha = (await import("node:crypto")).createHash("sha256").update(bytes).digest("hex");
+    expect((await call("GET", `/api/assets/${a.id}/file`, bo.cookie)).statusCode).toBe(404);
+    expect((await use(ada.cookie, await newDesign(ada.cookie, ws), a.id)).statusCode).toBe(204);
+    for (const url of [`/api/assets/${a.id}`, `/api/assets/${a.id}/file`, `/api/assets/${a.id}/thumb`]) {
+      expect((await call("GET", url, bo.cookie)).statusCode).toBe(200);
+      expect((await call("GET", url, cy.cookie)).statusCode).toBe(404);
+    }
+    for (const url of ["/api/assets?scope=mine", "/api/assets?scope=public", `/api/assets?scope=workspace&workspaceId=${ws}`]) {
+      expect(await ids(url, bo.cookie)).toEqual([]);
+    }
+    expect((await call("GET", `/api/assets/by-hash/${sha}`, bo.cookie)).statusCode).toBe(404);
+    expect((await call("PATCH", `/api/assets/${a.id}`, bo.cookie, { title: "x" })).statusCode).toBe(404); // use-based access is read-only
+  });
+
+  it("recording a use needs edit rights and a visible asset", async () => {
+    const { ada, bo, ws } = await workspaceWith("viewer");
+    const d = await newDesign(ada.cookie, ws);
+    const mine = (await upload(ada.cookie, await png())).json().asset;
+    const pub = (await upload(ada.cookie, await png("#112233"), { visibility: "public" })).json().asset;
+    const cy = await signUp(t.app, "cy@example.com");
+    expect((await use(bo.cookie, d, pub.id)).statusCode).toBe(403);
+    expect((await use(cy.cookie, d, pub.id)).statusCode).toBe(404);
+    expect((await use(ada.cookie, d, pub.id)).statusCode).toBe(204);
+    expect((await use(ada.cookie, d, pub.id)).statusCode).toBe(204);
+    expect((await use(ada.cookie, d, "nope")).statusCode).toBe(404);
+    // an editor cannot record somebody else's private asset
+    const bo2 = await signUp(t.app, "bo2@example.com");
+    const inv = await send("POST", `/api/workspaces/${ws}/invitations`, ada.cookie, { email: "bo2@example.com", role: "editor" });
+    await send("POST", `/api/invitations/${inv.json().token}/accept`, bo2.cookie);
+    expect((await use(bo2.cookie, d, mine.id)).json()).toEqual({ error: "not_found" });
+    expect((await use(bo2.cookie, d, pub.id)).statusCode).toBe(204);
+  });
+
+  it("usedIn counts designs", async () => {
+    const { ada, ws } = await workspaceWith("viewer");
+    const a = (await upload(ada.cookie, await png())).json().asset;
+    expect(a.usedIn).toBe(0);
+    const d1 = await newDesign(ada.cookie, ws);
+    await use(ada.cookie, d1, a.id);
+    await use(ada.cookie, d1, a.id);
+    await use(ada.cookie, await newDesign(ada.cookie, ws), a.id);
+    expect((await call("GET", `/api/assets/${a.id}`, ada.cookie)).json().asset.usedIn).toBe(2);
+    expect((await call("GET", "/api/assets?scope=mine", ada.cookie)).json().assets[0].usedIn).toBe(2);
+  });
+
+  it("deleting a used asset keeps designs working", async () => {
+    const { ada, bo, ws } = await workspaceWith("viewer");
+    const cy = await signUp(t.app, "cy@example.com");
+    const bytes = await png();
+    const a = (await upload(ada.cookie, bytes, { visibility: "workspace", workspaceId: ws })).json().asset;
+    const sha = (await import("node:crypto")).createHash("sha256").update(bytes).digest("hex");
+    await use(ada.cookie, await newDesign(ada.cookie, ws), a.id);
+    expect((await send("DELETE", `/api/assets/${a.id}`, ada.cookie)).statusCode).toBe(204);
+    for (const c of [ada, bo]) {
+      expect(await ids("/api/assets?scope=mine", c.cookie)).toEqual([]);
+      expect(await ids(`/api/assets?scope=workspace&workspaceId=${ws}`, c.cookie)).toEqual([]);
+      expect((await call("GET", `/api/assets/by-hash/${sha}`, c.cookie)).statusCode).toBe(404);
+      expect((await call("GET", `/api/assets/${a.id}/file`, c.cookie)).statusCode).toBe(200);
+    }
+    expect((await call("GET", `/api/assets/${a.id}/file`, cy.cookie)).statusCode).toBe(404);
+    expect((await send("DELETE", `/api/assets/${a.id}`, ada.cookie)).statusCode).toBe(404);
+    expect((await call("PATCH", `/api/assets/${a.id}`, ada.cookie, { title: "x" })).statusCode).toBe(404);
+    expect(t.storage.keys()).toHaveLength(2);
+  });
+
+  it("deleting an unused asset removes the stored file unless another asset shares it", async () => {
+    const ada = await signUp(t.app, "ada@example.com");
+    const bo = await signUp(t.app, "bo@example.com");
+    const bytes = await png();
+    const a = (await upload(ada.cookie, bytes)).json().asset;
+    const b = (await upload(bo.cookie, bytes)).json().asset;
+    expect(t.storage.keys()).toHaveLength(2);
+    expect((await send("DELETE", `/api/assets/${a.id}`, ada.cookie)).statusCode).toBe(204);
+    expect(t.storage.keys()).toHaveLength(2);
+    expect((await send("DELETE", `/api/assets/${b.id}`, bo.cookie)).statusCode).toBe(204);
+    expect(t.storage.keys()).toEqual([]);
+    expect((await call("GET", `/api/assets/${b.id}`, bo.cookie)).statusCode).toBe(404);
+  });
+
+  it("a workspace admin can delete a member's workspace asset; an editor cannot", async () => {
+    const { ada, bo, ws } = await workspaceWith("editor");
+    const cy = await signUp(t.app, "cy@example.com");
+    const inv = await send("POST", `/api/workspaces/${ws}/invitations`, ada.cookie, { email: "cy@example.com", role: "editor" });
+    await send("POST", `/api/invitations/${inv.json().token}/accept`, cy.cookie);
+    const ws1 = { visibility: "workspace", workspaceId: ws };
+    const a = (await upload(bo.cookie, await png(), ws1)).json().asset;
+    expect((await send("DELETE", `/api/assets/${a.id}`, cy.cookie)).statusCode).toBe(403);
+    expect((await send("DELETE", `/api/assets/${a.id}`, ada.cookie)).statusCode).toBe(204);
+    // admins have no say over private assets
+    const p = (await upload(bo.cookie, await png("#445566"))).json().asset;
+    expect((await send("DELETE", `/api/assets/${p.id}`, ada.cookie)).statusCode).toBe(404);
+  });
+});

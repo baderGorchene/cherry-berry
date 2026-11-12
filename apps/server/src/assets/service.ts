@@ -1,6 +1,6 @@
 import { and, desc, eq, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { assets, memberships, user, workspaces } from "../db/schema";
+import { assetUses, assets, designs, memberships, user, workspaces } from "../db/schema";
 import { escapeLike } from "../http";
 import type { Storage } from "../storage";
 import { WorkspaceError } from "../workspaces/errors";
@@ -13,22 +13,23 @@ export type Asset = {
   id: string; title: string; tags: string[]; kind: "image" | "gif" | "svg"; format: string;
   width: number; height: number; bytes: number; license: License; attribution: string;
   visibility: Visibility; workspaceId: string | null; workspaceName: string | null;
-  createdBy: string; uploaderName: string; createdAt: string; mine: boolean;
+  createdBy: string; uploaderName: string; createdAt: string; mine: boolean; usedIn: number;
 };
 export type AssetMeta = {
   title: string; tags: string[]; license: License; attribution: string; visibility: Visibility; workspaceId?: string;
 };
 type Row = typeof assets.$inferSelect;
-type Joined = { a: Row; uploaderName: string; workspaceName: string | null };
+type Joined = { a: Row; uploaderName: string; workspaceName: string | null; usedIn: number };
 
-const toAsset = ({ a, uploaderName, workspaceName }: Joined, userId: string): Asset => ({
+const toAsset = ({ a, uploaderName, workspaceName, usedIn }: Joined, userId: string): Asset => ({
   id: a.id, title: a.title, tags: a.tags, kind: a.kind as Asset["kind"], format: a.format,
   width: a.width, height: a.height, bytes: a.bytes, license: a.license as License, attribution: a.attribution,
   visibility: a.visibility as Visibility, workspaceId: a.workspaceId, workspaceName,
-  createdBy: a.createdBy, uploaderName, createdAt: a.createdAt.toISOString(), mine: a.createdBy === userId,
+  createdBy: a.createdBy, uploaderName, createdAt: a.createdAt.toISOString(), mine: a.createdBy === userId, usedIn,
 });
 
-const base = (db: Db) => db.select({ a: assets, uploaderName: user.name, workspaceName: workspaces.name })
+const base = (db: Db) => db.select({ a: assets, uploaderName: user.name, workspaceName: workspaces.name,
+  usedIn: sql<number>`(select count(*)::int from ${assetUses} where ${assetUses.assetId} = ${assets.id})`.mapWith(Number) })
   .from(assets).innerJoin(user, eq(user.id, assets.createdBy)).leftJoin(workspaces, eq(workspaces.id, assets.workspaceId));
 
 /** SQL twin of canReadAsset: own, public, or workspace in a workspace the user belongs to; never deleted. */
@@ -42,12 +43,23 @@ const visibleTo = (userId: string): SQL => and(
   ),
 )!;
 
-export async function canReadAsset(
-  db: Db, userId: string, asset: Pick<Row, "createdBy" | "visibility" | "workspaceId" | "deletedAt">,
-): Promise<boolean> {
+type Access = Pick<Row, "id" | "createdBy" | "visibility" | "workspaceId" | "deletedAt">;
+
+/** Own, public, or workspace in a workspace the user belongs to; never deleted. Used for listing and recording uses. */
+async function canSeeAsset(db: Db, userId: string, asset: Access): Promise<boolean> {
   if (asset.deletedAt) return false;
   if (asset.createdBy === userId || asset.visibility === "public") return true;
   return asset.visibility === "workspace" && !!asset.workspaceId && !!(await getRole(db, asset.workspaceId, userId));
+}
+
+/** canSeeAsset, or the asset is used in a design the user can open (even after the asset was deleted). */
+export async function canReadAsset(db: Db, userId: string, asset: Access): Promise<boolean> {
+  if (await canSeeAsset(db, userId, asset)) return true;
+  const [hit] = await db.select({ one: sql`1` }).from(assetUses)
+    .innerJoin(designs, eq(designs.id, assetUses.designId))
+    .innerJoin(memberships, and(eq(memberships.workspaceId, designs.workspaceId), eq(memberships.userId, userId)))
+    .where(eq(assetUses.assetId, asset.id)).limit(1);
+  return !!hit;
 }
 
 async function memberRole(db: Db, workspaceId: string, userId: string) {
@@ -136,7 +148,7 @@ export async function updateAsset(
   db: Db, userId: string, id: string, merge: (cur: AssetMeta) => AssetMeta,
 ): Promise<Asset> {
   const r = await loadRow(db, id);
-  if (!r || !(await canReadAsset(db, userId, r.a))) throw new WorkspaceError("not_found");
+  if (!r || !(await canSeeAsset(db, userId, r.a))) throw new WorkspaceError("not_found");
   const cur = r.a;
   if (cur.createdBy !== userId) throw new WorkspaceError("forbidden");
   const next = merge({
@@ -149,4 +161,36 @@ export async function updateAsset(
     visibility: next.visibility, workspaceId,
   }).where(eq(assets.id, id));
   return (await getAsset(db, userId, id))!;
+}
+
+/** Records that a design uses an asset the caller can see; needs edit rights on the design. Idempotent. */
+export async function recordUse(db: Db, userId: string, designId: string, assetId: string): Promise<void> {
+  const [d] = UUID.test(designId) ? await db.select({ workspaceId: designs.workspaceId }).from(designs).where(eq(designs.id, designId)) : [];
+  const role = d && (await getRole(db, d.workspaceId, userId));
+  if (!d || !role) throw new WorkspaceError("not_found");
+  if (role === "viewer") throw new WorkspaceError("forbidden");
+  const r = await loadRow(db, assetId);
+  if (!r || !(await canSeeAsset(db, userId, r.a))) throw new WorkspaceError("not_found");
+  await db.insert(assetUses).values({ designId, assetId }).onConflictDoNothing();
+}
+
+/** Uploader, or owner/admin of the asset's workspace. Used assets are soft-deleted so designs keep loading them. */
+export async function deleteAsset(db: Db, storage: Storage, userId: string, id: string): Promise<void> {
+  const r = await loadRow(db, id);
+  if (!r || !(await canSeeAsset(db, userId, r.a))) throw new WorkspaceError("not_found");
+  const a = r.a;
+  if (a.createdBy !== userId) {
+    const role = a.visibility === "workspace" && a.workspaceId ? await getRole(db, a.workspaceId, userId) : undefined;
+    if (role !== "owner" && role !== "admin") throw new WorkspaceError("forbidden");
+  }
+  if (r.usedIn > 0) {
+    await db.update(assets).set({ deletedAt: sql`now()` }).where(eq(assets.id, id));
+    return;
+  }
+  await db.delete(assets).where(eq(assets.id, id));
+  const [other] = await db.select({ id: assets.id }).from(assets).where(eq(assets.sha256, a.sha256)).limit(1);
+  if (!other) {
+    await storage.delete(`files/${a.sha256}`);
+    await storage.delete(`thumbs/${a.sha256}.webp`);
+  }
 }

@@ -29,6 +29,13 @@
       "when": 1794461541576,
       "tag": "0003_careful_zuras",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794462309072,
+      "tag": "0004_naive_gabe_jones",
+      "breakpoints": true
     }
   ]
 }
