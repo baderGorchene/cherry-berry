@@ -1,0 +1,91 @@
+# Phase 3 — rulings and deferred minors
+
+From the SDD ledger for docs/superpowers/plans/2026-11-11-03-vectors-shapes.md (branch phase-3-vectors, through c166bb0).
+
+## Rulings I made
+
+- Ruling: svg.ts (T8) must not touch DOMParser/document at module load, only inside svgToPaths — the server and Node tests import @cherry/vector's index — cost if wrong: a server crash at import, caught by the server tests
+- Task 1: Ruling: reviewer's ⚠️ on bundle size (paper-core ~200 kB in the main web chunk, vite >500 kB warning) — accepted; Phase 3 needs Paper in the editor anyway, code-splitting later — cost if wrong: slower first editor load
+- Task 1: Ruling: minor "fully rounded rect gives coincident anchor pairs" is folded into Task 2 (collapse consecutive coincident anchors when parsing) because Task 5's point editing would show doubled points — cost if wrong: a few lines in Task 2
+- Task 2: Ruling: the minor "normalizeEdit returns unrounded width/height while d is rounded to 4 decimals" enters the fix round — it breaks the Global Constraint "bounds are exactly 0 0 width height" — cost if wrong: a few lines
+- Task 2: Ruling: "bounds exactly 0 0 width height" means width/height exact and x/y = 0 within half a 4-decimal step (|x|,|y| < 5e-5) — a curve extremum between anchors cannot land on the 1e-4 grid, so exact 0 is unreachable — cost if wrong: sub-1e-4 drift nobody can see
+- Task 3: Ruling: booleanOp/flatten throw InvalidPath on a malformed operand d (matches nodeToPath's contract); the .cherry schema accepts any d string, so the Task 6 editor call site catches it and shows a status message instead of crashing — carried into the Task 6 dispatch — cost if wrong: one try/catch
+- Task 4: Ruling: three cheap trust-boundary minors join the fix round — d schema .max(100_000) plus a cap on the normalized d length (2×, else invalid_shape) so the list response stays bounded; visibility=workspace without workspaceId → 400 invalid_body, matching GET; the "admin can delete" test must actually use an admin — cost if wrong: a few lines
+- Task 5: Ruling: the minor "no committed test for a rect flattened on first drag, then undone to a real rect" joins the fix round — it is plan Review Focus 5 (undo granularity) — cost if wrong: one e2e test
+- Task 5: Ruling: the pre-existing bug "Corner radius input squeezed to zero width (Playwright reports it hidden)" is folded into the Task 6 dispatch, which edits Properties.tsx anyway — a user can't see or edit the corner radius — cost if wrong: a CSS fix
+- Task 6: Ruling: two minors join the fix round — (a) nodeInfo(...)! in the boolean path throws TypeError, which guarded() rethrows and crashes the editor, if an operand vanishes remotely; (b) fix the zero-width field at its CSS root and check Line height, Letter spacing and Stroke width visibility — both are user-visible breakage — cost if wrong: a few lines
+- Task 7: dispatched (BASE 3c7b74d); Ruling: thumbnails use stored solid fill else currentColor; no delete UI in panel (deleteShape in api only) — YAGNI, brief only requires the api — cost if wrong: small follow-up
+- Task 7: implementer DONE_WITH_CONCERNS (db96451). Ruling: my default-fill ruling was wrong for stroke-only shapes — default fill applies only when both fill and stroke are null; thumbnails draw the stored stroke too — a saved line must come back as a line — cost if wrong: few lines
+- Task 8: Ruling: ShapeLibrary.dc.html is a canvas design not in the repo — Shapes page reuses Home's sidebar/grid patterns and ShapesPanel's thumbnail/tab code — cost if wrong: visual polish pass later
+- Task 8: Ruling: pre-count shape elements on the sanitized DOM before importSVG joins the fix round — it is the DoS half of the sanitizer finding — cost if wrong: a few lines
+- Task 8: Ruling: ShapeLibrary.dc.html visual comparison left for the user — design lives on the canvas, not the repo — cost if wrong: a visual polish pass
+- Task 8: Ruling: replace the denylist with an allowlist — rebuild elements/attributes from a fixed geometry+paint set, drop style entirely, allow only url(#id) — every denylist round has leaked; an allowlist is closed by construction — cost if wrong: some exotic SVGs import with fewer styles
+- Task 8: Ruling: catch InvalidPath in /shapes onFile and in editor importNodes (pre-existing) in this round — silent failure on user input — cost if wrong: a few lines
+- Task 8: Ruling: drop clip-path and clipPath support entirely from the allowlist — clipping is not needed for single-colour library shapes and removes the expansion vector — cost if wrong: clipped SVGs import unclipped
+- Final: Ruling: declined-to-judge items stand — concurrent edits are last-writer-wins as in Phase 2; role change mid-session out of scope; allowlist styling loss and single-colour library shapes are the spec's scope — cost if wrong: Phase 4+ follow-ups
+
+## Deferred minors
+
+- Task 1: num() writes magnitudes ≥1e21 in exponent form (breaks the no-exponent output format at absurd sizes)
+- Task 1: rotation test at 90° can't tell clockwise from counter-clockwise (code verified CW by hand)
+- Task 1: no test for the smooth kind, the 1° collinearity tolerance, or "Z"-only input
+- Task 1: extensionless 'paper/dist/paper-core' import would need .js under plain Node ESM
+- Task 2: toAnchor/fromItem/toItem leak Paper types through export *
+- Task 2: setAnchorKind "smooth" at an open endpoint leaves one zero handle, so the stored kind disagrees with the derived one
+- Task 2: insertAnchor with an out-of-range segment returns the model unchanged plus a ref that may not exist
+- Task 2: an open subpath whose points all coincide collapses to a single anchor
+- Task 2: no tests for symmetric-from-corner, multi-subpath hitSegment, or the collapse handle merge
+- Task 3: unreachable null-operand branch, and each path is parsed three times in booleanOp
+- Task 3: `as PathNode` casts hide incomplete object literals
+- Task 3: no tests for a closed path operand, mixed open/closed subpaths, stroke/opacity copying, or flatten of rect/path
+- Task 3: RED run not captured (tests written together with the code)
+- Task 4: normalize parses each path three times
+- Task 4: no tests for an editor deleting another member's workspace shape (403), or for "_" and "\" escaping
+- Task 4: the parse helper is copied verbatim into a third routes file
+- Task 4: RED run not captured
+- Task 4: straight lines are accepted as library shapes (brief: reject only when width and height are both 0)
+- Task 4: MAX_NORMALIZED_D 200 000 is dead code (parsePath's 100k input cap already bounds the stored d)
+- Task 4: the rate-limit keyGenerator does a second session lookup per POST
+- Task 5: endDrag commits the last rendered mousemove position, not the mouseup point (a fast flick can lose the end)
+- Task 5: Shift 45° snap happens in the node frame, not the page frame, on rotated nodes
+- Task 5: PathPanel takes no readOnly prop (unreachable for viewers today)
+- Task 5: every Stage mousemove in edit mode re-renders PathEditor and re-parses d
+- Task 5: Enter enters edit mode even while a toolbar button has focus
+- Task 5: formatting slip in geometry.ts clampZoom
+- Task 5: no committed tests for a nudge or delete being one undo step, or for Enter entering edit mode
+- Task 5: Smooth with equal handles reads back as Symmetric (the kind is re-derived from handles; not stored)
+- Task 5: edit overlay draws above all layers; clicking empty canvas doesn't exit edit mode; can't click another path to switch to it while editing; Ctrl+A doesn't select anchors; the pen only continues from the end anchor
+- Task 5: the "text tool" e2e failed once in three full runs and couldn't be reproduced (possible flake)
+- Task 5: flatten re-inserts at nodeInfo.index into the top-level list; a nested group child would land at the wrong index (only top-level nodes are editable today)
+- Task 6: no e2e for the Ctrl+Alt shortcuts; on macOS Option+letter can change e.key, so match on e.code
+- Task 6: convertToPath doesn't re-check the node's kind, and the Convert button ignores locked
+- Task 6: the role=status element is mounted only when a message exists (may not be announced)
+- Task 6: the tooltip hard-codes "Ctrl+Alt+" (wrong on Mac)
+- Task 6: combinable re-parses every path node's d on each render
+- Task 6: the group test builds its group by casting a rect (as unknown as CherryNode)
+- Task 6: Stroke width e2e uses a rectangle, not an open path or line
+- Task 7: shapeNode maths has no unit test (fix round adds one for the fill rule)
+- Task 7: no e2e for viewer-cannot-insert, workspace-disabled-for-viewer, dialog error path
+- Task 7: dialog has no focus trap or focus restore
+- Task 7: role=status mounted only after save (same as Task 6's)
+- Task 7: "Saved to your shapes" copy shown for workspace/public saves too
+- Task 7: every search keystroke flashes Loading…
+- Task 7: Shapes panel hidden during point-edit mode
+- Task 7: a shape with neither fill nor stroke shows a blank thumbnail but inserts with the default fill
+- Task 7: no test for thumbnail markup
+- Task 8: MAX_D client copy of the server cap can drift; tag limits unchecked client-side
+- Task 8: too_large uses UTF-16 length, not bytes
+- Task 8: readSvg/IMPORT_ERRORS live in ShapesPanel.tsx and are imported by a route
+- Task 8: /shapes drops the stroke when a fill exists (per brief), losing berry.svg's outline
+- Task 8: mixed CRLF/LF line endings in touched files
+- Task 8: no e2e for Delete-confirm or the no_shapes/too_complex errors
+- Task 8: comma-separated transform lists (translate(1,2),scale(2)) are rejected and dropped
+- Task 8: paper NaN on "scale( 2 )" after another transform surfaces as the misleading "too detailed" message
+- Task 8: rgba fill alpha dropped on import (toCSS(true))
+- Task 8: no e2e for the oversize catch paths
+- Final: forged huge coordinates (1e39) give 500 instead of 400 invalid_shape (forged requests only)
+- Final: real columns lose precision on shape width/height; shapeNode bounds drift ~1e-4
+- Final: two clicks on one spot + Enter creates a 0×0 path
+- Final: SaveShapeDialog calls nodeToPath outside try (only for an unreadable d)
+- Final: no boolean test with a resized path operand; no undo test for convertToPath; no viewer-cannot-run-ops e2e
+- Final: continue branch writes the draft's closed flag even if the subpath was closed meanwhile (now only when the subpath is otherwise identical)
