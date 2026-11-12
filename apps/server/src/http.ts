@@ -9,6 +9,6 @@ export const parse = <T>(schema: z.ZodType<T>, data: unknown): T => {
 
 /**
  * Escapes `!`, `%` and `_` so user text (backslash included) matches literally in `ILIKE ... ESCAPE '!'`.
- * An explicit escape character, because PGlite ignores the default backslash one.
+ * One explicit escape character for every LIKE; `!` avoids string-literal backslash ambiguity.
  */
 export const escapeLike = (q: string) => q.replace(/[!%_]/g, "!$&");

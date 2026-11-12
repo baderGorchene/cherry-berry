@@ -64,6 +64,10 @@ describe("workspace routes", () => {
     const { workspace } = (await call("POST", "/api/workspaces", ada.cookie, { name: "Open Berry", accessMode: "open" })).json();
     const list = (await call("GET", "/api/workspaces/open?q=berry", bo.cookie)).json();
     expect(list.workspaces.map((w: { id: string }) => w.id)).toEqual([workspace.id]);
+    await call("POST", "/api/workspaces", ada.cookie, { name: "Open 100 Club", accessMode: "open" });
+    await call("POST", "/api/workspaces", ada.cookie, { name: "Open 100% Club", accessMode: "open" });
+    const pct = (await call("GET", "/api/workspaces/open?q=100%25", bo.cookie)).json();
+    expect(pct.workspaces.map((w: { name: string }) => w.name)).toEqual(["Open 100% Club"]);
     const j = await call("POST", `/api/workspaces/${workspace.id}/join-open`, bo.cookie);
     expect(j.json().workspace.role).toBe("editor");
   });

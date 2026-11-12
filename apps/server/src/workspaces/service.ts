@@ -1,7 +1,8 @@
 import { hash, verify } from "@node-rs/argon2";
-import { and, asc, eq, ilike, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull, sql } from "drizzle-orm";
 import { createHash, randomBytes } from "node:crypto";
 import type { Db } from "../db/client";
+import { escapeLike } from "../http";
 import { invitations, memberships, workspaces } from "../db/schema";
 import { WorkspaceError } from "./errors";
 import { makeWorkspacePublicId, normalizePublicId } from "./ids";
@@ -122,9 +123,8 @@ export async function listMyWorkspaces(db: Db, userId: string): Promise<Workspac
 export async function listOpenWorkspaces(db: Db, opts: { q?: string; limit?: number }): Promise<WorkspaceSummary[]> {
   const q = opts.q?.trim();
   const limit = Math.min(Math.max(opts.limit ?? 20, 1), 50);
-  const escaped = q?.replace(/[\\%_]/g, (c) => `\\${c}`);
   const rows = await db.select().from(workspaces)
-    .where(and(eq(workspaces.accessMode, "open"), escaped ? ilike(workspaces.name, `%${escaped}%`) : undefined))
+    .where(and(eq(workspaces.accessMode, "open"), q ? sql`${workspaces.name} ilike ${`%${escapeLike(q)}%`} escape '!'` : undefined))
     .orderBy(asc(workspaces.name)).limit(limit);
   return rows.map((w) => summary(w));
 }
