@@ -12,11 +12,12 @@
     "db:migrate": "tsx src/db/migrate.ts"
   },
   "dependencies": {
+    "@cherry/doc": "workspace:*",
+    "@cherry/vector": "workspace:*",
     "@electric-sql/pglite": "^0.5.16",
     "@fastify/rate-limit": "^11.2.2",
     "@node-rs/argon2": "^2.2.2",
-    "@cherry/doc": "workspace:*",
-    "@cherry/vector": "workspace:*",
+    "aws4fetch": "^1.0.20",
     "better-auth": "^1.7.19",
     "dotenv": "^18.0.10",
     "drizzle-orm": "^0.45.4",

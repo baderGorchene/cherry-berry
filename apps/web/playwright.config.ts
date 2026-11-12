@@ -21,6 +21,7 @@ export default defineConfig({
         AUTH_SECRET: "e2e-secret-e2e-secret-e2e-secret-1234",
         PUBLIC_URL: `http://localhost:${WEB}`,
         PORT: String(API),
+        S3_ENDPOINT: "memory:",
       },
     },
     {

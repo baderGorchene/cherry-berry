@@ -4,6 +4,7 @@ import { buildApp } from "../src/app";
 import { loadConfig, type Config } from "../src/config";
 import { createDb, type Db } from "../src/db/client";
 import { runMigrations } from "../src/db/migrate";
+import { memoryStorage, type Storage } from "../src/storage";
 
 export function testConfig(): Config {
   return loadConfig({
@@ -11,19 +12,21 @@ export function testConfig(): Config {
     AUTH_SECRET: "test-secret-test-secret-test-secret-123",
     PUBLIC_URL: "http://localhost:3000",
     LOG_LEVEL: "silent",
+    S3_ENDPOINT: "memory:",
   });
 }
 
 export async function setupTestApp(overrides: Partial<Config> = {}): Promise<{
-  app: FastifyInstance; db: Db; reset(): Promise<void>; close(): Promise<void>;
+  app: FastifyInstance; db: Db; storage: Storage; reset(): Promise<void>; close(): Promise<void>;
 }> {
   const config = { ...testConfig(), ...overrides };
   const { db, close } = createDb(config.databaseUrl);
   await runMigrations(db);
-  const app = await buildApp(config, { db });
+  const storage = memoryStorage();
+  const app = await buildApp(config, { db, storage });
   await app.ready();
   return {
-    app, db,
+    app, db, storage,
     async reset() {
       type Row = { tablename: string };
       const res = (await db.execute(

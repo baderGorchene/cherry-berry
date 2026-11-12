@@ -2,13 +2,14 @@ import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastif
 import { createAuth, createRequireUser } from "./auth";
 import type { Config } from "./config";
 import type { Db } from "./db/client";
+import type { Storage } from "./storage";
 import { HttpError } from "./errors";
 import { registerDesignRoutes } from "./designs/routes";
 import { registerShapeRoutes } from "./shapes/routes";
 import { registerWorkspaceRoutes } from "./workspaces/routes";
 import rateLimit from "@fastify/rate-limit";
 
-export async function buildApp(config: Config, deps: { db: Db }): Promise<FastifyInstance> {
+export async function buildApp(config: Config, deps: { db: Db; storage: Storage }): Promise<FastifyInstance> {
   const options: FastifyServerOptions = {
     logger: { level: config.logLevel },
     // Fastify accepts a hop count at runtime; its types omit number.
