@@ -1,9 +1,9 @@
-import { spawn } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { IngestError } from "./errors";
-import { sanitizeSvg } from "./svg";
+import { prescan } from "./svg";
 
 export { IngestError };
 
@@ -65,44 +65,78 @@ async function thumbnail(input: Uint8Array): Promise<Uint8Array> {
   } catch (e) { throw sharpError(e); }
 }
 
-// SVG rendering can run for minutes on a small hostile file and cannot be interrupted in-process,
-// so it happens in a child process that is killed after RENDER_MS.
+// Parsing, sanitizing and rendering an SVG can each run for minutes on a small hostile file and
+// cannot be interrupted in-process, so they happen in a child process that is killed after RENDER_MS.
 const RENDER_MS = 5000;
 const RENDER_SCRIPT = fileURLToPath(new URL("./render.mjs", import.meta.url));
 const MAX_RENDERS = 2;
 export const renderStats = { active: 0, max: 0 }; // max is for tests
 const waiting: (() => void)[] = [];
-async function renderSvgThumb(svg: Uint8Array): Promise<Uint8Array> {
-  // Wait for a slot; a render's 5 s clock starts only when its own child starts.
+type SvgResult = { file: Uint8Array; width: number; height: number; thumb: Uint8Array };
+async function processSvg(svg: Uint8Array): Promise<SvgResult> {
+  // Wait for a slot; a render's 5 s clock starts only when it hands its own child the work.
   if (renderStats.active >= MAX_RENDERS) await new Promise<void>((go) => waiting.push(go));
   else renderStats.active++;
   renderStats.max = Math.max(renderStats.max, renderStats.active);
-  try { return await spawnRender(svg); }
+  try { return await runChild(svg); }
   finally {
     const next = waiting.shift();
     if (next) next(); // hand the slot over without releasing it
     else renderStats.active--;
   }
 }
-function spawnRender(svg: Uint8Array): Promise<Uint8Array> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [RENDER_SCRIPT, String(THUMB), String(MAX_PIXELS)], { stdio: ["pipe", "pipe", "pipe"] });
-    const out: Buffer[] = [];
-    let err = "";
-    let timedOut = false;
-    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, RENDER_MS);
-    child.stdout.on("data", (c: Buffer) => out.push(c));
-    child.stderr.on("data", (c: Buffer) => { if (err.length < 1000) err += c; });
-    child.stdin.on("error", () => {}); // the child may die before reading
-    child.on("error", (e) => { clearTimeout(timer); reject(new IngestError("invalid_image", e.message)); });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      if (timedOut) reject(new IngestError("too_large", "render timed out"));
-      else if (code === 0) resolve(new Uint8Array(Buffer.concat(out)));
-      else reject(new IngestError(/pixel limit/i.test(err) ? "too_large" : "invalid_image", err));
-    });
-    child.stdin.end(svg);
+
+// One child is kept started and idle, so the next SVG does not wait for it to load jsdom (~1 s).
+// ponytail: one spare, replaced when taken; SVGs arriving back to back (or two at once) can still meet a
+// child that is mid-start (~1.5 s). A pool of reusable children would fix that if upload latency matters.
+type Child = { proc: ChildProcessWithoutNullStreams; done: Promise<{ out: Buffer; err: string }> };
+let spare: Child | undefined;
+function startChild(): Child {
+  const proc = spawn(process.execPath, [RENDER_SCRIPT, String(THUMB), String(MAX_PIXELS)], { stdio: ["pipe", "pipe", "pipe"] });
+  const out: Buffer[] = [];
+  let err = "";
+  proc.stdout.on("data", (c: Buffer) => out.push(c));
+  proc.stderr.on("data", (c: Buffer) => { if (err.length < 1000) err += c; });
+  proc.stdin.on("error", () => {}); // the child may die before reading
+  const done = new Promise<{ out: Buffer; err: string }>((resolve) => {
+    proc.on("error", (e) => resolve({ out: Buffer.alloc(0), err: e.message }));
+    proc.on("close", () => resolve({ out: Buffer.concat(out), err }));
   });
+  // An idle spare must not keep the process alive.
+  proc.unref();
+  for (const s of [proc.stdin, proc.stdout, proc.stderr]) (s as unknown as { unref(): void }).unref();
+  return { proc, done };
+}
+function takeChild(): Child {
+  const c = spare && spare.proc.exitCode === null && !spare.proc.killed ? spare : startChild();
+  spare = startChild();
+  c.proc.ref();
+  for (const s of [c.proc.stdin, c.proc.stdout, c.proc.stderr]) (s as unknown as { ref(): void }).ref();
+  return c;
+}
+
+async function runChild(svg: Uint8Array): Promise<SvgResult> {
+  const { proc, done } = takeChild();
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; proc.kill("SIGKILL"); }, RENDER_MS);
+  proc.stdin.end(svg);
+  const { out, err } = await done;
+  clearTimeout(timer);
+  if (timedOut) throw new IngestError("too_large", "svg processing timed out");
+  // Frame: 4-byte header length, JSON header, sanitized svg (head.svg bytes), webp thumbnail.
+  try {
+    const n = out.readUInt32BE(0);
+    const head: { error?: IngestError["code"]; message?: string; width: number; height: number; svg: number } = JSON.parse(out.subarray(4, 4 + n).toString("utf8"));
+    if (head.error) throw new IngestError(head.error, head.message);
+    const file = new Uint8Array(out.subarray(4 + n, 4 + n + head.svg));
+    const thumb = new Uint8Array(out.subarray(4 + n + head.svg));
+    if (file.length > MAX_SVG_BYTES) throw new IngestError("too_large", "sanitized svg too large");
+    if (!(head.width > 0 && head.height > 0) || thumb.length === 0) throw new IngestError("invalid_image");
+    if (head.width * head.height > MAX_PIXELS) throw new IngestError("too_large");
+    return { file, width: head.width, height: head.height, thumb };
+  } catch (e) {
+    throw e instanceof IngestError ? e : new IngestError("invalid_image", err || String(e));
+  }
 }
 
 export async function ingest(bytes: Uint8Array): Promise<Ingested> {
@@ -112,15 +146,9 @@ export async function ingest(bytes: Uint8Array): Promise<Ingested> {
 
   if (isSvg(bytes)) {
     if (bytes.length > MAX_SVG_BYTES) throw new IngestError("too_large", "svg over 2 MB");
-    const clean = sanitizeSvg(new TextDecoder().decode(bytes));
-    const file = new TextEncoder().encode(clean);
-    // Size comes from the renderer itself, so it agrees with the thumbnail.
-    let sm: Meta;
-    try { sm = await sharp(file, opts).metadata(); } catch (e) { throw sharpError(e); }
-    const [width, height] = [sm.width ?? 0, sm.height ?? 0];
-    if (!(width > 0 && height > 0)) throw new IngestError("invalid_image");
-    if (width * height > MAX_PIXELS) throw new IngestError("too_large");
-    return { kind: "svg", format: "svg", contentType: "image/svg+xml", width, height, sha256, file, thumb: await renderSvgThumb(file) };
+    prescan(new TextDecoder().decode(bytes));
+    const { file, width, height, thumb } = await processSvg(bytes);
+    return { kind: "svg", format: "svg", contentType: "image/svg+xml", width, height, sha256, file, thumb };
   }
 
   if (!looksRaster(bytes)) throw new IngestError("unsupported_type");

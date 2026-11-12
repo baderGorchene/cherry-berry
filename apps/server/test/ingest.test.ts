@@ -200,3 +200,31 @@ describe("entities and render concurrency", () => {
     expect(renderStats.active).toBe(0);
   });
 });
+
+// Ingest while a 20 ms interval runs; gap is the longest the event loop went without a tick.
+async function ticking(bytes: Uint8Array) {
+  let last = performance.now(), gap = 0;
+  const tick = setInterval(() => { const now = performance.now(); gap = Math.max(gap, now - last); last = now; }, 20);
+  try {
+    const r = await timed(bytes);
+    return { ...r, gap: Math.max(gap, performance.now() - last) };
+  } finally { clearInterval(tick); }
+}
+
+describe("svg work runs off the main thread", () => {
+  it("one rect with 170000 attributes is too_large within 8 s and the event loop keeps ticking", async () => {
+    const attrs = Array.from({ length: 170000 }, (_, i) => `a${i}=""`).join(" ");
+    const svg = enc(`<svg ${SVGNS} width="10" height="10"><rect ${attrs}/></svg>`);
+    expect(svg.length).toBeLessThan(2 * 1024 * 1024);
+    const { outcome, ms, gap } = await ticking(svg);
+    expect(outcome).toBe("too_large");
+    expect(ms).toBeLessThan(8000);
+    expect(gap).toBeLessThan(200);
+  }, 30000);
+  it("a repeated unterminated doctype does not block the event loop", async () => {
+    const { outcome, ms, gap } = await ticking(enc(`<svg ${SVGNS}>${"<!DOCTYPE a".repeat(180000)}</svg>`));
+    expect(outcome).toBe("invalid_image");
+    expect(ms).toBeLessThan(8000);
+    expect(gap).toBeLessThan(200);
+  }, 30000);
+});
