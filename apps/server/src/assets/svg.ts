@@ -3,11 +3,6 @@ import { JSDOM } from "jsdom";
 import { IngestError } from "./errors";
 
 const MAX_ELEMENTS = 5000;
-const MAX_DEPTH = 256;
-// librsvg text layout is superlinear and nested <use> expands multiplicatively, and sharp's
-// timeout does not interrupt the load. These caps bound the render until it runs out of process.
-const MAX_TEXT_CHARS = 2000;
-const MAX_USES = 100;
 const DATA_IMAGE = /^data:image\/(png|jpeg|gif|webp);base64,/i;
 // `url(` is fine only when it points at a fragment in this document.
 const EXTERNAL_URL = /url\(\s*(?!['"]?#)/i;
@@ -31,15 +26,24 @@ function badCss(css: string): boolean {
   return css.includes("\\") || /@import|image-set/i.test(css) || EXTERNAL_URL.test(css);
 }
 
-// Cheap checks on the raw text, before any parser allocates for a hostile document.
+// Count every `<` that opens a tag, whatever its name starts with, before any parser allocates.
+// The depth estimate can be spoofed (`/>` inside an attribute), so checkDepth repeats it on the parsed tree.
 function prescan(svg: string) {
-  let opens = 0, depth = 0;
-  for (const m of svg.matchAll(/<\/|<[A-Za-z_:]|\/>/g)) { // linear: each token is two characters
-    if (m[0] === "<\/" || m[0] === "/>") depth--;
-    else {
-      if (++opens > MAX_ELEMENTS) throw new IngestError("too_large", "too many elements");
-      if (++depth > MAX_DEPTH) throw new IngestError("invalid_image", "nested too deeply");
-    }
+  let n = 0, depth = 0;
+  for (const m of svg.matchAll(/<(?![/!?])|<\/|\/>/g)) {
+    if (m[0].length === 2) { depth--; continue; }
+    if (++n > MAX_ELEMENTS) throw new IngestError("too_large", "too many elements");
+    if (++depth > MAX_DEPTH) throw new IngestError("invalid_image", "nested too deeply");
+  }
+}
+
+const MAX_DEPTH = 256;
+// Iterative, so a deep tree cannot overflow the stack here (DOMPurify and the serializer recurse).
+function checkDepth(root: Element) {
+  const stack: [Element, number][] = [[root, 1]];
+  for (let top = stack.pop(); top; top = stack.pop()) {
+    if (top[1] > MAX_DEPTH) throw new IngestError("invalid_image", "nested too deeply");
+    for (const c of Array.from(top[0].children)) stack.push([c, top[1] + 1]);
   }
 }
 
@@ -57,6 +61,7 @@ function sanitize(svg: string): string {
   let doc: Document;
   try { doc = parse(svg); } catch { throw new IngestError("invalid_image", "not well-formed xml"); }
   if (doc.documentElement?.localName !== "svg") throw new IngestError("invalid_image", "no svg root");
+  checkDepth(doc.documentElement);
   const body = p.sanitize(doc.documentElement, {
     USE_PROFILES: { svg: true, svgFilters: true },
     ADD_TAGS: ["use"], // dropped by the svg profile; the walk below keeps only #-references
@@ -68,14 +73,8 @@ function sanitize(svg: string): string {
   const all = [root, ...Array.from(root.querySelectorAll("*"))];
   if (all.length > MAX_ELEMENTS) throw new IngestError("too_large", "too many elements");
 
-  let text = 0, uses = 0;
   for (const el of all) {
     const tag = el.localName.toLowerCase();
-    if (tag === "use" && ++uses > MAX_USES) throw new IngestError("too_large", "too many use elements");
-    if (tag === "text" || tag === "tspan" || tag === "textpath") {
-      for (const n of Array.from(el.childNodes)) if (n.nodeType === 3) text += n.nodeValue?.length ?? 0;
-      if (text > MAX_TEXT_CHARS) throw new IngestError("too_large", "too much text");
-    }
     if (tag === "style" && badCss(el.textContent ?? "")) { el.remove(); continue; }
     for (const attr of Array.from(el.attributes)) {
       const name = attr.name.toLowerCase();

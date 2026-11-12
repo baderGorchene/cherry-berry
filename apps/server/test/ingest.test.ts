@@ -126,10 +126,38 @@ describe("bounded work", () => {
     expect(outcome).toBe("too_large");
     expect(ms).toBeLessThan(500);
   });
-  it("a 20000 character text svg is rejected quickly (render cannot be interrupted, so text is capped)", async () => {
-    const { outcome, ms } = await timed(enc(`<svg ${SVGNS} width="200" height="50"><text font-size="9">${"w".repeat(20000)}</text></svg>`));
-    expect(outcome).toBe("too_large");
-    expect(ms).toBeLessThan(1000);
+  it("a prolog with an unterminated doctype or comment returns promptly", async () => {
+    for (const bad of ["<?x?><!DOCTYPE [>", "<!--a--><!DOCTYPE svg [ <svg/>", "<!--a", "<?x"]) {
+      const { outcome, ms } = await timed(enc(bad));
+      expect(outcome).toBe("unsupported_type");
+      expect(ms).toBeLessThan(100);
+    }
+  }, 5000);
+  it("counts elements whatever their name starts with", async () => {
+    for (const body of ["<ü/>".repeat(300000), "<ü>".repeat(100000), '<g a="/>/>">'.repeat(3000)]) {
+      const { outcome, ms } = await timed(enc(`<svg ${SVGNS}>${body}</svg>`));
+      expect(outcome).toMatch(/^(too_large|invalid_image)$/);
+      expect(ms).toBeLessThan(1000);
+    }
+    expect((await timed(enc(`<svg ${SVGNS}>${"<ü/>".repeat(6000)}</svg>`))).outcome).toBe("too_large");
+  }, 10000);
+  it("a render that never ends is killed and reported too_large", async () => {
+    const text = "w".repeat(1990);
+    const uses = (href: string) => `<use href="#${href}"/>`.repeat(49);
+    const useText = `<svg ${SVGNS} width="200" height="200"><defs><text id="t" font-size="9">${text}</text>` +
+      `<g id="a">${uses("t")}</g><g id="b">${uses("a")}</g></defs><use href="#b"/></svg>`;
+    const verts = Array.from({ length: 300 }, (_, i) => `L${i % 50} ${i % 40}`).join(" ");
+    const marker = `<svg ${SVGNS} width="100" height="100"><defs><marker id="m" markerWidth="50" markerHeight="50" markerUnits="userSpaceOnUse">` +
+      `<text font-size="9">${"w".repeat(1500)}</text></marker></defs><path d="M0 0 ${verts}" fill="none" stroke="#000" marker-mid="url(#m)"/></svg>`;
+    for (const svg of [useText, marker]) {
+      const { outcome, ms } = await timed(enc(svg));
+      expect(outcome).toBe("too_large");
+      expect(ms).toBeLessThan(8000);
+    }
+  }, 30000);
+  it("a text heavy svg still gets a thumbnail", async () => {
+    const r = await ingest(enc(`<svg ${SVGNS} width="200" height="50"><text font-size="9">${"w".repeat(500)}</text></svg>`));
+    expect((await meta(r.thumb)).format).toBe("webp");
   });
   it("svg size is what sharp renders", async () => {
     const r = await ingest(enc(`<svg ${SVGNS} width="10cm" height="5cm"/>`));

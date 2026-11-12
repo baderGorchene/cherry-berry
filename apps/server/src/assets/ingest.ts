@@ -1,4 +1,6 @@
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
+import { fileURLToPath } from "node:url";
 import sharp from "sharp";
 import { IngestError } from "./errors";
 import { sanitizeSvg } from "./svg";
@@ -27,21 +29,23 @@ const looksRaster = (b: Uint8Array) =>
   (b.length > 12 && String.fromCharCode(...Array.from(b.subarray(0, 4)), ...Array.from(b.subarray(8, 12))) === "RIFFWEBP");
 
 // Linear scan: skip whitespace, <?...?>, <!DOCTYPE ...> and <!--...-->, then expect <svg.
+// Every skip must find its terminator and move forward, otherwise the prolog is not SVG.
 function isSvg(bytes: Uint8Array): boolean {
   const s = new TextDecoder("utf-8").decode(bytes.subarray(0, 65536)); // the decoder drops a BOM
   let i = 0;
   for (;;) {
     while (i < s.length && /\s/.test(s.charAt(i))) i++;
-    let end: number, len: number; // index of the closing token and its length
-    if (s.startsWith("<?", i)) [end, len] = [s.indexOf("?>", i + 2), 2];
-    else if (s.startsWith("<!--", i)) [end, len] = [s.indexOf("-->", i + 4), 3];
+    let next: number;
+    if (s.startsWith("<?", i)) { const e = s.indexOf("?>", i + 2); next = e < 0 ? -1 : e + 2; }
+    else if (s.startsWith("<!--", i)) { const e = s.indexOf("-->", i + 4); next = e < 0 ? -1 : e + 3; }
     else if (s.slice(i, i + 9).toLowerCase() === "<!doctype") {
       const sub = s.indexOf("[", i), gt = s.indexOf(">", i);
-      [end, len] = [sub !== -1 && sub < gt ? s.indexOf(">", s.indexOf("]", sub)) : gt, 1];
+      let e = gt;
+      if (sub !== -1 && (gt === -1 || sub < gt)) { const rb = s.indexOf("]", sub); e = rb < 0 ? -1 : s.indexOf(">", rb); }
+      next = e < 0 ? -1 : e + 1;
     } else return /^<svg[\s>/]/i.test(s.slice(i, i + 5));
-    if (end < 0) return false; // unterminated
-    const close = end + len;
-    i = close;
+    if (next <= i) return false; // unterminated
+    i = next;
   }
 }
 
@@ -55,11 +59,35 @@ function sharpError(e: unknown): IngestError {
 
 async function thumbnail(input: Uint8Array): Promise<Uint8Array> {
   try {
-    // Backstop for the raster pipeline only; it does not interrupt librsvg (svg.ts caps text and <use>).
-    const out = await sharp(input, opts).autoOrient().timeout({ seconds: 3 })
+    const out = await sharp(input, opts).autoOrient()
       .resize(THUMB, THUMB, { fit: "inside", withoutEnlargement: true }).webp().toBuffer();
     return new Uint8Array(out);
   } catch (e) { throw sharpError(e); }
+}
+
+// SVG rendering can run for minutes on a small hostile file and cannot be interrupted in-process,
+// so it happens in a child process that is killed after RENDER_MS.
+const RENDER_MS = 5000;
+const RENDER_SCRIPT = fileURLToPath(new URL("./render.mjs", import.meta.url));
+function renderSvgThumb(svg: Uint8Array): Promise<Uint8Array> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [RENDER_SCRIPT, String(THUMB), String(MAX_PIXELS)], { stdio: ["pipe", "pipe", "pipe"] });
+    const out: Buffer[] = [];
+    let err = "";
+    let timedOut = false;
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, RENDER_MS);
+    child.stdout.on("data", (c: Buffer) => out.push(c));
+    child.stderr.on("data", (c: Buffer) => { if (err.length < 1000) err += c; });
+    child.stdin.on("error", () => {}); // the child may die before reading
+    child.on("error", (e) => { clearTimeout(timer); reject(new IngestError("invalid_image", e.message)); });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (timedOut) reject(new IngestError("too_large", "render timed out"));
+      else if (code === 0) resolve(new Uint8Array(Buffer.concat(out)));
+      else reject(new IngestError(/pixel limit/i.test(err) ? "too_large" : "invalid_image", err));
+    });
+    child.stdin.end(svg);
+  });
 }
 
 export async function ingest(bytes: Uint8Array): Promise<Ingested> {
@@ -77,7 +105,7 @@ export async function ingest(bytes: Uint8Array): Promise<Ingested> {
     const [width, height] = [sm.width ?? 0, sm.height ?? 0];
     if (!(width > 0 && height > 0)) throw new IngestError("invalid_image");
     if (width * height > MAX_PIXELS) throw new IngestError("too_large");
-    return { kind: "svg", format: "svg", contentType: "image/svg+xml", width, height, sha256, file, thumb: await thumbnail(file) };
+    return { kind: "svg", format: "svg", contentType: "image/svg+xml", width, height, sha256, file, thumb: await renderSvgThumb(file) };
   }
 
   if (!looksRaster(bytes)) throw new IngestError("unsupported_type");
