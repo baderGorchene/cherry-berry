@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import Konva from "konva";
-import { Ellipse, Group, Layer, Path, Rect, Stage, Text, Transformer } from "react-konva";
+import { Ellipse, Group, Image as KImage, Layer, Path, Rect, Stage, Text, Transformer } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import * as Y from "yjs";
 import type { AnchorRef } from "@cherry/vector";
@@ -11,6 +11,7 @@ import {
 import { fromKonvaTransform, toKonvaAttrs } from "./geometry";
 import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
 import TextEditor from "./TextEditor";
+import { useAssetImage } from "./useAssetImage";
 
 export type Tool = "select" | "text" | "pen" | "direct" | "add-anchor" | "convert-anchor" | BasicShape;
 type Pt = { x: number; y: number };
@@ -38,6 +39,22 @@ const paint = (p?: { color: string; opacity: number }) => p && (p.opacity < 1 ? 
 const hexA = (hex: string, a: number) =>
   `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 
+/** An asset's image at the node's size; a grey box while it loads, with a note if it can't. */
+function ImageView({ n, common }: { n: Extract<CherryNode, { kind: "image" }>; common: object }) {
+  const { image, status } = useAssetImage(n.assetId);
+  return (
+    <Group {...common}>
+      {image ? <KImage image={image} width={n.width} height={n.height} /> : (
+        <>
+          <Rect width={n.width} height={n.height} fill="#D9D2DC" />
+          <Text text={status === "error" ? "Image unavailable" : "Image"} width={n.width} height={n.height} align="center" verticalAlign="middle"
+            fontSize={Math.max(1, Math.min(n.width, n.height) / 6)} fill="#5D4E66" />
+        </>
+      )}
+    </Group>
+  );
+}
+
 /** Plain render of one node; Konva ids are only set on top-level (selectable) nodes. */
 function NodeView({ n, unit, top, editing, ...events }: {
   n: CherryNode; unit: Unit; top: boolean; editing: string | null;
@@ -60,13 +77,7 @@ function NodeView({ n, unit, top, editing, ...events }: {
     case "text":
       return <Text {...common} {...konvaFont(n, unit)} fill={paint(n.fill)} visible={editing !== n.id} />;
     case "image":
-      return (
-        <Group {...common}>
-          <Rect width={n.width} height={n.height} fill="#D9D2DC" />
-          <Text text="Image" width={n.width} height={n.height} align="center" verticalAlign="middle"
-            fontSize={Math.max(1, Math.min(n.width, n.height) / 6)} fill="#5D4E66" />
-        </Group>
-      );
+      return <ImageView n={n} common={common} />;
     case "group":
       return (
         <Group {...common}>

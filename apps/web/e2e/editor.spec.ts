@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, openAsViewer, signUp, unique } from "./helpers";
+import { createWorkspace, openAsViewer, signUp, unique, uniquePng } from "./helpers";
 
 async function newSocialPost(page: Page) {
   await signUp(page, unique("ed"));
@@ -406,4 +406,87 @@ test("too-large file is refused", async ({ page }) => {
   });
   await expect(page.getByRole("alert").filter({ hasText: "That file is too large (1 MB max)." })).toBeVisible();
   await expect(layers(page).getByRole("button", { name: /Imported/ })).toHaveCount(0);
+});
+
+/** Seeds a visual through the API; returns its id. */
+async function seedVisual(page: Page, title: string, visibility: "private" | "workspace") {
+  const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
+  const res = await page.request.post("/api/assets", {
+    multipart: {
+      file: { name: "dot.png", mimeType: "image/png", buffer: uniquePng() },
+      title, tags: "", license: "cc0", attribution: "", visibility, workspaceId: workspaces[0].id, confirmed: "true",
+    },
+  });
+  expect(res.status()).toBe(201);
+  return (await res.json()).asset.id as string;
+}
+const visualsPanel = (page: Page) => page.getByRole("complementary", { name: "Visuals panel" });
+const fileUrl = (id: string) => new RegExp(`/api/assets/${id}/file$`);
+
+test("insert a visual into a design", async ({ page }) => {
+  await newSocialPost(page);
+  const id = await seedVisual(page, "Dot", "workspace");
+  await page.getByRole("button", { name: "Visuals" }).click();
+  await visualsPanel(page).getByRole("button", { name: "Workspace", exact: true }).click();
+  const loaded = page.waitForResponse((r) => fileUrl(id).test(r.url()));
+  await visualsPanel(page).getByRole("button", { name: "Dot" }).click();
+  expect((await loaded).status()).toBe(200);
+  await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Properties" }).getByText("CC0", { exact: true })).toBeVisible();
+  await expect(status(page)).toHaveText("Saved");
+
+  await page.keyboard.press("Control+Z");
+  await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toHaveCount(0);
+  await page.keyboard.press("Control+Shift+Z");
+  await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toBeVisible();
+  await expect(status(page)).toHaveText("Saved");
+
+  const again = page.waitForResponse((r) => fileUrl(id).test(r.url()) && r.status() === 200);
+  await page.reload();
+  await again;
+  await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toBeVisible();
+});
+
+test("a teammate sees a private visual used in the design", async ({ page, browser }) => {
+  await newSocialPost(page);
+  const id = await seedVisual(page, "Secret dot", "private");
+  await page.getByRole("button", { name: "Visuals" }).click();
+  await visualsPanel(page).getByRole("button", { name: "Mine", exact: true }).click();
+  const linked = page.waitForResponse((r) => r.url().includes("/assets") && r.url().includes("/api/designs/") && r.request().method() === "POST");
+  await visualsPanel(page).getByRole("button", { name: "Secret dot" }).click();
+  expect((await linked).ok()).toBe(true);
+  await expect(status(page)).toHaveText("Saved");
+
+  const viewer = await openAsViewer(browser, page);
+  const seen = viewer.waitForResponse((r) => fileUrl(id).test(r.url()));
+  await viewer.reload();
+  expect((await seen).status()).toBe(200);
+  await expect(layers(viewer).getByRole("button", { name: "Secret dot", exact: true })).toBeVisible();
+});
+
+test("a missing visual shows a placeholder, not a crash", async ({ page }) => {
+  await newSocialPost(page);
+  await seedVisual(page, "Gone dot", "workspace");
+  await page.route("**/api/assets/*/file", (r) => r.fulfill({ status: 404, body: "" }));
+  await page.getByRole("button", { name: "Visuals" }).click();
+  await visualsPanel(page).getByRole("button", { name: "Workspace", exact: true }).click();
+  await visualsPanel(page).getByRole("button", { name: "Gone dot" }).click();
+  await expect(status(page)).toHaveText("Saved");
+  await page.reload();
+  const layer = layers(page).getByRole("button", { name: "Gone dot", exact: true });
+  await layer.click();
+  await expect(page.getByRole("complementary", { name: "Properties" }).getByRole("heading", { name: "Visual" })).toBeVisible();
+});
+
+test("upload from the editor", async ({ page }) => {
+  await newSocialPost(page);
+  await page.getByRole("button", { name: "Visuals" }).click();
+  await visualsPanel(page).getByRole("button", { name: "Upload…" }).click();
+  const dialog = page.getByRole("dialog", { name: "Upload visuals" });
+  await dialog.locator('input[type="file"]').setInputFiles({ name: "dot2.png", mimeType: "image/png", buffer: uniquePng() });
+  await expect(dialog.getByText("Ready", { exact: true })).toBeVisible();
+  await dialog.getByLabel("License", { exact: true }).selectOption({ label: "CC0 · public domain" });
+  await dialog.getByLabel(/I created this/).check();
+  await dialog.getByRole("button", { name: "Add 1 visual" }).click();
+  await expect(layers(page).getByRole("button", { name: "Dot2", exact: true })).toBeVisible();
 });

@@ -1,9 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import * as Y from "yjs";
 import { LOCAL, updateNode, type CherryNode, type Page } from "@cherry/doc";
 import { scalePath, type BoolOp } from "@cherry/vector";
 import ReuseShape from "./SaveShapeDialog";
 import { withTextHeight } from "./Canvas";
+import { getAsset, type Asset } from "../api";
+import { LICENSES } from "../library/assets";
 
 const FONTS = ["Inter", "Space Grotesk", "Georgia", "Arial", "Times New Roman", "Courier New"];
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -66,6 +68,31 @@ const OPS: { op: BoolOp; label: string; icon: ReactNode }[] = [
   { op: "intersect", label: "Intersect", icon: <><clipPath id="bo-int"><circle cx="18" cy="10" r="8" /></clipPath><circle cx="10" cy="10" r="8" fill="none" stroke="#C654C3" strokeDasharray="2 2" /><circle cx="18" cy="10" r="8" fill="none" stroke="#C654C3" strokeDasharray="2 2" /><circle cx="10" cy="10" r="8" fill="#8E1EA2" clipPath="url(#bo-int)" /></> },
   { op: "exclude", label: "Exclude", icon: <path fill="#8E1EA2" fillRule="evenodd" d="M10 2a8 8 0 1 0 0 16a8 8 0 1 0 0-16zM18 2a8 8 0 1 0 0 16a8 8 0 1 0 0-16z" /> },
 ];
+
+/** The library asset behind an image layer: title, license, attribution and pixel size. */
+function VisualInfo({ assetId }: { assetId: string }) {
+  const [a, setA] = useState<Asset | "failed" | null>(null);
+  useEffect(() => {
+    let stale = false;
+    getAsset(assetId).then((r) => !stale && setA(r.asset), () => !stale && setA("failed"));
+    return () => { stale = true; };
+  }, [assetId]);
+  return (
+    <section className="ed-sec">
+      <h2 className="ed-ph">Visual</h2>
+      {a === null ? <p className="muted" style={{ fontSize: 13 }}>Loading…</p>
+        : a === "failed" ? <p className="muted" style={{ fontSize: 13 }}>Details unavailable</p>
+          : (
+            <>
+              <p style={{ fontSize: 13 }}>{a.title}</p>
+              <p style={{ fontSize: 13 }}>{LICENSES.find((l) => l.value === a.license)?.badge ?? a.license}</p>
+              {a.attribution && <p className="muted" style={{ fontSize: 13 }}>{a.attribution}</p>}
+              <p className="muted" style={{ fontSize: 13 }}>{a.width} × {a.height} px</p>
+            </>
+          )}
+    </section>
+  );
+}
 
 export default function Properties({ ydoc, pageId, workspaceId, unit, nodes, readOnly, act, combinable, canConvert, message, onCombine, onConvert }: {
   ydoc: Y.Doc; pageId: string; workspaceId: string; unit: Page["unit"]; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
@@ -194,6 +221,7 @@ export default function Properties({ ydoc, pageId, workspaceId, unit, nodes, rea
             onCommit={(w) => set(n, { stroke: { paint: stroke?.paint ?? paint("#22142A"), width: Math.max(0, w) } })} />
         </section>
       )}
+      {n.kind === "image" && <VisualInfo assetId={n.assetId} />}
       {(n.kind === "rect" || n.kind === "ellipse" || n.kind === "path") && (
         <ReuseShape key={n.id} node={n} workspaceId={workspaceId} viewer={readOnly} />
       )}

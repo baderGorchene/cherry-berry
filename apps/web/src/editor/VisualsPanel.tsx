@@ -1,0 +1,74 @@
+import { useState } from "react";
+import * as Y from "yjs";
+import { addNode, type Page } from "@cherry/doc";
+import { assetUrl, linkAssetToDesign, type Asset, type AssetKind } from "../api";
+import { useAssetList, type AssetScope } from "../library/assets";
+import UploadDialog from "../library/UploadDialog";
+import { imageNode } from "./visuals";
+
+const SOURCES: [AssetScope, string][] = [["mine", "Mine"], ["workspace", "Workspace"], ["public", "Public"]];
+const TYPES: [AssetKind | undefined, string][] = [[undefined, "All"], ["image", "Images"], ["gif", "GIFs"], ["svg", "SVG"]];
+
+function Chips<T>({ label, options, value, onPick }: { label: string; options: [T, string][]; value: T; onPick(v: T): void }) {
+  return (
+    <div role="group" aria-label={label} className="chips">
+      {options.map(([v, text]) => (
+        <button key={text} type="button" className="chip" aria-pressed={v === value} onClick={() => onPick(v)}>{text}</button>
+      ))}
+    </div>
+  );
+}
+
+export default function VisualsPanel({ ydoc, undo, page, designId, workspaceId, readOnly, act, onSelect }: {
+  ydoc: Y.Doc; undo: Y.UndoManager; page: Page; designId: string; workspaceId: string; readOnly: boolean;
+  act(fn: () => void): void; onSelect(ids: string[]): void;
+}) {
+  const [scope, setScope] = useState<AssetScope>("workspace");
+  const [kind, setKind] = useState<AssetKind | undefined>();
+  const [text, setText] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState("");
+  const { res, retry } = useAssetList(scope, { workspaceId, kind }, text);
+
+  const insert = async (a: Asset) => {
+    const n = imageNode(a, page);
+    setError("");
+    act(() => addNode(ydoc, page.id, n));
+    onSelect([n.id]);
+    try {
+      await linkAssetToDesign(designId, a.id);
+    } catch {
+      undo.undo();
+      onSelect([]);
+      setError("Couldn't link this visual to the design. Try again.");
+    }
+  };
+
+  return (
+    <aside aria-label="Visuals panel" className="ed-shapes">
+      <Chips label="Source" options={SOURCES} value={scope} onPick={setScope} />
+      <Chips label="Type" options={TYPES} value={kind} onPick={setKind} />
+      <button className="ed-mini" disabled={readOnly} onClick={() => setUploading(true)}>Upload…</button>
+      <input type="search" aria-label="Search visuals" placeholder="Search visuals" value={text} onChange={(e) => setText(e.target.value)} />
+      {error && <p role="alert" className="ed-err">{error}</p>}
+      {!res ? <p className="muted" style={{ fontSize: 13 }}>Loading…</p>
+        : "error" in res ? (
+          <div><p role="alert" className="ed-err">{res.error}</p><button className="ed-mini" onClick={retry}>Retry</button></div>
+        ) : !res.assets.length ? <p className="muted" style={{ fontSize: 13 }}>No visuals yet</p>
+          : (
+            <div className="ed-shapegrid">
+              {res.assets.map((a) => (
+                <button key={a.id} className="ed-shape" disabled={readOnly} title={a.title} onClick={() => void insert(a)}>
+                  <img src={assetUrl(a.id, "thumb")} alt="" loading="lazy" />
+                  <span>{a.title}</span>
+                </button>
+              ))}
+            </div>
+          )}
+      {uploading && (
+        <UploadDialog workspaceId={workspaceId} viewer={false} onClose={() => setUploading(false)}
+          onDone={(a) => { retry(); if (a) void insert(a); }} />
+      )}
+    </aside>
+  );
+}
