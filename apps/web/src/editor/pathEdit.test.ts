@@ -88,6 +88,14 @@ describe("finishDraft", () => {
     const m = [{ anchors: [a(0), a(9)], closed: false }];
     expect(finishDraft(m, draft, false)).toEqual({ model: [m[0], { anchors: [a(2), a(3)], closed: false }], sub: 1 });
   });
+  it("appends a new subpath when a collaborator extended the old one, keeping their anchors", () => {
+    const m = [{ anchors: [...base, a(7)], closed: false }];
+    expect(finishDraft(m, draft, false)).toEqual({ model: [m[0], { anchors: [a(2), a(3)], closed: false }], sub: 1 });
+  });
+  it("appends a new subpath when only a handle of the old one changed", () => {
+    const m = [{ anchors: [a(0), { ...a(1), in: { x: -3, y: 0 } }], closed: false }];
+    expect(finishDraft(m, draft, false)?.sub).toBe(1);
+  });
   it("appends a new subpath when the old one was removed", () => {
     expect(finishDraft([], draft, true)).toEqual({ model: [{ anchors: [a(2), a(3)], closed: true }], sub: 0 });
   });

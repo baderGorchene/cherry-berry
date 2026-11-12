@@ -119,7 +119,10 @@ export function convertToPath(ydoc: Y.Doc, pageId: string, node: CherryNode, act
   });
 }
 
-const same = (a: Anchor, b: Anchor) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
+const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+const same = (a: Anchor, b: Anchor) =>
+  near(a.x, b.x) && near(a.y, b.y) && near(a.in.x, b.in.x) && near(a.in.y, b.in.y) &&
+  near(a.out.x, b.out.x) && near(a.out.y, b.out.y) && a.kind === b.kind;
 
 /**
  * Places a finished pen draft into the current model. A draft that continues subpath `sub` only does so while that
@@ -130,7 +133,7 @@ export function finishDraft(
   model: PathModel, dr: { anchors: Anchor[]; sub: number | null; base: Anchor[] }, closed: boolean,
 ): { model: PathModel; sub: number } | null {
   const cur = dr.sub === null ? undefined : model[dr.sub];
-  if (dr.sub !== null && cur && cur.anchors.length >= dr.base.length && dr.base.every((b, i) => same(b, cur.anchors[i]!))) {
+  if (dr.sub !== null && cur && cur.anchors.length === dr.base.length && dr.base.every((b, i) => same(b, cur.anchors[i]!))) {
     return { model: model.map((s, i) => (i === dr.sub ? { anchors: dr.anchors, closed } : s)), sub: dr.sub };
   }
   const anchors = dr.anchors.slice(dr.base.length);
