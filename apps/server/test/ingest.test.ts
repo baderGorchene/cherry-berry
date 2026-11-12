@@ -75,9 +75,10 @@ describe("ingest svg", () => {
     expect(r.thumb.length).toBeGreaterThan(0);
     expect((await meta(r.thumb)).format).toBe("webp");
   });
-  it("an svg with no size falls back to 300x150", async () => {
+  it("an svg with no size takes the size the renderer gives it", async () => {
     const r = await ingest(enc(`<svg xmlns="http://www.w3.org/2000/svg"><rect width="4" height="4"/></svg>`));
-    expect([r.width, r.height]).toEqual([300, 150]);
+    const m = await sharp(r.file).metadata();
+    expect([r.width, r.height]).toEqual([m.width, m.height]);
   });
 });
 
@@ -99,5 +100,48 @@ describe("lying and broken files", () => {
     expect(await code(ingest(png))).toBe("too_large");
     const big = `<svg xmlns="http://www.w3.org/2000/svg">${"<!--x-->".repeat(2.1e6 / 8)}</svg>`;
     expect(await code(ingest(enc(big)))).toBe("too_large");
+  });
+});
+
+const SVGNS = 'xmlns="http://www.w3.org/2000/svg"';
+async function timed(bytes: Uint8Array) {
+  const t0 = performance.now();
+  const outcome = await ingest(bytes).then(() => "ok", (e) => (e instanceof IngestError ? e.code : `non-IngestError: ${e}`));
+  return { outcome, ms: performance.now() - t0 };
+}
+
+describe("bounded work", () => {
+  it.each(["<?xml ?>", "<!--a-->"])("a long prolog of %s is rejected quickly", async (unit) => {
+    const { outcome, ms } = await timed(enc(unit.repeat(40) + "x"));
+    expect(outcome).toBe("unsupported_type");
+    expect(ms).toBeLessThan(200);
+  });
+  it.each([4000, 100000])("%i nested groups reject with an IngestError", async (n) => {
+    const { outcome, ms } = await timed(enc(`<svg ${SVGNS}>${"<g>".repeat(n)}${"</g>".repeat(n)}</svg>`));
+    expect(outcome).toMatch(/^(invalid_image|too_large)$/);
+    expect(ms).toBeLessThan(1000);
+  });
+  it("200000 elements reject as too_large without parsing them", async () => {
+    const { outcome, ms } = await timed(enc(`<svg ${SVGNS}>${"<g/>".repeat(200000)}</svg>`));
+    expect(outcome).toBe("too_large");
+    expect(ms).toBeLessThan(500);
+  });
+  it("a 20000 character text svg is rejected quickly (render cannot be interrupted, so text is capped)", async () => {
+    const { outcome, ms } = await timed(enc(`<svg ${SVGNS} width="200" height="50"><text font-size="9">${"w".repeat(20000)}</text></svg>`));
+    expect(outcome).toBe("too_large");
+    expect(ms).toBeLessThan(1000);
+  });
+  it("svg size is what sharp renders", async () => {
+    const r = await ingest(enc(`<svg ${SVGNS} width="10cm" height="5cm"/>`));
+    const m = await sharp(r.file).metadata();
+    expect([r.width, r.height]).toEqual([m.width, m.height]);
+    expect(r.width).not.toBe(300);
+  });
+  it("an enormous declared size is too_large", async () => {
+    expect(await code(ingest(enc(`<svg ${SVGNS} width="1e5" height="1e5"/>`)))).toBe("too_large");
+    expect(await code(ingest(enc(`<svg ${SVGNS} width="20000" height="10001"/>`)))).toBe("too_large");
+  });
+  it("junk before <svg is unsupported_type", async () => {
+    expect(await code(ingest(enc(`junk<svg ${SVGNS} width="5" height="5"/>`)))).toBe("unsupported_type");
   });
 });
