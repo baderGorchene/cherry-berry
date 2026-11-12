@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, customType, integer, jsonb, index, pgTable, primaryKey, real, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, customType, integer, jsonb, index, pgTable, primaryKey, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 // PGlite returns bytea as Uint8Array, node-postgres as Buffer.
 const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
@@ -158,3 +158,24 @@ export const assetUses = pgTable("asset_uses", {
   assetId: uuid("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.designId, t.assetId] }), index("asset_uses_asset").on(t.assetId)]);
+
+export const reports = pgTable("reports", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  // Polymorphic (asset or shape), so targetId has no foreign key; readers join to the live target.
+  targetType: text("target_type").notNull(),
+  targetId: uuid("target_id").notNull(),
+  reporterId: text("reporter_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+  reason: text("reason").notNull(),
+  note: text("note").notNull().default(""),
+  status: text("status").notNull().default("open"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  resolvedBy: text("resolved_by").references(() => user.id, { onDelete: "set null" }),
+  resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+}, (t) => [
+  check("reports_target_type", sql`${t.targetType} in ('asset','shape')`),
+  check("reports_reason", sql`${t.reason} in ('copyright','inappropriate','spam','other')`),
+  check("reports_note", sql`char_length(${t.note}) <= 500`),
+  check("reports_status", sql`${t.status} in ('open','dismissed','removed')`),
+  uniqueIndex("reports_target_reporter").on(t.targetType, t.targetId, t.reporterId),
+  index("reports_target_status").on(t.targetType, t.targetId, t.status),
+]);

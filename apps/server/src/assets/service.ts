@@ -2,6 +2,7 @@ import { and, desc, eq, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { assetUses, assets, designs, memberships, user, workspaces } from "../db/schema";
 import { escapeLike } from "../http";
+import { notHidden } from "../reports/hide";
 import type { Storage } from "../storage";
 import { loadWithRole } from "../designs/service";
 import { WorkspaceError } from "../workspaces/errors";
@@ -36,6 +37,7 @@ const base = (db: Db) => db.select({ a: assets, uploaderName: user.name, workspa
 /** SQL twin of canReadAsset: own, public, or workspace in a workspace the user belongs to; never deleted. */
 const visibleTo = (userId: string): SQL => and(
   sql`${assets.deletedAt} is null`,
+  notHidden("asset", assets.id, assets.visibility, assets.createdBy, userId),
   or(
     eq(assets.createdBy, userId),
     eq(assets.visibility, "public"),
@@ -47,7 +49,7 @@ const visibleTo = (userId: string): SQL => and(
 type Access = Pick<Row, "id" | "createdBy" | "visibility" | "workspaceId" | "deletedAt">;
 
 /** Own, public, or workspace in a workspace the user belongs to; never deleted. Used for listing and recording uses. */
-async function canSeeAsset(db: Db, userId: string, asset: Access): Promise<boolean> {
+export async function canSeeAsset(db: Db, userId: string, asset: Access): Promise<boolean> {
   if (asset.deletedAt) return false;
   if (asset.createdBy === userId || asset.visibility === "public") return true;
   return asset.visibility === "workspace" && !!asset.workspaceId && !!(await getRole(db, asset.workspaceId, userId));
@@ -124,7 +126,7 @@ export async function listAssets(
 ): Promise<Asset[]> {
   let where: SQL | undefined = sql`${assets.deletedAt} is null`;
   if (scope === "mine") where = and(where, eq(assets.createdBy, userId));
-  else if (scope === "public") where = and(where, eq(assets.visibility, "public"));
+  else if (scope === "public") where = and(where, eq(assets.visibility, "public"), notHidden("asset", assets.id, assets.visibility, assets.createdBy, userId));
   else {
     await memberRole(db, workspaceId!, userId);
     where = and(where, eq(assets.visibility, "workspace"), eq(assets.workspaceId, workspaceId!));

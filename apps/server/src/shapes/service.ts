@@ -3,6 +3,7 @@ import type { Paint, Stroke } from "@cherry/doc";
 import { parsePath, pathBounds, toPathData, transformPath } from "@cherry/vector";
 import type { Db } from "../db/client";
 import { escapeLike } from "../http";
+import { notHidden } from "../reports/hide";
 import { shapes } from "../db/schema";
 import { WorkspaceError } from "../workspaces/errors";
 import { getRole, UUID } from "../workspaces/service";
@@ -70,7 +71,7 @@ export async function listShapes(
 ): Promise<Shape[]> {
   let where;
   if (scope === "mine") where = eq(shapes.createdBy, userId);
-  else if (scope === "public") where = eq(shapes.visibility, "public");
+  else if (scope === "public") where = and(eq(shapes.visibility, "public"), notHidden("shape", shapes.id, shapes.visibility, shapes.createdBy, userId));
   else {
     await memberRole(db, workspaceId!, userId);
     where = and(eq(shapes.visibility, "workspace"), eq(shapes.workspaceId, workspaceId!));
@@ -87,13 +88,20 @@ export async function listShapes(
   return rows.map((r) => toShape(r, userId));
 }
 
-export async function deleteShape(db: Db, userId: string, id: string): Promise<void> {
-  if (!UUID.test(id)) throw new WorkspaceError("not_found");
+/** The shape row if the user may see it (own, public, or workspace in a workspace they belong to), else undefined. */
+export async function findVisibleShape(db: Db, userId: string, id: string) {
+  if (!UUID.test(id)) return undefined;
   const [s] = await db.select().from(shapes).where(eq(shapes.id, id));
-  if (!s) throw new WorkspaceError("not_found");
-  const role = s.workspaceId ? await getRole(db, s.workspaceId, userId) : null;
+  if (!s) return undefined;
+  const role = s.workspaceId ? await getRole(db, s.workspaceId, userId) : undefined;
   const visible = s.createdBy === userId || s.visibility === "public" || (s.visibility === "workspace" && role);
-  if (!visible) throw new WorkspaceError("not_found");
+  return visible ? { s, role } : undefined;
+}
+
+export async function deleteShape(db: Db, userId: string, id: string): Promise<void> {
+  const found = await findVisibleShape(db, userId, id);
+  if (!found) throw new WorkspaceError("not_found");
+  const { s, role } = found;
   if (s.createdBy !== userId && !(s.visibility === "workspace" && (role === "owner" || role === "admin"))) {
     throw new WorkspaceError("forbidden");
   }
