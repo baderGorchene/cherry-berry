@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { parsePath, pathBounds, transformPath } from "@cherry/vector";
-import { Link, Navigate } from "react-router";
+import { Navigate } from "react-router";
 import {
-  ApiError, deleteShape, errorMessage, myWorkspaces, saveShape, signOut, type Shape, type Workspace,
+  ApiError, deleteShape, errorMessage, myWorkspaces, saveShape, type Shape, type Workspace,
 } from "../api";
 import { currentWorkspace, useSession } from "../App";
 import { readSvg, ShapeThumb, TABS } from "../editor/ShapesPanel";
 import { ShapeFields, shapePayload, useShapeForm, useShapeList } from "../editor/shapeForm";
 import { SHAPES } from "../editor/Toolbar";
+import ReportDialog from "../library/ReportDialog";
+import Sidebar from "../Sidebar";
 
 const MAX_D = 100_000;
 const grid = { listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 14 } as const;
@@ -24,6 +26,8 @@ export default function Shapes() {
   const [formError, setFormError] = useState("");
   const [saved, setSaved] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [, setCurrentId] = useState<string | null>(null); // re-render when the sidebar switches workspace
+  const [reporting, setReporting] = useState<Shape | null>(null);
 
   useEffect(() => {
     myWorkspaces().then((r) => setList(r.workspaces), (e) => {
@@ -82,16 +86,7 @@ export default function Shapes() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexWrap: "wrap" }}>
-      <nav aria-label="Main" style={{
-        flex: "1 1 220px", maxWidth: 260, background: "#fff", borderRight: "1px solid var(--line)",
-        padding: "20px 14px", display: "flex", flexDirection: "column", gap: 10,
-      }}>
-        <p className="brand" style={{ margin: "0 0 4px 12px" }}>Cherry Berry</p>
-        <Link to="/" style={{ padding: "6px 12px", fontWeight: 600 }}>Designs</Link>
-        <Link to="/shapes" aria-current="page" style={{ padding: "6px 12px", fontWeight: 700, color: "var(--berry)" }}>Shapes</Link>
-        <span style={{ flex: 1 }} />
-        <button className="btn" onClick={async () => { await signOut().catch(() => {}); setUser(null); }}>Sign out</button>
-      </nav>
+      <Sidebar active="shapes" onSwitch={setCurrentId} />
 
       <main style={{ flex: "999 1 560px", minWidth: 0, padding: "28px clamp(16px, 4vw, 40px) 48px", display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start" }}>
         <section style={{ flex: "3 1 380px", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -120,7 +115,9 @@ export default function Shapes() {
                     <li key={s.id} className="card" style={cell}>
                       <ShapeThumb s={s} size={64} />
                       <span style={{ color: "var(--ink)", fontSize: 14 }}>{s.name}</span>
-                      {s.mine && <button className="btn" onClick={() => void remove(s)}>Delete</button>}
+                      {s.mine
+                        ? <button className="btn" onClick={() => void remove(s)}>Delete</button>
+                        : <button className="btn" onClick={() => setReporting(s)}>Report</button>}
                     </li>
                   ))}
                 </ul>
@@ -152,6 +149,7 @@ export default function Shapes() {
           {saved && <p role="status" className="muted">Saved to your shapes</p>}
         </aside>
       </main>
+      {reporting && <ReportDialog target={{ type: "shape", id: reporting.id, title: reporting.name }} onClose={() => setReporting(null)} />}
     </div>
   );
 }

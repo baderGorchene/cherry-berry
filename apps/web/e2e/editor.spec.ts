@@ -357,7 +357,7 @@ test("workspace shapes are shared", async ({ browser }) => {
   const viewer = await openAsViewer(browser, owner);
   await viewer.getByRole("button", { name: "Shapes", exact: true }).click();
   await viewer.getByRole("tab", { name: "Workspace" }).click();
-  await expect(viewer.getByRole("complementary", { name: "Shapes panel" }).getByRole("button", { name: "Badge" })).toBeVisible();
+  await expect(viewer.getByRole("complementary", { name: "Shapes panel" }).getByRole("button", { name: "Badge", exact: true })).toBeVisible();
 });
 
 test("import an SVG into a design", async ({ page }) => {

@@ -5,11 +5,12 @@ export class ApiError extends Error {
 }
 
 export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+  const form = init.body instanceof FormData; // the browser sets the multipart content type and boundary
   const res = await fetch(path, {
     method: init.method ?? (init.body === undefined ? "GET" : "POST"),
     credentials: "include",
-    headers: init.body === undefined ? {} : { "content-type": "application/json" },
-    body: init.body === undefined ? undefined : JSON.stringify(init.body),
+    headers: init.body === undefined || form ? {} : { "content-type": "application/json" },
+    body: init.body === undefined ? undefined : form ? (init.body as FormData) : JSON.stringify(init.body),
   });
   const text = await res.text();
   let data: unknown = null;
@@ -82,6 +83,58 @@ export const listShapes = (scope: "mine" | "workspace" | "public", opts: { works
 };
 export const deleteShape = (id: string) => api<void>(`/api/shapes/${encodeURIComponent(id)}`, { method: "DELETE" });
 
+export type AssetKind = "image" | "gif" | "svg";
+export type License = "cc0" | "cc-by" | "own" | "workspace-only";
+export type Asset = {
+  id: string; title: string; tags: string[]; kind: AssetKind; format: string;
+  width: number; height: number; bytes: number; license: License; attribution: string;
+  visibility: Visibility; workspaceId: string | null; workspaceName: string | null;
+  createdBy: string; uploaderName: string; createdAt: string; mine: boolean; usedIn: number;
+};
+export type NewAsset = {
+  title: string; tags: string[]; license: License; attribution: string; visibility: Visibility; workspaceId?: string;
+};
+export type AssetFilters = { workspaceId?: string; kind?: AssetKind; license?: License; q?: string };
+
+const enc = encodeURIComponent;
+export const listAssets = (scope: "mine" | "workspace" | "public", opts: AssetFilters = {}) => {
+  const qs = new URLSearchParams({ scope });
+  for (const [k, v] of Object.entries(opts)) if (v) qs.set(k, v);
+  return api<{ assets: Asset[] }>(`/api/assets?${qs}`);
+};
+export const getAsset = (id: string) => api<{ asset: Asset }>(`/api/assets/${enc(id)}`);
+export const assetByHash = (sha256: string) =>
+  api<{ asset: Asset }>(`/api/assets/by-hash/${enc(sha256)}`).then((r) => r.asset, (e) => {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  });
+export async function uploadAsset(file: File, fields: NewAsset): Promise<{ asset: Asset; duplicate: boolean }> {
+  const f = new FormData();
+  f.set("file", file);
+  f.set("title", fields.title);
+  f.set("tags", fields.tags.join(","));
+  f.set("license", fields.license);
+  f.set("attribution", fields.attribution);
+  f.set("visibility", fields.visibility);
+  if (fields.workspaceId) f.set("workspaceId", fields.workspaceId);
+  f.set("confirmed", "true"); // the caller's dialog collects the rights confirmation
+  try {
+    return await api(`/api/assets`, { body: f });
+  } catch (e) {
+    // `too_large` means a design that can't be saved elsewhere; for a file it has its own copy.
+    throw e instanceof ApiError && e.code === "too_large" ? new ApiError(e.status, "upload_too_large") : e;
+  }
+}
+export const updateAsset = (id: string, patch: Partial<NewAsset>) =>
+  api<{ asset: Asset }>(`/api/assets/${enc(id)}`, { method: "PATCH", body: patch });
+export const deleteAsset = (id: string) => api<void>(`/api/assets/${enc(id)}`, { method: "DELETE" });
+export const linkAssetToDesign = (designId: string, assetId: string) =>
+  api<void>(`/api/designs/${enc(designId)}/assets`, { body: { assetId } });
+export const assetUrl = (id: string, kind: "file" | "thumb") => `/api/assets/${enc(id)}/${kind}`;
+
+export type ReportBody = { targetType: "asset" | "shape"; targetId: string; reason: "copyright" | "inappropriate" | "spam" | "other"; note?: string };
+export const reportItem = (body: ReportBody) => api<{ report: { id: string } }>("/api/reports", { body });
+
 export function toBase64(u8: Uint8Array): string {
   let s = "";
   for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
@@ -109,6 +162,10 @@ const COPY: Record<string, string> = {
   INVALID_EMAIL_OR_PASSWORD: "Wrong email or password.",
   USER_ALREADY_EXISTS: "An account with that email already exists. Sign in instead.",
   PASSWORD_TOO_SHORT: "Use a password of at least 8 characters.",
+  unsupported_type: "That file type isn't supported. Use PNG, JPG, WEBP, GIF or SVG.",
+  invalid_image: "That file couldn't be read as an image.",
+  upload_too_large: "That file is too large (50 MB max, 2 MB for SVG).",
+  rights_not_confirmed: "Confirm you have the right to share this file.",
   too_large: "This design is too large to save.",
   forbidden: "You have view-only access to this design.",
   invalid_document: "This change couldn't be saved because the design became invalid.",

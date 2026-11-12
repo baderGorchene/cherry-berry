@@ -3,6 +3,7 @@ import * as Y from "yjs";
 import { addNode, type CherryNode, type Page } from "@cherry/doc";
 import { InvalidSvg, parsePath, pathBounds, scalePath, svgToPaths, transformPath } from "@cherry/vector";
 import type { Shape } from "../api";
+import ReportDialog from "../library/ReportDialog";
 import { useShapeList } from "./shapeForm";
 import type { Tool } from "./Canvas";
 import { SHAPES } from "./Toolbar";
@@ -85,6 +86,7 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
   const [text, setText] = useState("");
   const { res, retry } = useShapeList(tab === "basic" ? null : tab, workspaceId, text);
   const [importError, setImportError] = useState("");
+  const [reporting, setReporting] = useState<Shape | null>(null);
   const onFile = async (file: File | undefined) => {
     if (!file) return;
     const r = await readSvg(file);
@@ -132,15 +134,19 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
               : (
                 <div className="ed-shapegrid">
                   {res.shapes.map((s) => (
-                    <button key={s.id} className="ed-shape" disabled={readOnly} title={s.name} onClick={() => insert(s)}>
-                      <ShapeThumb s={s} />
-                      <span>{s.name}</span>
-                    </button>
+                    <div key={s.id} style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                      <button className="ed-shape" disabled={readOnly} title={s.name} onClick={() => insert(s)}>
+                        <ShapeThumb s={s} />
+                        <span>{s.name}</span>
+                      </button>
+                      {!s.mine && <button className="ed-mini" aria-label={`Report ${s.name}`} onClick={() => setReporting(s)}>Report</button>}
+                    </div>
                   ))}
                 </div>
               )}
         </>
       )}
+      {reporting && <ReportDialog target={{ type: "shape", id: reporting.id, title: reporting.name }} onClose={() => setReporting(null)} />}
     </aside>
   );
 }

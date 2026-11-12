@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
 import {
-  ApiError, createDesign, errorMessage, listDesigns, myWorkspaces, signOut,
+  ApiError, createDesign, errorMessage, listDesigns, myWorkspaces,
   type Design, type NewDesign, type Workspace,
 } from "../api";
 import { currentWorkspace, useSession } from "../App";
+import Sidebar from "../Sidebar";
 import { initials } from "./Workspaces";
 
 const PRESETS: { name: string; size: string; w: number; h: number; bg: string; body: NewDesign }[] = [
@@ -19,8 +20,6 @@ const PRESETS: { name: string; size: string; w: number; h: number; bg: string; b
   { name: "Business card", size: "85 × 55 mm · CMYK", w: 84, h: 48, bg: "#fff",
     body: { title: "Untitled design", width: 85, height: 55, unit: "mm", colorMode: "cmyk", bleed: 3 } },
 ];
-
-const ROLE: Record<string, string> = { owner: "Owner", admin: "Admin", editor: "Editor", viewer: "Viewer" };
 
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 export function edited(iso: string, now = Date.now()): string {
@@ -80,11 +79,6 @@ export default function Home() {
   if (!current) return <Navigate to="/workspaces" replace />;
   const viewOnly = current.role === "viewer";
 
-  const switchTo = (id: string) => {
-    if (id === "__new") return navigate("/workspaces");
-    currentWorkspace.set(id);
-    setCurrentId(id);
-  };
   const create = async (body: NewDesign) => {
     setBusy(true); setCreateError("");
     try {
@@ -98,24 +92,7 @@ export default function Home() {
 
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexWrap: "wrap" }}>
-      <nav aria-label="Main" style={{
-        flex: "1 1 220px", maxWidth: 260, background: "#fff", borderRight: "1px solid var(--line)",
-        padding: "20px 14px", display: "flex", flexDirection: "column", gap: 10,
-      }}>
-        <p className="brand" style={{ margin: "0 0 4px 12px" }}>Cherry Berry</p>
-        <label className="sr-only" htmlFor="ws">Workspace</label>
-        <select id="ws" className="inp" value={current.id} onChange={(e) => switchTo(e.target.value)} style={{ fontWeight: 600 }}>
-          {list.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-          <option value="__new">Join or create another…</option>
-        </select>
-        <div style={{ padding: "4px 12px", fontSize: 13 }} className="muted">
-          <span>{ROLE[current.role ?? "viewer"]} · ID </span>
-          <code data-testid="workspace-public-id" style={{ color: "var(--ink)", userSelect: "all" }}>{current.publicId}</code>
-        </div>
-        <Link to="/shapes" style={{ padding: "6px 12px", fontWeight: 600 }}>Shapes</Link>
-        <span style={{ flex: 1 }} />
-        <button className="btn" onClick={async () => { await signOut().catch(() => {}); setUser(null); }}>Sign out</button>
-      </nav>
+      <Sidebar active="home" onSwitch={setCurrentId} />
 
       <main style={{ flex: "999 1 560px", minWidth: 0, padding: "28px clamp(16px, 4vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 36 }}>
         <header style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
