@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { errorMessage, listAssets, type Asset, type AssetFilters, type AssetKind, type License } from "../api";
+import { errorMessage, listAssets, type Asset, type AssetFilters, type AssetKind, type License, type Visibility } from "../api";
 
 export const LICENSES: { value: License; label: string; badge: string }[] = [
   { value: "cc0", label: "CC0 · public domain", badge: "CC0" },
@@ -7,6 +7,7 @@ export const LICENSES: { value: License; label: string; badge: string }[] = [
   { value: "own", label: "Own work · all rights", badge: "Own work" },
   { value: "workspace-only", label: "Workspace only", badge: "Workspace only" },
 ];
+export const VISIBILITY: [Visibility, string][] = [["private", "Only me"], ["workspace", "This workspace"], ["public", "Everyone (public)"]];
 export const KIND_BADGE: Record<AssetKind, string> = { image: "IMG", gif: "GIF", svg: "SVG" };
 
 export function formatBytes(n: number): string {

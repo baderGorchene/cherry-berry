@@ -4,7 +4,7 @@ import { createWorkspace, signUp, unique, uniquePng } from "./helpers";
 
 type Up = { file: string; mime: string; title: string; license: string; visibility: string; tags?: string };
 
-/** Uploads through the API; the upload dialog is a later task. */
+/** Seeds a visual through the API. */
 async function upload(page: Page, u: Up) {
   const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
   const res = await page.request.post("/api/assets", {
@@ -99,4 +99,88 @@ test("report someone else's public visual", async ({ browser }) => {
   await dlg.getByLabel("Reason").selectOption({ label: "Spam" });
   await dlg.getByRole("button", { name: "Send report" }).click();
   await expect(dlg.getByRole("status")).toHaveText("Thanks. Your report was sent.");
+});
+
+const file = (name: string, mimeType: string, buffer: Buffer) => ({ name, mimeType, buffer });
+const uniqueSvg = () => Buffer.concat([readFileSync("e2e/fixtures/berry.svg"), Buffer.from(`<!--${crypto.randomUUID()}-->`)]);
+const dialog = (page: Page) => page.getByRole("dialog", { name: "Upload visuals" });
+const open = async (page: Page) => {
+  await page.goto("/library");
+  await page.getByRole("button", { name: "Upload visuals" }).click();
+  await expect(dialog(page)).toBeVisible();
+};
+const pick = (page: Page, ...files: ReturnType<typeof file>[]) => dialog(page).locator('input[type="file"]').setInputFiles(files);
+/** Gives the selected row a license and the rights confirmation. */
+async function fillDetails(page: Page) {
+  await dialog(page).getByLabel("License", { exact: true }).selectOption({ label: "CC0 · public domain" });
+  await dialog(page).getByLabel(/I created this/).check();
+}
+
+test("upload two visuals with details", async ({ page }) => {
+  await start(page, "up");
+  await open(page);
+  await pick(page, file("dot.png", "image/png", uniquePng()), file("berry.svg", "image/svg+xml", uniqueSvg()));
+  await expect(dialog(page).getByText("Ready", { exact: true })).toHaveCount(2);
+  await expect(dialog(page).getByRole("button", { name: "Add 0 visuals" })).toBeDisabled();
+  await expect(dialog(page).getByText("Choose a license.")).toHaveCount(2);
+  await expect(dialog(page).getByText("Details for dot.png")).toBeVisible();
+  await expect(dialog(page).getByLabel("Title")).toHaveValue("Dot");
+  await fillDetails(page);
+  await dialog(page).getByRole("button", { name: "Apply to all files" }).click();
+  await dialog(page).getByRole("button", { name: "Add 2 visuals" }).click();
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(tile(page, "Dot")).toBeVisible();
+  await expect(tile(page, "Berry")).toBeVisible();
+  await expect(page.locator(".tile").getByText("CC0", { exact: true })).toHaveCount(2);
+  await expect(page.locator(".tile").getByText("SVG", { exact: true })).toHaveCount(1);
+});
+
+test("a duplicate is offered instead of re-uploaded", async ({ page }) => {
+  await start(page, "dup");
+  const bytes = uniquePng();
+  await open(page);
+  await pick(page, file("dot.png", "image/png", bytes));
+  await expect(dialog(page).getByText("Ready", { exact: true })).toBeVisible();
+  await fillDetails(page);
+  await dialog(page).getByRole("button", { name: "Add 1 visual" }).click();
+  await expect(tile(page, "Dot")).toBeVisible();
+
+  await page.getByRole("button", { name: "Upload visuals" }).click();
+  await pick(page, file("dot.png", "image/png", bytes));
+  await expect(dialog(page).getByText("Already in library")).toBeVisible();
+  await dialog(page).getByRole("button", { name: "Use existing" }).click();
+  await expect(dialog(page)).toHaveCount(0);
+  await expect(page.getByRole("complementary", { name: "Selected visual" }).getByRole("heading", { name: "Dot" })).toBeVisible();
+  await expect(tile(page, "Dot")).toHaveCount(1);
+});
+
+test("one bad file doesn't stop the others", async ({ page }) => {
+  await start(page, "bad");
+  await open(page);
+  await pick(page, file("dot2.png", "image/png", uniquePng()), file("fake.png", "image/png", readFileSync("e2e/fixtures/fake.png")));
+  await expect(dialog(page).getByText("Ready", { exact: true })).toHaveCount(2);
+  await fillDetails(page);
+  await dialog(page).getByRole("button", { name: "Apply to all files" }).click();
+  await dialog(page).getByRole("button", { name: "Add 2 visuals" }).click();
+  await expect(dialog(page).getByText("Added", { exact: true })).toBeVisible();
+  await expect(dialog(page).getByText("That file type isn't supported. Use PNG, JPG, WEBP, GIF or SVG.")).toBeVisible();
+  await expect(tile(page, "Dot2")).toBeVisible();
+  await expect(dialog(page).getByRole("button", { name: "Add 0 visuals" })).toBeDisabled();
+  await dialog(page).getByRole("button", { name: "Remove fake.png" }).click();
+  await expect(dialog(page).getByText("That file type isn't supported. Use PNG, JPG, WEBP, GIF or SVG.")).toHaveCount(0);
+  await expect(tile(page, "Dot2")).toHaveCount(1);
+});
+
+test("license is required", async ({ page }) => {
+  await start(page, "lic");
+  await open(page);
+  await pick(page, file("dot.png", "image/png", uniquePng()));
+  await expect(dialog(page).getByText("Ready", { exact: true })).toBeVisible();
+  await expect(dialog(page).getByText("Choose a license.")).toBeVisible();
+  await expect(dialog(page).getByRole("button", { name: "Add 0 visuals" })).toBeDisabled();
+  await dialog(page).getByLabel(/I created this/).check();
+  await dialog(page).getByLabel("License", { exact: true }).selectOption({ label: "CC-BY · credit required" });
+  await expect(dialog(page).getByText("CC-BY needs an attribution.")).toBeVisible();
+  await dialog(page).getByLabel("Attribution / source").fill("Ann");
+  await expect(dialog(page).getByRole("button", { name: "Add 1 visual" })).toBeEnabled();
 });

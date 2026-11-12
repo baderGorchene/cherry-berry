@@ -5,14 +5,14 @@ import {
   type Asset, type AssetKind, type License, type Visibility, type Workspace,
 } from "../api";
 import { currentWorkspace, useSession } from "../App";
-import { KIND_BADGE, LICENSES, formatBytes, useAssetList, type AssetScope } from "../library/assets";
+import { KIND_BADGE, LICENSES, VISIBILITY, formatBytes, useAssetList, type AssetScope } from "../library/assets";
 import ReportDialog from "../library/ReportDialog";
+import UploadDialog from "../library/UploadDialog";
 import Sidebar from "../Sidebar";
 
 const TYPES: [AssetKind | undefined, string][] = [[undefined, "All"], ["image", "Images"], ["gif", "GIFs"], ["svg", "SVG"]];
 const SOURCES: [AssetScope, string][] = [["mine", "Mine"], ["workspace", "Workspace"], ["public", "Public"]];
 const LICENSE_CHIPS: [License | undefined, string][] = [[undefined, "Any"], ["cc0", "CC0"], ["cc-by", "CC-BY"], ["own", "Own work"]];
-const VISIBILITY: [Visibility, string][] = [["private", "Only me"], ["workspace", "This workspace"], ["public", "Everyone (public)"]];
 
 const license = (l: License) => LICENSES.find((x) => x.value === l)!;
 
@@ -123,6 +123,7 @@ export default function Library() {
   const [lic, setLic] = useState<License | undefined>();
   const [text, setText] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     myWorkspaces().then((r) => setList(r.workspaces), (e) => {
@@ -146,7 +147,7 @@ export default function Library() {
               <h1 style={{ fontSize: 22 }}>Visual library</h1>
               <p className="muted">Every image, GIF and SVG your community adds lands here.</p>
             </div>
-            <button className="btn btn-p">Upload visuals</button>
+            <button className="btn btn-p" onClick={() => setUploading(true)}>Upload visuals</button>
           </header>
           <input className="inp" type="search" aria-label="Search visuals" placeholder="Search by title, tag or uploader"
             value={text} onChange={(e) => setText(e.target.value)} />
@@ -178,6 +179,10 @@ export default function Library() {
           ) : <p className="muted" style={{ fontSize: 14 }}>Select a visual to see its details.</p>}
         </aside>
       </main>
+      {uploading && (
+        <UploadDialog workspaceId={ws.id} viewer={ws.role === "viewer"} onClose={() => setUploading(false)}
+          onDone={(a) => { if (a) setSelectedId(a.id); retry(); }} />
+      )}
     </div>
   );
 }
