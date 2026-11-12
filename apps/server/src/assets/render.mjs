@@ -19,6 +19,8 @@ const fail = (code, message = code) => Object.assign(new Error(message), { code 
 // Loaded before stdin is read, so a warm child has paid for jsdom by the time it gets work.
 const win = new JSDOM("").window;
 const purify = createDOMPurify(win);
+// Tell the parent the imports are loaded: its job clock starts here, so a cold start is not billed to the job.
+process.stderr.write("\u0006ready\n");
 
 // Closed by construction: a backslash (CSS escape) anywhere voids the whole style.
 const badCss = (css) => css.includes("\\") || /@import|image-set/i.test(css) || EXTERNAL_URL.test(css);

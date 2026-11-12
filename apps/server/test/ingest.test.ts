@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { crc32 } from "node:zlib";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { ingest, IngestError, renderStats } from "../src/assets/ingest";
+import { ingest, IngestError, renderStats, svgChild } from "../src/assets/ingest";
 
 const solid = (w: number, h: number) =>
   sharp({ create: { width: w, height: h, channels: 3, background: "#8E1EA2" } });
@@ -227,4 +227,28 @@ describe("svg work runs off the main thread", () => {
     expect(ms).toBeLessThan(8000);
     expect(gap).toBeLessThan(200);
   }, 30000);
+});
+
+describe("svg child lifecycle", () => {
+  const small = enc(`<svg ${SVGNS} width="20" height="20"><rect width="5" height="5"/></svg>`);
+  it("the job clock starts when a cold child is ready, not when it is spawned", async () => {
+    svgChild.spare = undefined; // the next job gets a cold child (loading jsdom takes > 1 s)
+    svgChild.jobMs = 1000;
+    try {
+      const { outcome } = await timed(small);
+      expect(outcome).toBe("ok");
+    } finally { svgChild.jobMs = 5000; }
+  });
+  it("a child that is not ready in time fails as invalid_image", async () => {
+    svgChild.spare = undefined;
+    svgChild.readyMs = 50;
+    try {
+      expect(await code(ingest(small))).toBe("invalid_image");
+    } finally { svgChild.readyMs = 10000; }
+  });
+  it("a dead spare is replaced and the upload succeeds", async () => {
+    await ingest(small); // leaves a spare
+    process.kill(svgChild.spare!.proc.pid!); // dies outside our control: killed stays false, exitCode null until close
+    expect(await code(ingest(small))).toBe("ok");
+  });
 });

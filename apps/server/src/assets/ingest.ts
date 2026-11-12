@@ -86,17 +86,26 @@ async function processSvg(svg: Uint8Array): Promise<SvgResult> {
   }
 }
 
-// One child is kept started and idle, so the next SVG does not wait for it to load jsdom (~1 s).
+// One child is kept started and idle, so the next SVG usually does not wait for it to load jsdom (~1.5 s);
+// either way that load is not billed to the job, whose clock starts on the child's ready signal.
 // ponytail: one spare, replaced when taken; SVGs arriving back to back (or two at once) can still meet a
 // child that is mid-start (~1.5 s). A pool of reusable children would fix that if upload latency matters.
-type Child = { proc: ChildProcessWithoutNullStreams; done: Promise<{ out: Buffer; err: string }> };
-let spare: Child | undefined;
+type Child = { proc: ChildProcessWithoutNullStreams; ready: Promise<void>; done: Promise<{ out: Buffer; err: string }> };
+// Limits and the idle spare, exported so tests can force a cold child or shorten the clocks.
+export const svgChild: { jobMs: number; readyMs: number; spare?: Child } = { jobMs: RENDER_MS, readyMs: 10_000 };
+const READY = "\u0006ready\n"; // render.mjs writes this on stderr once jsdom is loaded
 function startChild(): Child {
   const proc = spawn(process.execPath, [RENDER_SCRIPT, String(THUMB), String(MAX_PIXELS)], { stdio: ["pipe", "pipe", "pipe"] });
   const out: Buffer[] = [];
   let err = "";
+  let isReady = false, onReady = () => {};
+  const ready = new Promise<void>((go) => { onReady = go; });
   proc.stdout.on("data", (c: Buffer) => out.push(c));
-  proc.stderr.on("data", (c: Buffer) => { if (err.length < 1000) err += c; });
+  proc.stderr.on("data", (c: Buffer) => {
+    // Uncapped until ready (only a few bytes then), so the marker is always seen.
+    if (!isReady || err.length < 1000) err += c;
+    if (!isReady && err.includes(READY)) { isReady = true; err = err.replace(READY, ""); onReady(); }
+  });
   proc.stdin.on("error", () => {}); // the child may die before reading
   const done = new Promise<{ out: Buffer; err: string }>((resolve) => {
     proc.on("error", (e) => resolve({ out: Buffer.alloc(0), err: e.message }));
@@ -105,24 +114,47 @@ function startChild(): Child {
   // An idle spare must not keep the process alive.
   proc.unref();
   for (const s of [proc.stdin, proc.stdout, proc.stderr]) (s as unknown as { unref(): void }).unref();
-  return { proc, done };
+  return { proc, ready, done };
 }
 function takeChild(): Child {
+  const { spare } = svgChild;
   const c = spare && spare.proc.exitCode === null && !spare.proc.killed ? spare : startChild();
-  spare = startChild();
+  svgChild.spare = startChild();
+  return claim(c);
+}
+function claim(c: Child): Child {
   c.proc.ref();
   for (const s of [c.proc.stdin, c.proc.stdout, c.proc.stderr]) (s as unknown as { ref(): void }).ref();
   return c;
 }
 
 async function runChild(svg: Uint8Array): Promise<SvgResult> {
-  const { proc, done } = takeChild();
-  let timedOut = false;
-  const timer = setTimeout(() => { timedOut = true; proc.kill("SIGKILL"); }, RENDER_MS);
-  proc.stdin.end(svg);
-  const { out, err } = await done;
+  const first = await runOnce(takeChild(), svg);
+  // A spare can die unnoticed (exitCode stays null until 'close'): its reply is empty. Retry once on a
+  // fresh child. A timeout never gets here, so a hostile job is not run twice to its limit.
+  if (first.out.length > 0) return parseReply(first);
+  return parseReply(await runOnce(claim(startChild()), svg));
+}
+
+// Two clocks: up to readyMs for the child to load its imports, then jobMs for the job itself.
+async function runOnce({ proc, ready, done }: Child, svg: Uint8Array) {
+  let timedOut: IngestError | undefined, finished = false;
+  const kill = (e: IngestError) => { timedOut = e; proc.kill("SIGKILL"); };
+  proc.stdin.end(svg); // the child reads stdin only after it is ready
+  // Not ready in time is our failure, not the file's size, so it maps to invalid_image.
+  let timer = setTimeout(() => kill(new IngestError("invalid_image", "svg worker did not start")), svgChild.readyMs);
+  void ready.then(() => {
+    clearTimeout(timer);
+    if (!timedOut && !finished) timer = setTimeout(() => kill(new IngestError("too_large", "svg processing timed out")), svgChild.jobMs);
+  });
+  const reply = await done;
+  finished = true;
   clearTimeout(timer);
-  if (timedOut) throw new IngestError("too_large", "svg processing timed out");
+  if (timedOut) throw timedOut;
+  return reply;
+}
+
+function parseReply({ out, err }: { out: Buffer; err: string }): SvgResult {
   // Frame: 4-byte header length, JSON header, sanitized svg (head.svg bytes), webp thumbnail.
   try {
     const n = out.readUInt32BE(0);
