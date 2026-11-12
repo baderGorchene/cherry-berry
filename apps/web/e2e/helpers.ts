@@ -1,3 +1,4 @@
+import { deflateSync } from "node:zlib";
 import { expect, type Browser, type Page } from "@playwright/test";
 
 export const unique = (name: string) => `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
@@ -37,4 +38,34 @@ export async function openAsViewer(browser: Browser, owner: Page): Promise<Page>
   await viewer.goto(designUrl);
   await expect(viewer.getByText("View only")).toBeVisible();
   return viewer;
+}
+
+/** A valid 8x8 PNG whose bytes differ on every call (random pixel colour plus a unique tEXt chunk), so uploads never dedupe. */
+export function uniquePng(): Buffer {
+  const crcTable = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc = (b: Buffer) => {
+    let r = 0xffffffff;
+    for (const x of b) r = crcTable[(r ^ x) & 255]! ^ (r >>> 8);
+    return (r ^ 0xffffffff) >>> 0;
+  };
+  const chunk = (type: string, data: Buffer) => {
+    const len = Buffer.alloc(4), sum = Buffer.alloc(4);
+    len.writeUInt32BE(data.length);
+    const td = Buffer.concat([Buffer.from(type), data]);
+    sum.writeUInt32BE(crc(td));
+    return Buffer.concat([len, td, sum]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(8, 0); ihdr.writeUInt32BE(8, 4); ihdr[8] = 8; ihdr[9] = 6;
+  const rgb = [142, 30, 162].map((v) => (v + Math.floor(Math.random() * 100)) & 255);
+  const raw = Buffer.concat(Array.from({ length: 8 }, () => Buffer.concat([Buffer.from([0]), Buffer.from(Array.from({ length: 8 }, () => [...rgb, 255]).flat())])));
+  return Buffer.concat([
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), chunk("IHDR", ihdr),
+    chunk("tEXt", Buffer.from(`id\0${crypto.randomUUID()}`)),
+    chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0)),
+  ]);
 }

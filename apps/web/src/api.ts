@@ -97,12 +97,16 @@ export type NewAsset = {
 export type AssetFilters = { workspaceId?: string; kind?: AssetKind; license?: License; q?: string };
 
 const enc = encodeURIComponent;
+/** Library calls report 404/403 in their own words; the shared copy talks about workspaces and designs. */
+export const libraryError = (e: unknown): unknown =>
+  e instanceof ApiError && (e.code === "not_found" || e.code === "forbidden") ? new ApiError(e.status, `library_${e.code}`) : e;
+const lib = <T>(p: Promise<T>) => p.catch((e) => { throw libraryError(e); });
 export const listAssets = (scope: "mine" | "workspace" | "public", opts: AssetFilters = {}) => {
   const qs = new URLSearchParams({ scope });
   for (const [k, v] of Object.entries(opts)) if (v) qs.set(k, v);
-  return api<{ assets: Asset[] }>(`/api/assets?${qs}`);
+  return lib(api<{ assets: Asset[] }>(`/api/assets?${qs}`));
 };
-export const getAsset = (id: string) => api<{ asset: Asset }>(`/api/assets/${enc(id)}`);
+export const getAsset = (id: string) => lib(api<{ asset: Asset }>(`/api/assets/${enc(id)}`));
 export const assetByHash = (sha256: string) =>
   api<{ asset: Asset }>(`/api/assets/by-hash/${enc(sha256)}`).then((r) => r.asset, (e) => {
     if (e instanceof ApiError && e.status === 404) return null;
@@ -119,21 +123,21 @@ export async function uploadAsset(file: File, fields: NewAsset): Promise<{ asset
   if (fields.workspaceId) f.set("workspaceId", fields.workspaceId);
   f.set("confirmed", "true"); // the caller's dialog collects the rights confirmation
   try {
-    return await api(`/api/assets`, { body: f });
+    return await lib(api<{ asset: Asset; duplicate: boolean }>(`/api/assets`, { body: f }));
   } catch (e) {
     // `too_large` means a design that can't be saved elsewhere; for a file it has its own copy.
     throw e instanceof ApiError && e.code === "too_large" ? new ApiError(e.status, "upload_too_large") : e;
   }
 }
 export const updateAsset = (id: string, patch: Partial<NewAsset>) =>
-  api<{ asset: Asset }>(`/api/assets/${enc(id)}`, { method: "PATCH", body: patch });
-export const deleteAsset = (id: string) => api<void>(`/api/assets/${enc(id)}`, { method: "DELETE" });
+  lib(api<{ asset: Asset }>(`/api/assets/${enc(id)}`, { method: "PATCH", body: patch }));
+export const deleteAsset = (id: string) => lib(api<void>(`/api/assets/${enc(id)}`, { method: "DELETE" }));
 export const linkAssetToDesign = (designId: string, assetId: string) =>
-  api<void>(`/api/designs/${enc(designId)}/assets`, { body: { assetId } });
+  lib(api<void>(`/api/designs/${enc(designId)}/assets`, { body: { assetId } }));
 export const assetUrl = (id: string, kind: "file" | "thumb") => `/api/assets/${enc(id)}/${kind}`;
 
 export type ReportBody = { targetType: "asset" | "shape"; targetId: string; reason: "copyright" | "inappropriate" | "spam" | "other"; note?: string };
-export const reportItem = (body: ReportBody) => api<{ report: { id: string } }>("/api/reports", { body });
+export const reportItem = (body: ReportBody) => lib(api<{ report: { id: string } }>("/api/reports", { body }));
 
 export function toBase64(u8: Uint8Array): string {
   let s = "";
@@ -165,6 +169,8 @@ const COPY: Record<string, string> = {
   unsupported_type: "That file type isn't supported. Use PNG, JPG, WEBP, GIF or SVG.",
   invalid_image: "That file couldn't be read as an image.",
   upload_too_large: "That file is too large (50 MB max, 2 MB for SVG).",
+  library_not_found: "This visual is no longer available.",
+  library_forbidden: "You don't have permission to change this visual.",
   rights_not_confirmed: "Confirm you have the right to share this file.",
   too_large: "This design is too large to save.",
   forbidden: "You have view-only access to this design.",

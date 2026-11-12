@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, signUp, unique } from "./helpers";
+import { createWorkspace, signUp, unique, uniquePng } from "./helpers";
 
 type Up = { file: string; mime: string; title: string; license: string; visibility: string; tags?: string };
 
@@ -9,12 +9,13 @@ async function upload(page: Page, u: Up) {
   const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
   const res = await page.request.post("/api/assets", {
     multipart: {
-      file: { name: u.file, mimeType: u.mime, buffer: readFileSync(`e2e/fixtures/${u.file}`) },
+      file: { name: u.file, mimeType: u.mime, buffer: u.file === "dot.png" ? uniquePng() : Buffer.concat([readFileSync(`e2e/fixtures/${u.file}`), Buffer.from(`<!--${crypto.randomUUID()}-->`)]) },
       title: u.title, tags: u.tags ?? "", license: u.license, attribution: "", visibility: u.visibility,
       workspaceId: workspaces[0].id, confirmed: "true",
     },
   });
-  expect(res.ok()).toBe(true);
+  expect(res.status()).toBe(201);
+  expect((await res.json()).duplicate).toBe(false);
 }
 const png = (title: string, o: Partial<Up> = {}): Up => ({ file: "dot.png", mime: "image/png", title, license: "cc0", visibility: "workspace", ...o });
 const svg = (title: string, o: Partial<Up> = {}): Up => ({ file: "berry.svg", mime: "image/svg+xml", title, license: "own", visibility: "private", ...o });
