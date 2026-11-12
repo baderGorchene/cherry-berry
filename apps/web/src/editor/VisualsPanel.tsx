@@ -4,7 +4,7 @@ import { addNode, type Page } from "@cherry/doc";
 import { assetUrl, linkAssetToDesign, type Asset, type AssetKind } from "../api";
 import { useAssetList, type AssetScope } from "../library/assets";
 import UploadDialog from "../library/UploadDialog";
-import { imageNode } from "./visuals";
+import { imageNode, usableIn } from "./visuals";
 
 const SOURCES: [AssetScope, string][] = [["mine", "Mine"], ["workspace", "Workspace"], ["public", "Public"]];
 const TYPES: [AssetKind | undefined, string][] = [[undefined, "All"], ["image", "Images"], ["gif", "GIFs"], ["svg", "SVG"]];
@@ -28,7 +28,9 @@ export default function VisualsPanel({ ydoc, page, designId, workspaceId, readOn
   const [text, setText] = useState("");
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState("");
-  const { res, retry } = useAssetList(scope, { workspaceId, kind }, text);
+  const { res: raw, retry } = useAssetList(scope, { workspaceId, kind }, text);
+  // "Mine" includes assets in your other workspaces, which can't be placed here.
+  const res = raw && "assets" in raw ? { assets: raw.assets.filter((a) => usableIn(a, workspaceId)) } : raw;
 
   const insert = async (a: Asset) => {
     setError("");

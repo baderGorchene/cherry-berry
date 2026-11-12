@@ -29,7 +29,7 @@ export default function UploadDialog({ workspaceId, viewer, onClose, onDone }: {
     const pre = precheck(row.file);
     if (pre !== "ok") return patch(row.id, { status: "error", error: errorMessage(new ApiError(400, pre === "too_large" ? "upload_too_large" : pre)) });
     try {
-      const existing = await assetByHash(await sha256Hex(await row.file.arrayBuffer()));
+      const existing = await assetByHash(await sha256Hex(await row.file.arrayBuffer()), workspaceId);
       patch(row.id, existing ? { status: "duplicate", existing } : { status: "ready" });
     } catch (e) { patch(row.id, { status: "error", error: errorMessage(e) }); }
   };

@@ -246,6 +246,16 @@ describe("svg child lifecycle", () => {
       expect(await code(ingest(small))).toBe("invalid_image");
     } finally { svgChild.readyMs = 10000; }
   });
+  it("a full queue rejects the next svg as busy at once", async () => {
+    svgChild.maxWaiting = 1;
+    try {
+      const held = [ingest(small), ingest(small), ingest(small)]; // two run, one waits
+      const t0 = performance.now();
+      expect(await code(ingest(small))).toBe("busy");
+      expect(performance.now() - t0).toBeLessThan(100);
+      expect((await Promise.all(held.map(code))).every((c) => c === "ok")).toBe(true);
+    } finally { svgChild.maxWaiting = 8; }
+  });
   it("a dead spare is replaced and the upload succeeds", async () => {
     await ingest(small); // leaves a spare
     process.kill(svgChild.spare!.proc.pid!); // dies outside our control: killed stays false, exitCode null until close

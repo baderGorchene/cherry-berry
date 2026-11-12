@@ -40,6 +40,7 @@ const ListQuery = z.object({
 const UseBody = z.object({ assetId: z.string() });
 const IdParams = z.object({ id: z.string() });
 const HashParams = z.object({ sha256: z.string() });
+const HashQuery = z.object({ workspaceId: z.string().uuid().optional() });
 
 // Everything an uploaded file is served with; the bytes are never trusted to be inert.
 const SECURITY_HEADERS = {
@@ -79,7 +80,10 @@ export function registerAssetRoutes(
     await svc.placement(db, user.id, meta); // cheap permission check before the expensive ingest
     let img;
     try { img = await ingest(file); }
-    catch (e) { throw e instanceof IngestError ? new HttpError(400, e.code) : e; }
+    catch (e) {
+      if (e instanceof IngestError && e.code === "busy") return reply.status(503).header("retry-after", "5").send({ error: "busy" });
+      throw e instanceof IngestError ? new HttpError(400, e.code) : e;
+    }
     const { asset, duplicate } = await svc.createAsset(db, storage, user.id, img, meta);
     return reply.status(duplicate ? 200 : 201).send({ asset, duplicate });
   });
@@ -93,7 +97,8 @@ export function registerAssetRoutes(
   // Registered before /:id so the static segment can never be read as an id.
   app.get("/api/assets/by-hash/:sha256", async (req) => {
     const user = await requireUser(req);
-    const asset = await svc.findByHash(db, user.id, parse(HashParams, req.params).sha256.toLowerCase());
+    const { workspaceId } = parse(HashQuery, req.query);
+    const asset = await svc.findByHash(db, user.id, parse(HashParams, req.params).sha256.toLowerCase(), workspaceId ?? null);
     if (!asset) throw new WorkspaceError("not_found");
     return { asset };
   });

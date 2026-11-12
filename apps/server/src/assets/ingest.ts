@@ -75,7 +75,11 @@ const waiting: (() => void)[] = [];
 type SvgResult = { file: Uint8Array; width: number; height: number; thumb: Uint8Array };
 async function processSvg(svg: Uint8Array): Promise<SvgResult> {
   // Wait for a slot; a render's 5 s clock starts only when it hands its own child the work.
-  if (renderStats.active >= MAX_RENDERS) await new Promise<void>((go) => waiting.push(go));
+  // A full queue answers busy at once, so a flood can't make every later SVG wait without bound.
+  if (renderStats.active >= MAX_RENDERS) {
+    if (waiting.length >= svgChild.maxWaiting) throw new IngestError("busy", "svg queue full");
+    await new Promise<void>((go) => waiting.push(go));
+  }
   else renderStats.active++;
   renderStats.max = Math.max(renderStats.max, renderStats.active);
   try { return await runChild(svg); }
@@ -92,7 +96,7 @@ async function processSvg(svg: Uint8Array): Promise<SvgResult> {
 // child that is mid-start (~1.5 s). A pool of reusable children would fix that if upload latency matters.
 type Child = { proc: ChildProcessWithoutNullStreams; ready: Promise<void>; done: Promise<{ out: Buffer; err: string }> };
 // Limits and the idle spare, exported so tests can force a cold child or shorten the clocks.
-export const svgChild: { jobMs: number; readyMs: number; spare?: Child } = { jobMs: RENDER_MS, readyMs: 10_000 };
+export const svgChild: { jobMs: number; readyMs: number; maxWaiting: number; spare?: Child } = { jobMs: RENDER_MS, readyMs: 10_000, maxWaiting: 8 };
 const READY = "\u0006ready\n"; // render.mjs writes this on stderr once jsdom is loaded
 function startChild(): Child {
   const proc = spawn(process.execPath, [RENDER_SCRIPT, String(THUMB), String(MAX_PIXELS)], { stdio: ["pipe", "pipe", "pipe"] });

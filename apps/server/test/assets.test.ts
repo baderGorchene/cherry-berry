@@ -418,4 +418,38 @@ describe("uses and deletion", () => {
     try { expect((await send("DELETE", `/api/assets/${a.id}`, ada.cookie)).statusCode).toBe(204); } finally { t.storage.delete = origDelete; }
     expect((await call("GET", `/api/assets/${a.id}`, ada.cookie)).statusCode).toBe(404);
   });
+
+  it("dedupes only against assets usable in the target placement", async () => {
+    const { ada, ws: w1 } = await workspaceWith("editor");
+    const w2 = (await send("POST", "/api/workspaces", ada.cookie, { name: "Two", accessMode: "invite" })).json().workspace.id as string;
+    const bytes = await png();
+    const sha = (await import("node:crypto")).createHash("sha256").update(bytes).digest("hex");
+    const inW2 = (await upload(ada.cookie, bytes, { visibility: "workspace", workspaceId: w2 })).json().asset;
+    expect((await call("GET", `/api/assets/by-hash/${sha}?workspaceId=${w1}`, ada.cookie)).statusCode).toBe(404);
+    expect((await call("GET", `/api/assets/by-hash/${sha}?workspaceId=${w2}`, ada.cookie)).json().asset.id).toBe(inW2.id);
+    const res = await upload(ada.cookie, bytes, { visibility: "workspace", workspaceId: w1 });
+    expect(res.statusCode).toBe(201);
+    expect(res.json()).toMatchObject({ duplicate: false, asset: { workspaceId: w1 } });
+    expect(t.storage.keys()).toHaveLength(2); // objects still shared by hash
+    expect((await use(ada.cookie, await newDesign(ada.cookie, w1), res.json().asset.id)).statusCode).toBe(204);
+    // your own private asset dedupes into any placement
+    const other = await png("#0a0b0c");
+    const priv = (await upload(ada.cookie, other)).json().asset;
+    const again = await upload(ada.cookie, other, { visibility: "workspace", workspaceId: w1 });
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toMatchObject({ duplicate: true, asset: { id: priv.id } });
+  });
+
+  it("a busy svg queue answers 503 with Retry-After", async () => {
+    const ada = await signUp(t.app, "ada@example.com");
+    const { renderStats, svgChild } = await import("../src/assets/ingest");
+    const [active, max] = [renderStats.active, svgChild.maxWaiting];
+    renderStats.active = 2; svgChild.maxWaiting = 0; // both slots taken, no room to wait
+    try {
+      const res = await upload(ada.cookie, Buffer.from(SVG_HOSTILE));
+      expect(res.statusCode).toBe(503);
+      expect(res.headers["retry-after"]).toBe("5");
+      expect(res.json()).toEqual({ error: "busy" });
+    } finally { renderStats.active = active; svgChild.maxWaiting = max; }
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { imageNode } from "./visuals";
+import { imageNode, usableIn } from "./visuals";
 
 const page = { width: 1080, height: 1080 };
 
@@ -20,5 +20,13 @@ describe("imageNode", () => {
     const n = imageNode({ id: "a3", title: "Dot", width: 8, height: 8 }, page);
     expect(n.kind === "image" && n.assetId).toBe("a3");
     expect(n.name).toBe("Dot");
+  });
+});
+
+describe("usableIn", () => {
+  it("keeps private, public and this workspace's assets; hides other workspaces'", () => {
+    const a = (visibility: "private" | "workspace" | "public", workspaceId: string | null) => ({ visibility, workspaceId });
+    expect([a("private", null), a("public", null), a("workspace", "w1"), a("workspace", "w2")].map((x) => usableIn(x, "w1")))
+      .toEqual([true, true, true, false]);
   });
 });

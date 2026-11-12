@@ -12,3 +12,7 @@ export function imageNode(asset: Pick<Asset, "id" | "title" | "width" | "height"
     x: (page.width - width) / 2, y: (page.height - height) / 2, width, height, rotation: 0, opacity: 1, locked: false, hidden: false,
   };
 }
+
+/** A workspace asset can only be placed in its own workspace's designs; private and public ones travel. */
+export const usableIn = (a: Pick<Asset, "visibility" | "workspaceId">, workspaceId: string) =>
+  a.visibility !== "workspace" || a.workspaceId === workspaceId;

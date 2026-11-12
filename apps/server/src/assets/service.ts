@@ -83,9 +83,18 @@ export async function placement(db: Db, userId: string, m: Pick<AssetMeta, "visi
   return m.workspaceId;
 }
 
-/** Newest visible asset with these bytes, the caller's own first. */
-export async function findByHash(db: Db, userId: string, sha256: string): Promise<Asset | null> {
-  const [r] = await base(db).where(and(eq(assets.sha256, sha256), visibleTo(userId)))
+/**
+ * Newest asset with these bytes that could be used where a new upload would land (the caller's own first):
+ * the caller's private assets, public ones, or workspace assets of `workspaceId` (null: a private or public upload).
+ * Same rule as recordUse, so a duplicate is always one the caller can place.
+ */
+export async function findByHash(db: Db, userId: string, sha256: string, workspaceId: string | null): Promise<Asset | null> {
+  const usable = or(
+    and(eq(assets.createdBy, userId), eq(assets.visibility, "private")),
+    eq(assets.visibility, "public"),
+    workspaceId ? and(eq(assets.visibility, "workspace"), eq(assets.workspaceId, workspaceId)) : undefined,
+  );
+  const [r] = await base(db).where(and(eq(assets.sha256, sha256), visibleTo(userId), usable))
     .orderBy(desc(sql`${assets.createdBy} = ${userId}`), desc(assets.createdAt)).limit(1);
   return r ? toAsset(r, userId) : null;
 }
@@ -94,7 +103,7 @@ export async function createAsset(
   db: Db, storage: Storage, userId: string, img: Ingested, meta: AssetMeta,
 ): Promise<{ asset: Asset; duplicate: boolean }> {
   const workspaceId = await placement(db, userId, meta);
-  const existing = await findByHash(db, userId, img.sha256);
+  const existing = await findByHash(db, userId, img.sha256, workspaceId);
   if (existing) return { asset: existing, duplicate: true };
   // Row first (short transaction under the lock, so a concurrent hard delete sees it and keeps the objects),
   // then the objects; if the put fails the row goes again. No connection is held across the upload.

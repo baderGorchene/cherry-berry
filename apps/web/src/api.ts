@@ -107,8 +107,9 @@ export const listAssets = (scope: "mine" | "workspace" | "public", opts: AssetFi
   return lib(api<{ assets: Asset[] }>(`/api/assets?${qs}`));
 };
 export const getAsset = (id: string) => lib(api<{ asset: Asset }>(`/api/assets/${enc(id)}`));
-export const assetByHash = (sha256: string) =>
-  api<{ asset: Asset }>(`/api/assets/by-hash/${enc(sha256)}`).then((r) => r.asset, (e) => {
+/** An existing asset with these bytes that is usable in `workspaceId` (or anywhere private, when omitted). */
+export const assetByHash = (sha256: string, workspaceId?: string) =>
+  api<{ asset: Asset }>(`/api/assets/by-hash/${enc(sha256)}${workspaceId ? `?workspaceId=${enc(workspaceId)}` : ""}`).then((r) => r.asset, (e) => {
     if (e instanceof ApiError && e.status === 404) return null;
     throw e;
   });
@@ -169,6 +170,7 @@ const COPY: Record<string, string> = {
   unsupported_type: "That file type isn't supported. Use PNG, JPG, WEBP, GIF or SVG.",
   invalid_image: "That file couldn't be read as an image.",
   upload_too_large: "That file is too large (50 MB max, 2 MB for SVG).",
+  busy: "The server is busy. Try again in a moment.",
   library_not_found: "This visual is no longer available.",
   library_forbidden: "You don't have permission to change this visual.",
   rights_not_confirmed: "Confirm you have the right to share this file.",
