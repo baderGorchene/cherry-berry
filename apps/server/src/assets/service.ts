@@ -3,6 +3,7 @@ import type { Db } from "../db/client";
 import { assetUses, assets, designs, memberships, user, workspaces } from "../db/schema";
 import { escapeLike } from "../http";
 import type { Storage } from "../storage";
+import { loadWithRole } from "../designs/service";
 import { WorkspaceError } from "../workspaces/errors";
 import { getRole, UUID } from "../workspaces/service";
 import type { Ingested } from "./ingest";
@@ -62,6 +63,10 @@ export async function canReadAsset(db: Db, userId: string, asset: Access): Promi
   return !!hit;
 }
 
+/** Serializes create, delete and recordUse for one set of bytes; released at commit. */
+const lockBytes = (tx: Pick<Db, "execute">, sha256: string) =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtext(${sha256}))`);
+
 async function memberRole(db: Db, workspaceId: string, userId: string) {
   const role = UUID.test(workspaceId) ? await getRole(db, workspaceId, userId) : null;
   if (!role) throw new WorkspaceError("not_found");
@@ -90,14 +95,19 @@ export async function createAsset(
   const existing = await findByHash(db, userId, img.sha256);
   if (existing) return { asset: existing, duplicate: true };
   // Objects first, row second: a failed insert may orphan an object (Phase 9 cleans up), never a row without bytes.
-  await storage.put(`files/${img.sha256}`, img.file, img.contentType);
-  await storage.put(`thumbs/${img.sha256}.webp`, img.thumb, "image/webp");
-  const [row] = await db.insert(assets).values({
-    createdBy: userId, workspaceId, visibility: meta.visibility, title: meta.title, tags: meta.tags,
-    license: meta.license, attribution: meta.attribution, kind: img.kind, format: img.format,
-    width: img.width, height: img.height, bytes: img.file.length, sha256: img.sha256,
-  }).returning({ id: assets.id });
-  return { asset: (await getAsset(db, userId, row!.id))!, duplicate: false };
+  // The per-sha256 lock stops a concurrent hard delete from removing the objects between our put and insert.
+  const row = await db.transaction(async (tx) => {
+    await lockBytes(tx, img.sha256);
+    await storage.put(`files/${img.sha256}`, img.file, img.contentType);
+    await storage.put(`thumbs/${img.sha256}.webp`, img.thumb, "image/webp");
+    const [r] = await tx.insert(assets).values({
+      createdBy: userId, workspaceId, visibility: meta.visibility, title: meta.title, tags: meta.tags,
+      license: meta.license, attribution: meta.attribution, kind: img.kind, format: img.format,
+      width: img.width, height: img.height, bytes: img.file.length, sha256: img.sha256,
+    }).returning({ id: assets.id });
+    return r!;
+  });
+  return { asset: (await getAsset(db, userId, row.id))!, duplicate: false };
 }
 
 export async function listAssets(
@@ -165,13 +175,18 @@ export async function updateAsset(
 
 /** Records that a design uses an asset the caller can see; needs edit rights on the design. Idempotent. */
 export async function recordUse(db: Db, userId: string, designId: string, assetId: string): Promise<void> {
-  const [d] = UUID.test(designId) ? await db.select({ workspaceId: designs.workspaceId }).from(designs).where(eq(designs.id, designId)) : [];
-  const role = d && (await getRole(db, d.workspaceId, userId));
-  if (!d || !role) throw new WorkspaceError("not_found");
+  const { design, role } = await loadWithRole(db, designId, userId);
   if (role === "viewer") throw new WorkspaceError("forbidden");
   const r = await loadRow(db, assetId);
-  if (!r || !(await canSeeAsset(db, userId, r.a))) throw new WorkspaceError("not_found");
-  await db.insert(assetUses).values({ designId, assetId }).onConflictDoNothing();
+  // A workspace asset stays in its own workspace; private and public ones may travel.
+  if (!r || !(await canSeeAsset(db, userId, r.a))
+    || (r.a.visibility === "workspace" && r.a.workspaceId !== design.workspaceId)) throw new WorkspaceError("not_found");
+  await db.transaction(async (tx) => {
+    await lockBytes(tx, r.a.sha256);
+    const [live] = await tx.select({ id: assets.id }).from(assets).where(and(eq(assets.id, assetId), sql`${assets.deletedAt} is null`));
+    if (!live) throw new WorkspaceError("not_found");
+    await tx.insert(assetUses).values({ designId, assetId }).onConflictDoNothing();
+  });
 }
 
 /** Uploader, or owner/admin of the asset's workspace. Used assets are soft-deleted so designs keep loading them. */
@@ -183,14 +198,19 @@ export async function deleteAsset(db: Db, storage: Storage, userId: string, id: 
     const role = a.visibility === "workspace" && a.workspaceId ? await getRole(db, a.workspaceId, userId) : undefined;
     if (role !== "owner" && role !== "admin") throw new WorkspaceError("forbidden");
   }
-  if (r.usedIn > 0) {
-    await db.update(assets).set({ deletedAt: sql`now()` }).where(eq(assets.id, id));
-    return;
-  }
-  await db.delete(assets).where(eq(assets.id, id));
-  const [other] = await db.select({ id: assets.id }).from(assets).where(eq(assets.sha256, a.sha256)).limit(1);
-  if (!other) {
-    await storage.delete(`files/${a.sha256}`);
-    await storage.delete(`thumbs/${a.sha256}.webp`);
-  }
+  await db.transaction(async (tx) => {
+    await lockBytes(tx, a.sha256);
+    const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(assetUses).where(eq(assetUses.assetId, id)) as [{ n: number }];
+    if (n > 0) {
+      // ponytail: soft-deleted assets whose last use is gone are purged by the Phase 9 sweep
+      await tx.update(assets).set({ deletedAt: sql`now()` }).where(eq(assets.id, id));
+      return;
+    }
+    await tx.delete(assets).where(eq(assets.id, id));
+    const [other] = await tx.select({ id: assets.id }).from(assets).where(eq(assets.sha256, a.sha256)).limit(1);
+    if (!other) {
+      await storage.delete(`files/${a.sha256}`);
+      await storage.delete(`thumbs/${a.sha256}.webp`);
+    }
+  });
 }

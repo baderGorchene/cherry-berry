@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import sharp from "sharp";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { setupTestApp, signUp } from "./helpers";
@@ -348,5 +349,51 @@ describe("uses and deletion", () => {
     // admins have no say over private assets
     const p = (await upload(bo.cookie, await png("#445566"))).json().asset;
     expect((await send("DELETE", `/api/assets/${p.id}`, ada.cookie)).statusCode).toBe(404);
+  });
+
+  it("a workspace asset cannot be used in another workspace's design; access follows membership and the design", async () => {
+    const { ada, bo, ws } = await workspaceWith("viewer");
+    const cy = await signUp(t.app, "cy@example.com");
+    const w2 = (await send("POST", "/api/workspaces", bo.cookie, { name: "Two", accessMode: "invite" })).json().workspace.id as string;
+    const d2 = await newDesign(bo.cookie, w2);
+    const a = (await upload(ada.cookie, await png(), { visibility: "workspace", workspaceId: ws, license: "workspace-only" })).json().asset;
+    expect((await use(bo.cookie, d2, a.id)).statusCode).toBe(404);
+    expect((await call("GET", `/api/assets/${a.id}/file`, cy.cookie)).statusCode).toBe(404);
+    // private and public assets may travel
+    const pub = (await upload(bo.cookie, await png("#010203"), { visibility: "public" })).json().asset;
+    expect((await use(bo.cookie, d2, pub.id)).statusCode).toBe(204);
+    // access follows membership and the design
+    const priv = (await upload(bo.cookie, await png("#040506"))).json().asset;
+    expect((await use(bo.cookie, d2, priv.id)).statusCode).toBe(204);
+    const inv = await send("POST", `/api/workspaces/${w2}/invitations`, bo.cookie, { email: "cy@example.com", role: "viewer" });
+    await send("POST", `/api/invitations/${inv.json().token}/accept`, cy.cookie);
+    expect((await call("GET", `/api/assets/${priv.id}/file`, cy.cookie)).statusCode).toBe(200);
+    await t.db.execute(sql`delete from memberships where user_id = ${cy.userId}`);
+    expect((await call("GET", `/api/assets/${priv.id}/file`, cy.cookie)).statusCode).toBe(404);
+    await t.db.execute(sql`delete from designs where id = ${d2}`);
+    expect((await call("GET", `/api/assets/${priv.id}/file`, bo.cookie)).statusCode).toBe(200); // bo is the uploader
+    expect((await call("GET", `/api/assets/${pub.id}/file`, cy.cookie)).statusCode).toBe(200);
+  });
+
+  it("a delete racing an upload of the same bytes never leaves a row without its file", async () => {
+    const ada = await signUp(t.app, "ada@example.com");
+    const bo = await signUp(t.app, "bo@example.com");
+    const bytes = await png();
+    const a = (await upload(ada.cookie, bytes)).json().asset;
+    const origPut = t.storage.put.bind(t.storage);
+    let release!: () => void; let reached!: () => void;
+    const atThumb = new Promise<void>((r) => (reached = r));
+    const gate = new Promise<void>((r) => (release = r));
+    t.storage.put = async (k, b, ct) => { await origPut(k, b, ct); if (k.startsWith("thumbs/")) { reached(); await gate; } };
+    try {
+      const up = upload(bo.cookie, bytes);
+      await atThumb;
+      const del = send("DELETE", `/api/assets/${a.id}`, ada.cookie); // must wait for the upload's lock
+      await new Promise((r) => setTimeout(r, 200));
+      release();
+      const b = (await up).json().asset;
+      expect((await del).statusCode).toBe(204);
+      expect((await call("GET", `/api/assets/${b.id}/file`, bo.cookie)).statusCode).toBe(200);
+    } finally { t.storage.put = origPut; }
   });
 });

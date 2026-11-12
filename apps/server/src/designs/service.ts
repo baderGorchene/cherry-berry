@@ -30,7 +30,7 @@ async function memberRole(db: Db, workspaceId: string, userId: string): Promise<
   return role;
 }
 
-async function loadWithRole(db: Db, id: string, userId: string): Promise<{ design: Row; role: Role }> {
+export async function loadWithRole(db: Db, id: string, userId: string): Promise<{ design: Row; role: Role }> {
   if (!UUID.test(id)) throw new WorkspaceError("not_found");
   const [design] = await db.select(summaryColumns).from(designs).where(eq(designs.id, id));
   if (!design) throw new WorkspaceError("not_found");
