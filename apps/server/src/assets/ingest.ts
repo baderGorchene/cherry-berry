@@ -69,7 +69,22 @@ async function thumbnail(input: Uint8Array): Promise<Uint8Array> {
 // so it happens in a child process that is killed after RENDER_MS.
 const RENDER_MS = 5000;
 const RENDER_SCRIPT = fileURLToPath(new URL("./render.mjs", import.meta.url));
-function renderSvgThumb(svg: Uint8Array): Promise<Uint8Array> {
+const MAX_RENDERS = 2;
+export const renderStats = { active: 0, max: 0 }; // max is for tests
+const waiting: (() => void)[] = [];
+async function renderSvgThumb(svg: Uint8Array): Promise<Uint8Array> {
+  // Wait for a slot; a render's 5 s clock starts only when its own child starts.
+  if (renderStats.active >= MAX_RENDERS) await new Promise<void>((go) => waiting.push(go));
+  else renderStats.active++;
+  renderStats.max = Math.max(renderStats.max, renderStats.active);
+  try { return await spawnRender(svg); }
+  finally {
+    const next = waiting.shift();
+    if (next) next(); // hand the slot over without releasing it
+    else renderStats.active--;
+  }
+}
+function spawnRender(svg: Uint8Array): Promise<Uint8Array> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [RENDER_SCRIPT, String(THUMB), String(MAX_PIXELS)], { stdio: ["pipe", "pipe", "pipe"] });
     const out: Buffer[] = [];

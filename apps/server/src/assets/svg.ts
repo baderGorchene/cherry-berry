@@ -3,6 +3,7 @@ import { JSDOM } from "jsdom";
 import { IngestError } from "./errors";
 
 const MAX_ELEMENTS = 5000;
+const MAX_OUTPUT = 2 * 1024 * 1024; // same as the upload limit for svg
 const DATA_IMAGE = /^data:image\/(png|jpeg|gif|webp);base64,/i;
 // `url(` is fine only when it points at a fragment in this document.
 const EXTERNAL_URL = /url\(\s*(?!['"]?#)/i;
@@ -29,6 +30,8 @@ function badCss(css: string): boolean {
 // Count every `<` that opens a tag, whatever its name starts with, before any parser allocates.
 // The depth estimate can be spoofed (`/>` inside an attribute), so checkDepth repeats it on the parsed tree.
 function prescan(svg: string) {
+  // Entities expand inside the parser, past every size cap, so no declarations and no internal subset.
+  if (/<!ENTITY/i.test(svg) || /<!DOCTYPE[^>[]*\[/i.test(svg)) throw new IngestError("invalid_image", "dtd subset not allowed");
   let n = 0, depth = 0;
   for (const m of svg.matchAll(/<(?![/!?])|<\/|\/>/g)) {
     if (m[0].length === 2) { depth--; continue; }
@@ -90,5 +93,7 @@ function sanitize(svg: string): string {
     if (tag === "use" && !el.hasAttribute("href") && !el.hasAttribute("xlink:href")) el.remove();
   }
   if (!root.getAttribute("xmlns")) root.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  return serialize(root);
+  const out = serialize(root);
+  if (out.length > MAX_OUTPUT) throw new IngestError("too_large", "sanitized svg too large");
+  return out;
 }

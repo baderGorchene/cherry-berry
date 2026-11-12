@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { crc32 } from "node:zlib";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { ingest, IngestError } from "../src/assets/ingest";
+import { ingest, IngestError, renderStats } from "../src/assets/ingest";
 
 const solid = (w: number, h: number) =>
   sharp({ create: { width: w, height: h, channels: 3, background: "#8E1EA2" } });
@@ -171,5 +171,32 @@ describe("bounded work", () => {
   });
   it("junk before <svg is unsupported_type", async () => {
     expect(await code(ingest(enc(`junk<svg ${SVGNS} width="5" height="5"/>`)))).toBe("unsupported_type");
+  });
+});
+
+describe("entities and render concurrency", () => {
+  const withDtd = (dtd: string, body: string) => enc(`<?xml version="1.0"?>${dtd}<svg ${SVGNS} width="10" height="10">${body}</svg>`);
+  it("entity declarations and internal subsets are rejected quickly", async () => {
+    const bomb = withDtd(`<!DOCTYPE svg [<!ENTITY x "${"<g/>".repeat(1000)}">]>`, "&x;".repeat(20000));
+    const plain = withDtd(`<!DOCTYPE svg [<!ENTITY y "hello">]>`, "<text>&y;</text>");
+    const subset = withDtd(`<!DOCTYPE svg [ ]>`, "");
+    for (const b of [bomb, plain, subset]) {
+      const { outcome, ms } = await timed(b);
+      expect(outcome).toBe("invalid_image");
+      expect(ms).toBeLessThan(1000);
+    }
+  });
+  it("a bare PUBLIC doctype still ingests", async () => {
+    const r = await ingest(withDtd(`<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">`, `<rect width="5" height="5"/>`));
+    expect(r.kind).toBe("svg");
+    expect(text(r.file)).not.toContain("w3.org/Graphics");
+  });
+  it("at most 2 render children run at once", async () => {
+    renderStats.max = 0;
+    const svg = enc(`<svg ${SVGNS} width="50" height="50"><rect width="5" height="5"/></svg>`);
+    const rs = await Promise.all([1, 2, 3, 4].map(() => ingest(svg)));
+    expect(rs.every((r) => r.thumb.length > 0)).toBe(true);
+    expect(renderStats.max).toBe(2);
+    expect(renderStats.active).toBe(0);
   });
 });
