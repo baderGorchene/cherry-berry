@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Page } from "@cherry/doc";
 import type { Shape } from "../api";
-import { shapeNode, thumbBox } from "./ShapesPanel";
+import { readSvg, shapeNode, thumbBox } from "./ShapesPanel";
 
 const page = { width: 400, height: 200 } as Page;
 const shape = (o: Partial<Shape>): Shape => ({
@@ -33,5 +33,12 @@ describe("thumbBox", () => {
     expect(w).toBeGreaterThan(0);
     expect(h).toBeGreaterThan(0);
     expect(y! + h! / 2).toBe(0);
+  });
+});
+
+describe("readSvg", () => {
+  it("refuses an oversized file without reading it", async () => {
+    const file = { size: 2_000_000, text: () => { throw new Error("read"); } } as unknown as File;
+    expect(await readSvg(file)).toEqual({ error: "That file is too large (1 MB max)." });
   });
 });

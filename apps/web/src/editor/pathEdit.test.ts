@@ -3,7 +3,8 @@ import {
   addNode, removeNodes, createDocument, createShape, createUndoManager, docToY, yToDoc, type CherryNode,
 } from "@cherry/doc";
 import { moveAnchors } from "@cherry/vector";
-import { combine, commitEdit, convertToPath, editModel } from "./pathEdit";
+import type { Anchor } from "@cherry/vector";
+import { combine, commitEdit, convertToPath, editModel, finishDraft } from "./pathEdit";
 
 function setup() {
   const ydoc = docToY(createDocument({ title: "T", width: 100, height: 100, unit: "px", colorMode: "rgb" }));
@@ -72,5 +73,22 @@ describe("nested and vanished nodes", () => {
     removeNodes(ydoc, page().id, [ops[1]!.id]);
     expect(combine(ydoc, page().id, "union", ops, act, () => {})).toBe("These shapes can't be combined.");
     expect(page().nodes.map((n) => n.id)).toEqual([ops[0]!.id]);
+  });
+});
+
+describe("finishDraft", () => {
+  const a = (x: number, y = 0): Anchor => ({ x, y, in: { x: 0, y: 0 }, out: { x: 0, y: 0 }, kind: "corner" });
+  const base = [a(0), a(1)];
+  const draft = { anchors: [...base, a(2), a(3)], sub: 0, base };
+  it("continues an unchanged subpath", () => {
+    const m = [{ anchors: [a(0), a(1)], closed: false }];
+    expect(finishDraft(m, draft, false)).toEqual({ model: [{ anchors: draft.anchors, closed: false }], sub: 0 });
+  });
+  it("appends a new subpath when the old one changed, leaving it untouched", () => {
+    const m = [{ anchors: [a(0), a(9)], closed: false }];
+    expect(finishDraft(m, draft, false)).toEqual({ model: [m[0], { anchors: [a(2), a(3)], closed: false }], sub: 1 });
+  });
+  it("appends a new subpath when the old one was removed", () => {
+    expect(finishDraft([], draft, true)).toEqual({ model: [{ anchors: [a(2), a(3)], closed: true }], sub: 0 });
   });
 });
