@@ -94,12 +94,10 @@ export async function createAsset(
   const workspaceId = await placement(db, userId, meta);
   const existing = await findByHash(db, userId, img.sha256);
   if (existing) return { asset: existing, duplicate: true };
-  // Objects first, row second: a failed insert may orphan an object (Phase 9 cleans up), never a row without bytes.
-  // The per-sha256 lock stops a concurrent hard delete from removing the objects between our put and insert.
+  // Row first (short transaction under the lock, so a concurrent hard delete sees it and keeps the objects),
+  // then the objects; if the put fails the row goes again. No connection is held across the upload.
   const row = await db.transaction(async (tx) => {
     await lockBytes(tx, img.sha256);
-    await storage.put(`files/${img.sha256}`, img.file, img.contentType);
-    await storage.put(`thumbs/${img.sha256}.webp`, img.thumb, "image/webp");
     const [r] = await tx.insert(assets).values({
       createdBy: userId, workspaceId, visibility: meta.visibility, title: meta.title, tags: meta.tags,
       license: meta.license, attribution: meta.attribution, kind: img.kind, format: img.format,
@@ -107,6 +105,16 @@ export async function createAsset(
     }).returning({ id: assets.id });
     return r!;
   });
+  try {
+    await storage.put(`files/${img.sha256}`, img.file, img.contentType);
+    await storage.put(`thumbs/${img.sha256}.webp`, img.thumb, "image/webp");
+  } catch (e) {
+    await db.transaction(async (tx) => {
+      await lockBytes(tx, img.sha256);
+      await tx.delete(assets).where(eq(assets.id, row.id));
+    });
+    throw e;
+  }
   return { asset: (await getAsset(db, userId, row.id))!, duplicate: false };
 }
 
@@ -202,15 +210,16 @@ export async function deleteAsset(db: Db, storage: Storage, userId: string, id: 
     await lockBytes(tx, a.sha256);
     const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(assetUses).where(eq(assetUses.assetId, id)) as [{ n: number }];
     if (n > 0) {
-      // ponytail: soft-deleted assets whose last use is gone are purged by the Phase 9 sweep
+      // ponytail: soft-deleted assets whose last use is gone, and objects orphaned by a failed storage delete, are purged by the Phase 9 sweep
       await tx.update(assets).set({ deletedAt: sql`now()` }).where(eq(assets.id, id));
       return;
     }
     await tx.delete(assets).where(eq(assets.id, id));
     const [other] = await tx.select({ id: assets.id }).from(assets).where(eq(assets.sha256, a.sha256)).limit(1);
     if (!other) {
-      await storage.delete(`files/${a.sha256}`);
-      await storage.delete(`thumbs/${a.sha256}.webp`);
+      for (const key of [`files/${a.sha256}`, `thumbs/${a.sha256}.webp`]) {
+        await storage.delete(key).catch((e) => console.error(`asset delete: could not remove ${key}`, e));
+      }
     }
   });
 }

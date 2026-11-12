@@ -370,7 +370,11 @@ describe("uses and deletion", () => {
     expect((await call("GET", `/api/assets/${priv.id}/file`, cy.cookie)).statusCode).toBe(200);
     await t.db.execute(sql`delete from memberships where user_id = ${cy.userId}`);
     expect((await call("GET", `/api/assets/${priv.id}/file`, cy.cookie)).statusCode).toBe(404);
+    const inv2 = await send("POST", `/api/workspaces/${w2}/invitations`, bo.cookie, { email: "cy@example.com", role: "viewer" });
+    await send("POST", `/api/invitations/${inv2.json().token}/accept`, cy.cookie);
+    expect((await call("GET", `/api/assets/${priv.id}/file`, cy.cookie)).statusCode).toBe(200);
     await t.db.execute(sql`delete from designs where id = ${d2}`);
+    expect((await call("GET", `/api/assets/${priv.id}/file`, cy.cookie)).statusCode).toBe(404); // member, not uploader
     expect((await call("GET", `/api/assets/${priv.id}/file`, bo.cookie)).statusCode).toBe(200); // bo is the uploader
     expect((await call("GET", `/api/assets/${pub.id}/file`, cy.cookie)).statusCode).toBe(200);
   });
@@ -395,5 +399,23 @@ describe("uses and deletion", () => {
       expect((await del).statusCode).toBe(204);
       expect((await call("GET", `/api/assets/${b.id}/file`, bo.cookie)).statusCode).toBe(200);
     } finally { t.storage.put = origPut; }
+  });
+
+  it("a failed storage put leaves no row", async () => {
+    const ada = await signUp(t.app, "ada@example.com");
+    const origPut = t.storage.put.bind(t.storage);
+    t.storage.put = async (k, b, ct) => { if (k.startsWith("thumbs/")) throw new Error("boom"); await origPut(k, b, ct); };
+    try { expect((await upload(ada.cookie, await png())).statusCode).toBe(500); } finally { t.storage.put = origPut; }
+    expect(await ids("/api/assets?scope=mine", ada.cookie)).toEqual([]);
+    expect((await upload(ada.cookie, await png())).statusCode).toBe(201);
+  });
+
+  it("a failed storage delete still removes the row", async () => {
+    const ada = await signUp(t.app, "ada@example.com");
+    const a = (await upload(ada.cookie, await png())).json().asset;
+    const origDelete = t.storage.delete.bind(t.storage);
+    t.storage.delete = async (k) => { if (k.startsWith("thumbs/")) throw new Error("boom"); await origDelete(k); };
+    try { expect((await send("DELETE", `/api/assets/${a.id}`, ada.cookie)).statusCode).toBe(204); } finally { t.storage.delete = origDelete; }
+    expect((await call("GET", `/api/assets/${a.id}`, ada.cookie)).statusCode).toBe(404);
   });
 });
