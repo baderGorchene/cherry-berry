@@ -12,6 +12,10 @@ describe("imageNode", () => {
     const n = imageNode({ id: "a2", title: "Tall", width: 100, height: 400 }, page);
     expect([n.width, n.height]).toEqual([162, 648]);
   });
+  it("falls back to a square of 60% of the smaller page side for a zero-dimension asset", () => {
+    const n = imageNode({ id: "a4", title: "Zero", width: 0, height: 0 }, { width: 1000, height: 500 });
+    expect([n.width, n.height, n.x, n.y]).toEqual([300, 300, 350, 100]);
+  });
   it("takes assetId and name from the asset", () => {
     const n = imageNode({ id: "a3", title: "Dot", width: 8, height: 8 }, page);
     expect(n.kind === "image" && n.assetId).toBe("a3");

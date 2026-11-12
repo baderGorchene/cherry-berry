@@ -464,6 +464,20 @@ test("a teammate sees a private visual used in the design", async ({ page, brows
   await expect(layers(viewer).getByRole("button", { name: "Secret dot", exact: true })).toBeVisible();
 });
 
+test("a failed link adds no layer and leaves nothing to redo", async ({ page }) => {
+  await newSocialPost(page);
+  await seedVisual(page, "Unlinked dot", "workspace");
+  await page.route("**/api/designs/*/assets", (r) => r.fulfill({ status: 500, contentType: "application/json", body: '{"error":"server_error"}' }));
+  await page.getByRole("button", { name: "Visuals" }).click();
+  await visualsPanel(page).getByRole("button", { name: "Workspace", exact: true }).click();
+  await visualsPanel(page).getByRole("button", { name: "Unlinked dot" }).click();
+  await expect(visualsPanel(page).getByRole("alert")).toHaveText("Couldn't link this visual to the design. Try again.");
+  const layer = layers(page).getByRole("button", { name: "Unlinked dot", exact: true });
+  await expect(layer).toHaveCount(0);
+  await page.keyboard.press("Control+Shift+Z");
+  await expect(layer).toHaveCount(0);
+});
+
 test("a missing visual shows a placeholder, not a crash", async ({ page }) => {
   await newSocialPost(page);
   await seedVisual(page, "Gone dot", "workspace");
@@ -471,6 +485,7 @@ test("a missing visual shows a placeholder, not a crash", async ({ page }) => {
   await page.getByRole("button", { name: "Visuals" }).click();
   await visualsPanel(page).getByRole("button", { name: "Workspace", exact: true }).click();
   await visualsPanel(page).getByRole("button", { name: "Gone dot" }).click();
+  await expect(layers(page).getByRole("button", { name: "Gone dot", exact: true })).toBeVisible();
   await expect(status(page)).toHaveText("Saved");
   await page.reload();
   const layer = layers(page).getByRole("button", { name: "Gone dot", exact: true });

@@ -19,8 +19,8 @@ function Chips<T>({ label, options, value, onPick }: { label: string; options: [
   );
 }
 
-export default function VisualsPanel({ ydoc, undo, page, designId, workspaceId, readOnly, act, onSelect }: {
-  ydoc: Y.Doc; undo: Y.UndoManager; page: Page; designId: string; workspaceId: string; readOnly: boolean;
+export default function VisualsPanel({ ydoc, page, designId, workspaceId, readOnly, act, onSelect }: {
+  ydoc: Y.Doc; page: Page; designId: string; workspaceId: string; readOnly: boolean;
   act(fn: () => void): void; onSelect(ids: string[]): void;
 }) {
   const [scope, setScope] = useState<AssetScope>("workspace");
@@ -31,17 +31,16 @@ export default function VisualsPanel({ ydoc, undo, page, designId, workspaceId, 
   const { res, retry } = useAssetList(scope, { workspaceId, kind }, text);
 
   const insert = async (a: Asset) => {
-    const n = imageNode(a, page);
     setError("");
-    act(() => addNode(ydoc, page.id, n));
-    onSelect([n.id]);
     try {
       await linkAssetToDesign(designId, a.id);
     } catch {
-      undo.undo();
-      onSelect([]);
-      setError("Couldn't link this visual to the design. Try again.");
+      return setError("Couldn't link this visual to the design. Try again.");
     }
+    // Inserted even if the panel closed meanwhile: the person asked for it and the link now exists.
+    const n = imageNode(a, page);
+    act(() => addNode(ydoc, page.id, n));
+    onSelect([n.id]);
   };
 
   return (
@@ -66,7 +65,7 @@ export default function VisualsPanel({ ydoc, undo, page, designId, workspaceId, 
             </div>
           )}
       {uploading && (
-        <UploadDialog workspaceId={workspaceId} viewer={false} onClose={() => setUploading(false)}
+        <UploadDialog workspaceId={workspaceId} viewer={readOnly} onClose={() => setUploading(false)}
           onDone={(a) => { retry(); if (a) void insert(a); }} />
       )}
     </aside>

@@ -4,18 +4,24 @@ import { assetUrl } from "../api";
 type State = { image: HTMLImageElement | null; status: "loading" | "ready" | "error" };
 type Entry = { state: State; subs: Set<(s: State) => void> };
 const cache = new Map<string, Entry>();
+const MAX_CACHED = 64;
 
 /** One shared Image per asset id; a failed one is dropped so the next mount tries again. */
 function load(id: string): Entry {
   const hit = cache.get(id);
-  if (hit && hit.state.status !== "error") return hit;
+  if (hit && hit.state.status !== "error") { cache.delete(id); cache.set(id, hit); return hit; } // refresh recency
   const img = new Image();
   const e: Entry = { state: { image: null, status: "loading" }, subs: new Set() };
   const done = (state: State) => { e.state = state; e.subs.forEach((f) => f(state)); };
   img.onload = () => done({ image: img, status: "ready" });
   img.onerror = () => done({ image: null, status: "error" });
   img.src = assetUrl(id, "file");
+  cache.delete(id);
   cache.set(id, e);
+  for (const [k, v] of cache) { // oldest first; entries in use stay
+    if (cache.size <= MAX_CACHED) break;
+    if (!v.subs.size && k !== id) cache.delete(k);
+  }
   return e;
 }
 

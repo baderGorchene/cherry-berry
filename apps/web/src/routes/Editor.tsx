@@ -200,7 +200,7 @@ function Shell({ d }: { d: Ready }) {
           <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onTool={setTool} onSelect={select} />
         )}
         {panel === "visuals" && !editNode && (
-          <VisualsPanel ydoc={ydoc} undo={undo} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onSelect={select} />
+          <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onSelect={select} />
         )}
         <aside aria-label="Layers" className="ed-left">
           <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} act={act} onSelect={select} />
