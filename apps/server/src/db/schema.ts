@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, customType, jsonb, index, pgTable, primaryKey, real, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, customType, integer, jsonb, index, pgTable, primaryKey, real, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 // PGlite returns bytea as Uint8Array, node-postgres as Buffer.
 const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
@@ -122,4 +122,33 @@ export const shapes = pgTable("shapes", {
   index("shapes_visibility_created").on(t.visibility, t.createdAt.desc()),
   index("shapes_workspace").on(t.workspaceId),
   index("shapes_created_by").on(t.createdBy),
+]);
+
+export const assets = pgTable("assets", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdBy: text("created_by").notNull().references(() => user.id, { onDelete: "cascade" }),
+  workspaceId: uuid("workspace_id").references(() => workspaces.id, { onDelete: "cascade" }),
+  visibility: text("visibility").notNull(),
+  title: text("title").notNull(),
+  tags: text("tags").array().notNull(),
+  license: text("license").notNull(),
+  attribution: text("attribution").notNull().default(""),
+  kind: text("kind").notNull(),
+  format: text("format").notNull(),
+  width: integer("width").notNull(),
+  height: integer("height").notNull(),
+  bytes: integer("bytes").notNull(),
+  sha256: text("sha256").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  deletedAt: timestamp("deleted_at", { withTimezone: true }),
+}, (t) => [
+  check("assets_visibility", sql`${t.visibility} in ('private','workspace','public')`),
+  check("assets_license", sql`${t.license} in ('cc0','cc-by','own','workspace-only')`),
+  check("assets_workspace", sql`(${t.visibility} = 'workspace') = (${t.workspaceId} is not null)`),
+  check("assets_workspace_only", sql`${t.license} <> 'workspace-only' or ${t.visibility} = 'workspace'`),
+  check("assets_cc_by", sql`${t.license} <> 'cc-by' or ${t.attribution} <> ''`),
+  index("assets_sha256").on(t.sha256),
+  index("assets_visibility_created").on(t.visibility, t.createdAt.desc()),
+  index("assets_workspace").on(t.workspaceId),
+  index("assets_created_by").on(t.createdBy),
 ]);

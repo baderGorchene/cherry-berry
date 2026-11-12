@@ -4,6 +4,7 @@ import type { Config } from "./config";
 import type { Db } from "./db/client";
 import type { Storage } from "./storage";
 import { HttpError } from "./errors";
+import { registerAssetRoutes } from "./assets/routes";
 import { registerDesignRoutes } from "./designs/routes";
 import { registerShapeRoutes } from "./shapes/routes";
 import { registerWorkspaceRoutes } from "./workspaces/routes";
@@ -60,5 +61,6 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage 
   registerWorkspaceRoutes(app, deps.db, requireUser);
   registerDesignRoutes(app, deps.db, requireUser);
   registerShapeRoutes(app, deps.db, requireUser);
+  registerAssetRoutes(app, deps.db, deps.storage, requireUser);
   return app;
 }

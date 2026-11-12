@@ -2,6 +2,7 @@ import { and, desc, eq, or, sql } from "drizzle-orm";
 import type { Paint, Stroke } from "@cherry/doc";
 import { parsePath, pathBounds, toPathData, transformPath } from "@cherry/vector";
 import type { Db } from "../db/client";
+import { escapeLike } from "../http";
 import { shapes } from "../db/schema";
 import { WorkspaceError } from "../workspaces/errors";
 import { getRole, UUID } from "../workspaces/service";
@@ -64,8 +65,6 @@ export async function createShape(
   return toShape(row!, userId);
 }
 
-const escapeLike = (q: string) => q.replace(/[\\%_]/g, "\\$&");
-
 export async function listShapes(
   db: Db, userId: string, scope: "mine" | "workspace" | "public", workspaceId: string | undefined, q: string | undefined,
 ): Promise<Shape[]> {
@@ -79,8 +78,8 @@ export async function listShapes(
   if (q) {
     const like = `%${escapeLike(q)}%`;
     where = and(where, or(
-      sql`${shapes.name} ilike ${like}`,
-      sql`exists (select 1 from unnest(${shapes.tags}) as t(tag) where t.tag ilike ${like})`,
+      sql`${shapes.name} ilike ${like} escape '!'`,
+      sql`exists (select 1 from unnest(${shapes.tags}) as t(tag) where t.tag ilike ${like} escape '!')`,
     ));
   }
   // ponytail: no pagination yet, capped at 200; add a created_at cursor when libraries outgrow it

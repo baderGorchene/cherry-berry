@@ -4,7 +4,7 @@ import { buildApp } from "../src/app";
 import { loadConfig, type Config } from "../src/config";
 import { createDb, type Db } from "../src/db/client";
 import { runMigrations } from "../src/db/migrate";
-import { memoryStorage, type Storage } from "../src/storage";
+import { memoryStorage, type MemoryStorage } from "../src/storage";
 
 export function testConfig(): Config {
   return loadConfig({
@@ -17,7 +17,7 @@ export function testConfig(): Config {
 }
 
 export async function setupTestApp(overrides: Partial<Config> = {}): Promise<{
-  app: FastifyInstance; db: Db; storage: Storage; reset(): Promise<void>; close(): Promise<void>;
+  app: FastifyInstance; db: Db; storage: MemoryStorage; reset(): Promise<void>; close(): Promise<void>;
 }> {
   const config = { ...testConfig(), ...overrides };
   const { db, close } = createDb(config.databaseUrl);

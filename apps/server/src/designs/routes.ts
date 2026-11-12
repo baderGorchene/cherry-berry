@@ -2,14 +2,8 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { SessionUser } from "../auth";
 import type { Db } from "../db/client";
-import { HttpError } from "../errors";
+import { parse } from "../http";
 import * as svc from "./service";
-
-const parse = <T>(schema: z.ZodType<T>, data: unknown): T => {
-  const r = schema.safeParse(data ?? {});
-  if (!r.success) throw new HttpError(400, "invalid_body");
-  return r.data;
-};
 
 const CreateBody = z.object({
   title: z.string().trim().min(1).max(120),

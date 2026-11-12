@@ -7,12 +7,15 @@ export type Storage = {
   delete(key: string): Promise<void>;
 };
 
-export function memoryStorage(): Storage {
+export type MemoryStorage = Storage & { keys(): string[] };
+
+export function memoryStorage(): MemoryStorage {
   const m = new Map<string, Uint8Array>();
   return {
     async put(key, body) { m.set(key, body.slice()); },
     async get(key) { return m.get(key)?.slice() ?? null; },
     async delete(key) { m.delete(key); },
+    keys: () => [...m.keys()], // test-only: lets tests assert that nothing was stored
   };
 }
 

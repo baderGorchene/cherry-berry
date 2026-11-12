@@ -22,6 +22,13 @@
       "when": 1794435560376,
       "tag": "0002_shallow_vermin",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794461541576,
+      "tag": "0003_careful_zuras",
+      "breakpoints": true
     }
   ]
 }
