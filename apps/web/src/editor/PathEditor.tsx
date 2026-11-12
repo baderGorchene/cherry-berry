@@ -9,7 +9,7 @@ import {
 } from "@cherry/vector";
 import type { Tool } from "./Canvas";
 import { NUDGE, toKonvaAttrs } from "./geometry";
-import { anchorAt, asPath, commitEdit, editModel, rot, toLocal, toPage, validRefs } from "./pathEdit";
+import { anchorAt, asPath, commitEdit, editModel, finishDraft, rot, toLocal, toPage, validRefs } from "./pathEdit";
 
 const BERRY = "#8E1EA2";
 const ZERO: Pt = { x: 0, y: 0 };
@@ -41,7 +41,7 @@ type Drag =
   | { kind: "marquee"; from: Pt; to: Pt; shift: boolean } // page
   | { kind: "pen"; from: Pt; to: Pt }; // draft frame: pulling the new anchor's handle
 /** Pen anchors not yet committed; `sub` is the existing open subpath being continued. */
-type Draft = { anchors: Anchor[]; sub: number | null };
+type Draft = { anchors: Anchor[]; sub: number | null; base: Anchor[] };
 
 /**
  * Konva overlay for the pen and for point editing. Drawn in page units inside the canvas's scaled group; `node` is the
@@ -92,8 +92,10 @@ export default function PathEditor({ ydoc, page, node, tool, scale, anchors, act
     if (!dr || dr.anchors.length < 2) return false;
     const sp = { anchors: dr.anchors, closed };
     if (node && model) {
-      commit(dr.sub === null ? [...model, sp] : model.map((s, i) => (i === dr.sub ? sp : s)));
-      onAnchors(closed ? [] : [{ sub: dr.sub ?? model.length, i: dr.anchors.length - 1 }]);
+      const r = finishDraft(model, dr, closed);
+      if (!r) return false;
+      commit(r.model);
+      onAnchors(closed ? [] : [{ sub: r.sub, i: r.model[r.sub]!.anchors.length - 1 }]);
       return true;
     }
     const base = {
@@ -117,7 +119,8 @@ export default function PathEditor({ ydoc, page, node, tool, scale, anchors, act
 
   const penDown = (pagePt: Pt, shift: boolean) => {
     const target = sel[0] && model && !model[sel[0].sub]!.closed ? sel[0].sub : null;
-    const cur = draft ?? { anchors: target === null ? [] : model![target]!.anchors.map((a) => ({ ...a })), sub: target };
+    const start = target === null ? [] : model![target]!.anchors.map((a) => ({ ...a }));
+    const cur = draft ?? { anchors: start, sub: target, base: start };
     const first = cur.anchors[0];
     if (first && cur.anchors.length >= 2 && near(first, pagePt, HIT_PX)) {
       if (finish(cur, true) && !node) onTool("select");

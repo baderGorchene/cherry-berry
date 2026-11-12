@@ -38,6 +38,7 @@ const IMPORT_ERRORS = {
 
 /** Reads an SVG file into paths, or the user-facing reason it can't be imported. */
 export async function readSvg(file: File): Promise<{ paths: ReturnType<typeof svgToPaths> } | { error: string }> {
+  if (file.size > 1_000_000) return { error: IMPORT_ERRORS.too_large };
   try {
     return { paths: svgToPaths(await file.text()) };
   } catch (e) {

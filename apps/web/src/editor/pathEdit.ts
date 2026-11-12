@@ -118,3 +118,21 @@ export function convertToPath(ydoc: Y.Doc, pageId: string, node: CherryNode, act
     ydoc.transact(() => replaceNodes(ydoc, pageId, [node.id], path, now.index), LOCAL);
   });
 }
+
+const same = (a: Anchor, b: Anchor) => Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) < 1e-6;
+
+/**
+ * Places a finished pen draft into the current model. A draft that continues subpath `sub` only does so while that
+ * subpath still begins with the anchors the draft started from; otherwise (undo, collaborator edit, removal) its new
+ * anchors become a new subpath so nothing newer is overwritten. `null` when there is nothing to add.
+ */
+export function finishDraft(
+  model: PathModel, dr: { anchors: Anchor[]; sub: number | null; base: Anchor[] }, closed: boolean,
+): { model: PathModel; sub: number } | null {
+  const cur = dr.sub === null ? undefined : model[dr.sub];
+  if (dr.sub !== null && cur && cur.anchors.length >= dr.base.length && dr.base.every((b, i) => same(b, cur.anchors[i]!))) {
+    return { model: model.map((s, i) => (i === dr.sub ? { anchors: dr.anchors, closed } : s)), sub: dr.sub };
+  }
+  const anchors = dr.anchors.slice(dr.base.length);
+  return anchors.length < 2 ? null : { model: [...model, { anchors, closed }], sub: model.length };
+}
