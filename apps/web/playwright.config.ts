@@ -8,7 +8,8 @@ export default defineConfig({
   testDir: "e2e",
   timeout: 60_000,
   // Windows always ships Edge, so no browser download is needed there.
-  use: { baseURL: `http://localhost:${WEB}`, channel: process.platform === "win32" ? "msedge" : undefined },
+  // A failing test keeps its trace (test-results/…/trace.zip, open with `npx playwright show-trace`).
+  use: { baseURL: `http://localhost:${WEB}`, channel: process.platform === "win32" ? "msedge" : undefined, trace: "retain-on-failure" },
   webServer: [
     {
       command: "pnpm --filter @cherry/server dev",
