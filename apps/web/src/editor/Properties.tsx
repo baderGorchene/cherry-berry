@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import * as Y from "yjs";
-import { LOCAL, updateNode, type CherryNode, type Page } from "@cherry/doc";
+import { LOCAL, removeNodes, updateNode, type CherryNode, type Page } from "@cherry/doc";
 import { scalePath, type BoolOp } from "@cherry/vector";
 import ReuseShape from "./SaveShapeDialog";
 import { withTextHeight } from "./Canvas";
@@ -94,14 +94,27 @@ function VisualInfo({ assetId }: { assetId: string }) {
   );
 }
 
-export default function Properties({ ydoc, pageId, workspaceId, unit, nodes, readOnly, act, combinable, canConvert, message, onCombine, onConvert }: {
-  ydoc: Y.Doc; pageId: string; workspaceId: string; unit: Page["unit"]; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
+export default function Properties({ ydoc, page, workspaceId, nodes, readOnly, act, combinable, canConvert, message, onCombine, onConvert }: {
+  ydoc: Y.Doc; page: Page; workspaceId: string; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
   combinable: boolean; canConvert: boolean; message: string; onCombine(op: BoolOp): void; onConvert(n: CherryNode): void;
 }) {
+  const { id: pageId, unit } = page;
   if (nodes.length === 0) return (
     <aside aria-label="Properties" className="ed-props">
-      <p className="muted" style={{ fontSize: 13 }}>Select a layer to edit its properties.</p>
+      <section className="ed-sec">
+        <h2 className="ed-ph">Page</h2>
+        <p style={{ fontSize: 13 }}>{page.width} × {page.height} {unit}</p>
+        <p style={{ fontSize: 13 }}>{page.colorMode.toUpperCase()}</p>
+      </section>
+      <p className="muted" style={{ fontSize: 13 }}>
+        {readOnly ? "Select a layer to see its properties." : "Select a layer to edit it, or pick a tool on the left."}
+      </p>
     </aside>
+  );
+  const remove = !readOnly && (
+    <section className="ed-sec">
+      <button className="ed-mini ed-del" onClick={() => act(() => removeNodes(ydoc, pageId, nodes.map((n) => n.id)))}>Delete</button>
+    </section>
   );
   const update = (n: CherryNode, patch: Patch) =>
     updateNode(ydoc, pageId, n.id, withTextHeight(n, patch as Partial<CherryNode>, unit));
@@ -134,6 +147,7 @@ export default function Properties({ ydoc, pageId, workspaceId, unit, nodes, rea
             {message && <p role="status" className="muted" style={{ fontSize: 13 }}>{message}</p>}
           </section>
         )}
+        {remove}
       </aside>
     );
   }
@@ -170,13 +184,7 @@ export default function Properties({ ydoc, pageId, workspaceId, unit, nodes, rea
         </div>
       </section>
 
-      {canConvert && (n.kind === "rect" || n.kind === "ellipse") && !readOnly && (
-        <section className="ed-sec">
-          <button className="ed-mini" onClick={() => onConvert(n)}>Convert to path</button>
-          {message && <p role="status" className="muted" style={{ fontSize: 13 }}>{message}</p>}
-        </section>
-      )}
-
+      {n.kind === "image" && <VisualInfo assetId={n.assetId} />}
       {n.kind === "text" && (
         <section className="ed-sec">
           <h2 className="ed-ph">Text</h2>
@@ -221,10 +229,17 @@ export default function Properties({ ydoc, pageId, workspaceId, unit, nodes, rea
             onCommit={(w) => set(n, { stroke: { paint: stroke?.paint ?? paint("#22142A"), width: Math.max(0, w) } })} />
         </section>
       )}
-      {n.kind === "image" && <VisualInfo assetId={n.assetId} />}
+
+      {canConvert && (n.kind === "rect" || n.kind === "ellipse") && !readOnly && (
+        <section className="ed-sec">
+          <button className="ed-mini" onClick={() => onConvert(n)}>Convert to path</button>
+          {message && <p role="status" className="muted" style={{ fontSize: 13 }}>{message}</p>}
+        </section>
+      )}
       {(n.kind === "rect" || n.kind === "ellipse" || n.kind === "path") && (
         <ReuseShape key={n.id} node={n} workspaceId={workspaceId} viewer={readOnly} />
       )}
+      {remove}
     </aside>
   );
 }

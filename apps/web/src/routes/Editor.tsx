@@ -222,7 +222,7 @@ function Shell({ d }: { d: Ready }) {
           onAnchors={setAnchors} onEditPath={enterEdit} />
         {editNode
           ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
-          : <Properties ydoc={ydoc} pageId={page.id} workspaceId={d.design.workspaceId} unit={page.unit} nodes={selectedNodes} readOnly={readOnly} act={act}
+          : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} nodes={selectedNodes} readOnly={readOnly} act={act}
             combinable={operands.length >= 2} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} />}
       </div>
     </div>

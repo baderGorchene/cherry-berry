@@ -48,7 +48,8 @@
 .ed-props .ed-ph { padding: 0 0 4px; }
 .ed-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .ed-layrow { display: flex; align-items: center; gap: 4px; }
-.ed-pagerow { display: flex; flex-direction: column; gap: 2px; }
+.ed-pagerow { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
+.ed-pagerow .ed-lay { flex-basis: 80px; }
 .ed-glyph { width: 16px; text-align: center; color: var(--muted); font-size: 13px; flex: none; }
 .ed-lay {
   flex: 1; min-width: 0; min-height: 34px; padding: 0 8px; border: 0; border-radius: 8px; background: none;
@@ -66,6 +67,23 @@
 .ed-mini:hover:not(:disabled) { color: var(--berry); border-color: var(--blush); }
 .ed-mini:disabled { opacity: .5; cursor: default; }
 .ed-add { min-height: 34px; font-size: 13px; margin: 4px 8px 0; }
+.ed-phrow { display: flex; align-items: center; gap: 2px; }
+.ed-phrow .ed-ph { flex: 1; padding-bottom: 0; }
+.ed-icon {
+  width: 28px; height: 28px; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  padding: 0; border: 0; border-radius: 7px; background: none; color: var(--muted); cursor: pointer;
+}
+.ed-icon svg { width: 16px; height: 16px; }
+.ed-icon:hover:not(:disabled), .ed-icon-on { color: var(--berry); }
+.ed-icon:hover:not(:disabled) { background: var(--tint); }
+.ed-icon:disabled { opacity: .45; cursor: default; }
+.ed-icon:focus-visible { outline: 3px solid var(--blush); outline-offset: 1px; }
+/* Hide/lock show on row hover or focus, and always while hidden/locked; opacity keeps them clickable. */
+.ed-layrow .ed-icon { opacity: 0; }
+.ed-layrow:hover .ed-icon, .ed-layrow:focus-within .ed-icon, .ed-layrow .ed-icon-on { opacity: 1; }
+.ed-layrow:hover .ed-icon:disabled, .ed-layrow:focus-within .ed-icon:disabled, .ed-layrow .ed-icon-on:disabled { opacity: .45; }
+@media (hover: none) { .ed-layrow .ed-icon:not(:disabled) { opacity: 1; } }
+.ed-del { min-height: 34px; align-self: flex-start; }
 
 .ed-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .ed-f {

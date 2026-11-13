@@ -142,6 +142,26 @@ test("pages", async ({ page }) => {
   await expect(page1.getByRole("button", { name: "Delete" })).toBeDisabled();
 });
 
+test("properties show page info when nothing is selected", async ({ page }) => {
+  await newSocialPost(page);
+  const props = page.getByRole("complementary", { name: "Properties" });
+  await expect(props.getByRole("heading", { name: "Page", exact: true })).toBeVisible();
+  await expect(props.getByText("1080 × 1080 px")).toBeVisible();
+  await place(page, "Rectangle (R)");
+  await expect(props.getByRole("heading", { name: "Layout", exact: true })).toBeVisible();
+  await props.getByRole("button", { name: "Delete" }).click();
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(0);
+  await expect(props.getByRole("heading", { name: "Page", exact: true })).toBeVisible();
+});
+
+test("page actions show only on the current page", async ({ page }) => {
+  await newSocialPost(page);
+  await page.getByRole("button", { name: "+ Add page" }).click();
+  await expect(page.getByRole("listitem").filter({ hasText: "2 · Page 2" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Duplicate" })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Duplicate" })).toBeVisible();
+});
+
 test("viewer is read-only", async ({ browser }) => {
   const owner = await (await browser.newContext()).newPage();
   await newSocialPost(owner);
@@ -260,6 +280,9 @@ test("a save rejected as invalid offers a reload to the latest version", async (
   await expect(row(other, "Page 2")).toBeVisible();
 
   // Each tab deletes a different page; merged, the design would have no pages.
+  // Page actions only show on the current page, so switch to it first.
+  await row(page, "Page 1").getByRole("button", { name: "1 · Page 1" }).click();
+  await row(other, "Page 2").getByRole("button", { name: "2 · Page 2" }).click();
   await Promise.all([saved(page), row(page, "Page 1").getByRole("button", { name: "Delete" }).click()]);
   await row(other, "Page 2").getByRole("button", { name: "Delete" }).click();
   const reload = other.getByRole("button", { name: "Reload to get the latest version" });
