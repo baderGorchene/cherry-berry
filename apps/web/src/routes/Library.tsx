@@ -9,6 +9,7 @@ import { KIND_BADGE, LICENSES, VISIBILITY, formatBytes, useAssetList, type Asset
 import ReportDialog from "../library/ReportDialog";
 import UploadDialog from "../library/UploadDialog";
 import AppShell from "../AppShell";
+import { IconUpload } from "../icons";
 
 const TYPES: [AssetKind | undefined, string][] = [[undefined, "All"], ["image", "Images"], ["gif", "GIFs"], ["svg", "SVG"]];
 const SOURCES: [AssetScope, string][] = [["mine", "Mine"], ["workspace", "Workspace"], ["public", "Public"]];
@@ -18,11 +19,13 @@ const license = (l: License) => LICENSES.find((x) => x.value === l)!;
 
 function Chips<T>({ label, options, value, onPick }: { label: string; options: [T, string][]; value: T; onPick(v: T): void }) {
   return (
-    <div role="group" aria-label={label} className="chips">
-      <span className="muted" style={{ fontSize: 13, minWidth: 56 }}>{label}</span>
-      {options.map(([v, text]) => (
-        <button key={text} type="button" className="chip" aria-pressed={v === value} onClick={() => onPick(v)}>{text}</button>
-      ))}
+    <div role="group" aria-label={label} className="ph-row">
+      <span className="ph">{label}</span>
+      <div className="chips">
+        {options.map(([v, text]) => (
+          <button key={text} type="button" className="chip" aria-pressed={v === value} onClick={() => onPick(v)}>{text}</button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -138,15 +141,15 @@ export default function Library() {
   const selected = res && "assets" in res ? res.assets.find((a) => a.id === selectedId) : undefined;
 
   return (
-    <AppShell active="library" onSwitch={setCurrentId}>
-      <div style={{ display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <section style={{ flex: "3 1 380px", display: "flex", flexDirection: "column", gap: 16 }}>
-          <header style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+    <AppShell active="library" onSwitch={setCurrentId} bleed>
+      <div className="split">
+        <section className="split-main">
+          <header className="page-head">
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
-              <h1 style={{ fontSize: 22 }}>Visual library</h1>
-              <p className="muted">Every image, GIF and SVG your community adds lands here.</p>
+              <h1 className="page-title">Visual library</h1>
+              <p className="page-sub">Images, GIFs and SVGs you can use in any design.</p>
             </div>
-            <button className="btn btn-p" onClick={() => setUploading(true)}>Upload visuals</button>
+            <button className="btn btn-p" onClick={() => setUploading(true)}><IconUpload />Upload visuals</button>
           </header>
           <input className="inp" type="search" aria-label="Search visuals" placeholder="Search by title, tag or uploader"
             value={text} onChange={(e) => setText(e.target.value)} />
@@ -170,7 +173,7 @@ export default function Library() {
           )}
         </section>
 
-        <aside aria-label="Selected visual" className="card" style={{ flex: "1 1 260px", maxWidth: 360 }}>
+        <aside aria-label="Selected visual" className="aside">
           <h2 style={{ fontSize: 18 }}>Selected visual</h2>
           {selected ? (
             <Details a={selected} ws={ws} onEdited={retry} onError={(error) => setRes({ error })}

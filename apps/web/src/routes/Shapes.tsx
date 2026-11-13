@@ -12,8 +12,7 @@ import ReportDialog from "../library/ReportDialog";
 import AppShell from "../AppShell";
 
 const MAX_D = 100_000;
-const grid = { listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 14 } as const;
-const cell = { alignItems: "center", padding: 14, color: "var(--berry)" } as const;
+const cell = { color: "var(--berry)" } as const;
 
 export default function Shapes() {
   const { setUser } = useSession();
@@ -85,17 +84,22 @@ export default function Shapes() {
   };
 
   return (
-    <AppShell active="shapes" onSwitch={setCurrentId}>
-      <div style={{ display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start" }}>
-        <section style={{ flex: "3 1 380px", display: "flex", flexDirection: "column", gap: 16 }}>
-          <h1 style={{ fontSize: 22 }}>Shapes</h1>
-          <div role="tablist" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+    <AppShell active="shapes" onSwitch={setCurrentId} bleed>
+      <div className="split">
+        <section className="split-main">
+          <header className="page-head">
+            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+              <h1 className="page-title">Shapes</h1>
+              <p className="page-sub">Basic shapes and the shapes your team saved.</p>
+            </div>
+          </header>
+          <div role="tablist" className="tabs-u">
             {TABS.map(([id, label]) => (
-              <button key={id} role="tab" aria-selected={tab === id} className={`btn${tab === id ? " btn-p" : ""}`} onClick={() => setTab(id)}>{label}</button>
+              <button key={id} role="tab" aria-selected={tab === id} className="tab-u" onClick={() => setTab(id)}>{label}</button>
             ))}
           </div>
           {tab === "basic" ? (
-            <ul style={grid}>
+            <ul className="tiles tiles-sq">
               {SHAPES.map((s) => (
                 <li key={s.kind} className="card" style={cell}>
                   {s.icon}<span style={{ color: "var(--ink)", fontSize: 14 }}>{s.label.replace(/ \(.\)$/, "")}</span>
@@ -108,7 +112,7 @@ export default function Shapes() {
               {!res ? <p className="muted">Loading…</p> : "error" in res ? (
                 <div><p role="alert" className="field-error">{res.error}</p><button className="btn" onClick={retry}>Retry</button></div>
               ) : !res.shapes.length ? <p className="muted">No shapes yet</p> : (
-                <ul style={grid}>
+                <ul className="tiles tiles-sq">
                   {res.shapes.map((s) => (
                     <li key={s.id} className="card" style={cell}>
                       <ShapeThumb s={s} size={64} />
@@ -124,7 +128,7 @@ export default function Shapes() {
           )}
         </section>
 
-        <aside aria-label="New shape" className="card" style={{ flex: "1 1 260px", maxWidth: 360 }}>
+        <aside aria-label="New shape" className="aside">
           <h2 style={{ fontSize: 18 }}>New shape</h2>
           <section>
             <h3 style={{ fontSize: 15 }}>Draw with the pen</h3>

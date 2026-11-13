@@ -8,8 +8,8 @@ import { initials } from "./routes/Workspaces";
 const ROLE: Record<string, string> = { owner: "Owner", admin: "Admin", editor: "Editor", viewer: "Viewer" };
 const LINKS = [["home", "/", "Home", IconHome], ["library", "/library", "Visual library", IconImage], ["shapes", "/shapes", "Shapes", IconShapes]] as const;
 
-/** Page frame: brand, workspace switcher, page links and sign out (bottom tab bar on phones). `onSwitch` lets the page follow a workspace change. */
-export default function AppShell({ active, onSwitch, children }: { active: "home" | "library" | "shapes"; onSwitch?(id: string): void; children: ReactNode }) {
+/** Page frame: brand, workspace switcher, page links and sign out (bottom tab bar on phones). `onSwitch` lets the page follow a workspace change; `bleed` drops the page padding so the page can run a flush side panel. */
+export default function AppShell({ active, onSwitch, bleed, children }: { active: "home" | "library" | "shapes"; onSwitch?(id: string): void; bleed?: boolean; children: ReactNode }) {
   const { setUser } = useSession();
   const [list, setList] = useState<Workspace[]>([]);
   const [currentId, setCurrentId] = useState(currentWorkspace.get());
@@ -74,7 +74,7 @@ export default function AppShell({ active, onSwitch, children }: { active: "home
         <span style={{ flex: 1 }} className="only-d" />
         <button type="button" className="nav only-d" onClick={out}>Sign out</button>
       </nav>
-      <main className="page">{children}</main>
+      <main className={bleed ? "page bleed" : "page"}>{children}</main>
     </div>
   );
 }

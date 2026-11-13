@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspace, signUp, unique } from "./helpers";
+import { createWorkspace, signUp, unique, uniquePng } from "./helpers";
 
 const main = (page: import("@playwright/test").Page) => page.getByRole("navigation", { name: "Main" });
 
@@ -62,4 +62,36 @@ test("long workspace names truncate", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(1280);
   expect((await page.locator(".side").boundingBox())!.width).toBeLessThanOrEqual(260);
+});
+
+test("library and shapes keep the detail panel beside the grid on wide screens", async ({ page }) => {
+  await signUp(page, unique("aside"));
+  await createWorkspace(page, "Aside Studio");
+  const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
+  const res = await page.request.post("/api/assets", {
+    multipart: {
+      file: { name: "dot.png", mimeType: "image/png", buffer: uniquePng() }, title: "Side dot", tags: "", license: "cc0",
+      attribution: "", visibility: "workspace", workspaceId: workspaces[0].id, confirmed: "true",
+    },
+  });
+  expect(res.status()).toBe(201);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/library");
+  const tile = page.getByRole("button", { name: /Side dot/ });
+  await tile.click();
+  const aside = (await page.getByRole("complementary", { name: "Selected visual" }).boundingBox())!;
+  const t = (await tile.boundingBox())!;
+  expect(aside.x).toBeGreaterThan(t.x + t.width);
+  // flush with the right edge of the window, fixed 320px wide
+  expect(Math.round(aside.x + aside.width)).toBe(1280);
+  expect(Math.round(aside.width)).toBe(320);
+
+  await page.goto("/shapes");
+  await expect(page.getByRole("tablist")).toBeVisible();
+  const pub = page.getByRole("tab", { name: "Public" });
+  await expect(pub).toHaveAttribute("aria-selected", "false");
+  await pub.click();
+  await expect(pub).toHaveAttribute("aria-selected", "true");
+  const sa = (await page.getByRole("complementary", { name: "New shape" }).boundingBox())!;
+  expect(Math.round(sa.x + sa.width)).toBe(1280);
 });
