@@ -6,9 +6,10 @@ import {
 } from "../api";
 import { currentWorkspace, useSession } from "../App";
 import AppShell from "../AppShell";
+import { IconPlus, IconSearch } from "../icons";
 import { initials } from "./Workspaces";
 
-const PRESETS: { name: string; size: string; w: number; h: number; bg: string; body: NewDesign }[] = [
+export const PRESETS: { name: string; size: string; w: number; h: number; bg: string; body: NewDesign }[] = [
   { name: "Social post", size: "1080 × 1080 px", w: 60, h: 60, bg: "var(--blush)",
     body: { title: "Untitled design", width: 1080, height: 1080, unit: "px", colorMode: "rgb" } },
   { name: "A4 print", size: "210 × 297 mm · CMYK", w: 44, h: 64, bg: "var(--orchid)",
@@ -46,6 +47,7 @@ export default function Home() {
   const [designsTry, setDesignsTry] = useState(0);
   const [busy, setBusy] = useState(false);
   const [createError, setCreateError] = useState("");
+  const [q, setQ] = useState("");
 
   const load = () => {
     setLoadError(false);
@@ -78,6 +80,7 @@ export default function Home() {
   if (list === null) return <p className="muted" style={{ padding: 24 }}>Loading…</p>;
   if (!current) return <Navigate to="/workspaces" replace />;
   const viewOnly = current.role === "viewer";
+  const shown = Array.isArray(designs) ? designs.filter((d) => d.title.toLowerCase().includes(q.trim().toLowerCase())) : [];
 
   const create = async (body: NewDesign) => {
     setBusy(true); setCreateError("");
@@ -92,17 +95,22 @@ export default function Home() {
 
   return (
     <AppShell active="home" onSwitch={setCurrentId}>
-        <header style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-          <h1 className="ell" style={{ fontSize: 22, maxWidth: "100%" }}>{current.name}</h1>
+        <header className="page-head">
+          <label className="search">
+            <IconSearch />
+            <input type="search" className="inp" aria-label="Search designs" placeholder="Search designs"
+              value={q} onChange={(e) => setQ(e.target.value)} />
+          </label>
           <span style={{ flex: 1 }} />
+          {viewOnly ? null : <Link to="/new" className="btn btn-p"><IconPlus /> New design</Link>}
           <span aria-label={`Signed in as ${user?.name}`} title={user?.email} style={{
             width: 40, height: 40, borderRadius: "50%", background: "var(--berry)", color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
           }}>{initials(user?.name ?? "")}</span>
         </header>
 
-        <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <h2 style={{ fontSize: 28, letterSpacing: "-0.01em" }}>Start something</h2>
+        <section className="sec">
+          <h1 className="page-title">Start something</h1>
           {createError && <p role="alert" className="field-error">{createError}</p>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 14 }}>
             {PRESETS.map((p) => (
@@ -130,8 +138,8 @@ export default function Home() {
           </div>
         </section>
 
-        <section style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          <h2 style={{ fontSize: 22 }}>Recent designs</h2>
+        <section className="sec">
+          <h2 className="sec-title">Recent designs</h2>
           {designs === null ? <p className="muted">Loading…</p> : designs === "error" ? (
             <div className="card" style={{ alignItems: "flex-start" }}>
               <p role="alert">Couldn't load your designs.</p>
@@ -142,19 +150,22 @@ export default function Home() {
               <p className="muted">No designs yet. Pick a size above to start your first one.</p>
               <Link to="/workspaces" style={{ fontSize: 14 }}>Join or create another workspace</Link>
             </div>
+          ) : shown.length === 0 ? (
+            <p className="muted">No designs match “{q.trim()}”.</p>
           ) : (
             <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 20 }}>
-              {designs.map((d) => (
+              {shown.map((d) => (
                 <li key={d.id}>
                   <Link to={`/d/${d.id}`} className="card" style={{ ...tile, height: "100%" }}>
-                    <span style={{ ...thumbBox, height: 140 }}>
+                    <span style={{ ...thumbBox, height: 160, overflow: "hidden" }}>
                       <span style={{
                         background: "#fff", border: "1px solid var(--line)", borderRadius: 4,
-                        aspectRatio: `${d.width} / ${d.height}`, [d.width >= d.height ? "width" : "height"]: "70%",
+                        aspectRatio: `${d.width} / ${d.height}`, maxWidth: "80%", maxHeight: "80%",
+                        [d.width >= d.height ? "width" : "height"]: "80%",
                       }} />
                     </span>
                     <span>
-                      <strong style={{ display: "block", fontSize: 14 }}>{d.title}</strong>
+                      <strong className="ell" style={{ display: "block", fontSize: 14 }}>{d.title}</strong>
                       <span className="muted" style={{ fontSize: 13 }}>
                         {d.width} × {d.height} {d.unit} · {edited(d.updatedAt)}
                       </span>

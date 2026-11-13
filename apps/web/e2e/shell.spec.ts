@@ -18,14 +18,25 @@ test("workspace menu switches workspace and shows its ID", async ({ page }) => {
   await createWorkspace(page, alpha);
   await page.goto("/workspaces");
   await createWorkspace(page, beta);
-  await expect(page.getByRole("heading", { name: beta })).toBeVisible();
+  await page.getByRole("button", { name: /Social post/ }).click();
+  await expect(page).toHaveURL(/\/d\//);
+  await page.getByRole("link", { name: "Back to home" }).click();
+  const designs = page.getByRole("link", { name: /Untitled design/ });
+  await expect(page.getByRole("button", { name: new RegExp(`^Workspace: ${beta}`) })).toBeVisible();
+  await expect(designs).toHaveCount(1);
 
   const button = page.getByRole("button", { name: /^Workspace: / });
   await button.click();
   await expect(page.getByTestId("workspace-public-id")).toBeVisible();
   await page.locator(".ws-menu").getByRole("button", { name: alpha }).click();
   await expect(button).toHaveAccessibleName(new RegExp(alpha));
-  await expect(page.getByRole("heading", { name: alpha })).toBeVisible();
+  await expect(page.getByText("No designs yet")).toBeVisible();
+  await expect(designs).toHaveCount(0);
+
+  await button.click();
+  await page.locator(".ws-menu").getByRole("button", { name: beta }).click();
+  await expect(button).toHaveAccessibleName(new RegExp(beta));
+  await expect(designs).toHaveCount(1);
 
   await button.click();
   await expect(page.locator(".ws-menu")).toBeVisible();

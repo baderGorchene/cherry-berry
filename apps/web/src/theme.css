@@ -153,3 +153,7 @@ a { color: var(--berry); }
   .only-m { display: flex; }
   .page { padding-top: 76px; padding-bottom: 88px; }
 }
+
+.search { position: relative; flex: 1 1 240px; max-width: 560px; display: block; }
+.search svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted, #6b5a70); pointer-events: none; }
+.search .inp { padding-left: 42px; }
