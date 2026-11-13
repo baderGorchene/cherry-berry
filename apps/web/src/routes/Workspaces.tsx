@@ -55,7 +55,7 @@ export default function Workspaces() {
         </header>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <h1 style={{ fontSize: 40, letterSpacing: "-0.02em", overflowWrap: "anywhere" }}>Pick a workspace</h1>
-          <p className="muted" style={{ fontSize: 16 }}>Workspaces hold your designs, brand kits and shared visual library.</p>
+          <p className="muted" style={{ fontSize: 16 }}>Workspaces hold your designs and shared visual library.</p>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(300px, 100%), 1fr))", gap: 20 }}>

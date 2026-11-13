@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspace, signUp, unique, uniquePng } from "./helpers";
+import { createWorkspace, openAsViewer, signUp, unique, uniquePng } from "./helpers";
 
 const main = (page: import("@playwright/test").Page) => page.getByRole("navigation", { name: "Main" });
 
@@ -49,9 +49,9 @@ test("phone width has a bottom nav and no horizontal scroll", async ({ page }) =
   await signUp(page, unique("phone"));
   await createWorkspace(page, "Phone Studio");
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const path of ["/", "/library", "/shapes"]) {
+  for (const path of ["/", "/library", "/shapes", "/workspaces", "/new"]) {
     await page.goto(path);
-    await expect(main(page).getByRole("link", { name: "Visual library" })).toBeVisible();
+    if (!["/workspaces", "/new"].includes(path)) await expect(main(page).getByRole("link", { name: "Visual library" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   }
 });
@@ -115,4 +115,16 @@ test("new design lists presets beside the custom form", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/");
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\//);
+});
+
+test("viewers cannot create from presets on the new design page", async ({ page, browser }) => {
+  await signUp(page, unique("owner"));
+  await createWorkspace(page, "View Studio");
+  await page.getByRole("button", { name: /Social post/ }).click();
+  await expect(page).toHaveURL(/\/d\//);
+  const viewer = await openAsViewer(browser, page);
+  await viewer.goto("/new");
+  await expect(viewer.getByText("You have view-only access to this workspace.")).toBeVisible();
+  await expect(viewer.getByRole("button", { name: /Social post/ })).toBeDisabled();
+  await expect(viewer.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
 });

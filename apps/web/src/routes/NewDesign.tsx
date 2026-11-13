@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { createDesign, errorMessage, myWorkspaces, type NewDesign } from "../api";
 import { currentWorkspace } from "../App";
@@ -12,6 +12,10 @@ export default function NewDesign() {
   const [unit, setUnit] = useState("px");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [viewOnly, setViewOnly] = useState(false);
+  useEffect(() => {
+    myWorkspaces().then((r) => setViewOnly(currentWorkspace.pick(r.workspaces)?.role === "viewer"), () => {});
+  }, []);
 
   async function create(body: NewDesign) {
     setBusy(true); setError("");
@@ -46,11 +50,13 @@ export default function NewDesign() {
           <h1 style={{ fontSize: 24 }}>New design</h1>
           <Link to="/" className="btn" aria-label="Close" style={{ padding: 0, width: 44 }}><IconClose /></Link>
         </header>
+        {viewOnly && <p className="muted" style={{ fontSize: 14 }}>You have view-only access to this workspace.</p>}
+        {error && <p role="alert" className="field-error">{error}</p>}
         <div className="dlg-cols">
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <p className="ph">Presets</p>
             {PRESETS.map((p) => (
-              <button key={p.name} type="button" className="row" disabled={busy} onClick={() => create(p.body)}
+              <button key={p.name} type="button" className="row" disabled={busy || viewOnly} title={viewOnly ? "View-only access" : undefined} onClick={() => create(p.body)}
                 style={{ background: "#fff", font: "inherit", color: "inherit", textAlign: "left", cursor: "pointer" }}>
                 <span style={{ width: 48, height: 48, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--tint)", borderRadius: 10 }}>
                   <span style={{ width: p.w / 2, height: p.h / 2, background: p.bg, borderRadius: 3, border: p.bg === "#fff" ? "2px solid var(--berry)" : 0 }} />
@@ -97,9 +103,8 @@ export default function NewDesign() {
             <input id="bleed" key={unit} name="bleed" className="inp" type="number" min="0" step="any" defaultValue={DEFAULT_BLEED[unit]} required />
           </div>
         )}
-        {error && <p role="alert" className="field-error">{error}</p>}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <button className="btn btn-p" type="submit" disabled={busy}>Create</button>
+          <button className="btn btn-p" type="submit" disabled={busy || viewOnly} title={viewOnly ? "View-only access" : undefined}>Create</button>
         </div>
       </form>
         </div>
