@@ -8,7 +8,7 @@ import { currentWorkspace, useSession } from "../App";
 import { KIND_BADGE, LICENSES, VISIBILITY, formatBytes, useAssetList, type AssetScope } from "../library/assets";
 import ReportDialog from "../library/ReportDialog";
 import UploadDialog from "../library/UploadDialog";
-import Sidebar from "../Sidebar";
+import AppShell from "../AppShell";
 
 const TYPES: [AssetKind | undefined, string][] = [[undefined, "All"], ["image", "Images"], ["gif", "GIFs"], ["svg", "SVG"]];
 const SOURCES: [AssetScope, string][] = [["mine", "Mine"], ["workspace", "Workspace"], ["public", "Public"]];
@@ -138,9 +138,8 @@ export default function Library() {
   const selected = res && "assets" in res ? res.assets.find((a) => a.id === selectedId) : undefined;
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexWrap: "wrap" }}>
-      <Sidebar active="library" onSwitch={setCurrentId} />
-      <main style={{ flex: "999 1 560px", minWidth: 0, padding: "28px clamp(16px, 4vw, 40px) 48px", display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start" }}>
+    <AppShell active="library" onSwitch={setCurrentId}>
+      <div style={{ display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start" }}>
         <section style={{ flex: "3 1 380px", display: "flex", flexDirection: "column", gap: 16 }}>
           <header style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
@@ -178,11 +177,11 @@ export default function Library() {
               onDeleted={() => { setSelectedId(null); retry(); }} />
           ) : <p className="muted" style={{ fontSize: 14 }}>Select a visual to see its details.</p>}
         </aside>
-      </main>
+      </div>
       {uploading && (
         <UploadDialog workspaceId={ws.id} viewer={ws.role === "viewer"} onClose={() => setUploading(false)}
           onDone={(a) => { if (a) setSelectedId(a.id); retry(); }} />
       )}
-    </div>
+    </AppShell>
   );
 }

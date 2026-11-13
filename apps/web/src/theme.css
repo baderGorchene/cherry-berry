@@ -87,3 +87,69 @@ a { color: var(--berry); }
 }
 .drop:hover, .drop:focus-within { border-color: var(--berry); }
 .drop:focus-within { outline: 3px solid var(--blush); outline-offset: 2px; }
+
+/* app shell */
+.shell { min-height: 100vh; display: flex; }
+.side {
+  flex: 0 0 240px; width: 240px; background: #fff; border-right: 1px solid var(--line); padding: 20px 14px;
+  display: flex; flex-direction: column; gap: 6px; position: sticky; top: 0; height: 100vh; align-self: flex-start;
+}
+.side .brand { margin: 0 0 8px 12px; }
+.ws { position: relative; margin-bottom: 8px; }
+.ws-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%; height: 52px; padding: 0 10px; border: 1px solid var(--line);
+  border-radius: 12px; background: #fff; color: var(--ink); font: 14px Inter, sans-serif; text-align: left; cursor: pointer;
+}
+.ws-btn:hover { background: var(--tint); }
+.ws-btn svg { flex: none; color: var(--muted); }
+.ws-name { flex: 1; min-width: 0; display: flex; flex-direction: column; font-size: 12px; }
+.ws-name strong { font-size: 14px; font-weight: 600; }
+.ws-menu {
+  position: absolute; z-index: 30; top: calc(100% + 6px); left: 0; right: 0; min-width: 240px; padding: 8px; background: #fff;
+  border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(34, 20, 42, .14); display: flex; flex-direction: column; gap: 2px;
+}
+.ws-id { font-size: 13px; padding: 8px 12px; }
+.ws-id code { color: var(--ink); user-select: all; }
+.nav {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 10px; background: none;
+  color: var(--muted); font: 500 14px Inter, sans-serif; text-decoration: none; text-align: left; cursor: pointer;
+}
+.nav svg { flex: none; }
+.nav:hover { background: var(--tint); }
+.nav-on, .nav[aria-current] { background: var(--tint); color: var(--berry); font-weight: 600; }
+.nav:focus-visible, .ws-btn:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px; }
+.only-m { display: none; }
+.page { flex: 1; min-width: 0; padding: 28px clamp(16px, 4vw, 40px) 48px; display: flex; flex-direction: column; gap: 32px; }
+.page-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.page-title { font-size: 28px; letter-spacing: -0.01em; }
+.page-sub { color: var(--muted); font-size: 14px; }
+.sec { display: flex; flex-direction: column; gap: 16px; }
+.sec-title { font-size: 22px; }
+.ph { font: 600 12px Inter, sans-serif; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.tabs-u { display: flex; gap: 20px; border-bottom: 1px solid var(--line); }
+.tab-u {
+  min-height: 44px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none;
+  color: var(--muted); font: 600 14px Inter, sans-serif; cursor: pointer;
+}
+.tab-u[aria-selected="true"] { color: var(--berry); border-bottom-color: var(--berry); }
+.tab-u:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px; }
+.aside { flex: 1 1 260px; max-width: 360px; }
+.ell { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+@media (max-width: 759px) {
+  .shell::before { content: ""; position: fixed; z-index: 19; top: 0; left: 0; right: 0; height: 60px; background: #fff; border-bottom: 1px solid var(--line); }
+  .side {
+    position: fixed; z-index: 20; inset: auto 0 0 0; width: auto; height: 64px; padding: 0; flex-direction: row; gap: 0;
+    border-right: 0; border-top: 1px solid var(--line);
+  }
+  .side .nav { flex: 1; flex-direction: column; justify-content: center; gap: 2px; padding: 0 4px; border-radius: 0; font-size: 12px; text-align: center; }
+  .side .brand { position: fixed; z-index: 21; top: 18px; left: 16px; margin: 0; }
+  .side .ws { position: fixed; z-index: 21; top: 8px; right: 16px; margin: 0; }
+  .ws-btn { width: auto; height: 44px; padding: 0 8px; }
+  .ws-name { display: none; }
+  .ws-menu { left: auto; right: 0; width: 260px; }
+  .ws-menu .nav { flex: none; flex-direction: row; justify-content: flex-start; font-size: 14px; text-align: left; padding: 0 12px; }
+  .only-d { display: none; }
+  .only-m { display: flex; }
+  .page { padding-top: 76px; padding-bottom: 88px; }
+}

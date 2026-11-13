@@ -9,7 +9,7 @@ import { readSvg, ShapeThumb, TABS } from "../editor/ShapesPanel";
 import { ShapeFields, shapePayload, useShapeForm, useShapeList } from "../editor/shapeForm";
 import { SHAPES } from "../editor/Toolbar";
 import ReportDialog from "../library/ReportDialog";
-import Sidebar from "../Sidebar";
+import AppShell from "../AppShell";
 
 const MAX_D = 100_000;
 const grid = { listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: 14 } as const;
@@ -85,10 +85,8 @@ export default function Shapes() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexWrap: "wrap" }}>
-      <Sidebar active="shapes" onSwitch={setCurrentId} />
-
-      <main style={{ flex: "999 1 560px", minWidth: 0, padding: "28px clamp(16px, 4vw, 40px) 48px", display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start" }}>
+    <AppShell active="shapes" onSwitch={setCurrentId}>
+      <div style={{ display: "flex", gap: 32, flexWrap: "wrap", alignItems: "flex-start" }}>
         <section style={{ flex: "3 1 380px", display: "flex", flexDirection: "column", gap: 16 }}>
           <h1 style={{ fontSize: 22 }}>Shapes</h1>
           <div role="tablist" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
@@ -148,8 +146,8 @@ export default function Shapes() {
           )}
           {saved && <p role="status" className="muted">Saved to your shapes</p>}
         </aside>
-      </main>
+      </div>
       {reporting && <ReportDialog target={{ type: "shape", id: reporting.id, title: reporting.name }} onClose={() => setReporting(null)} />}
-    </div>
+    </AppShell>
   );
 }

@@ -5,7 +5,7 @@ import {
   type Design, type NewDesign, type Workspace,
 } from "../api";
 import { currentWorkspace, useSession } from "../App";
-import Sidebar from "../Sidebar";
+import AppShell from "../AppShell";
 import { initials } from "./Workspaces";
 
 const PRESETS: { name: string; size: string; w: number; h: number; bg: string; body: NewDesign }[] = [
@@ -91,12 +91,9 @@ export default function Home() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexWrap: "wrap" }}>
-      <Sidebar active="home" onSwitch={setCurrentId} />
-
-      <main style={{ flex: "999 1 560px", minWidth: 0, padding: "28px clamp(16px, 4vw, 40px) 48px", display: "flex", flexDirection: "column", gap: 36 }}>
+    <AppShell active="home" onSwitch={setCurrentId}>
         <header style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-          <h1 style={{ fontSize: 22 }}>{current.name}</h1>
+          <h1 className="ell" style={{ fontSize: 22, maxWidth: "100%" }}>{current.name}</h1>
           <span style={{ flex: 1 }} />
           <span aria-label={`Signed in as ${user?.name}`} title={user?.email} style={{
             width: 40, height: 40, borderRadius: "50%", background: "var(--berry)", color: "#fff",
@@ -168,7 +165,6 @@ export default function Home() {
             </ul>
           )}
         </section>
-      </main>
-    </div>
+    </AppShell>
   );
 }

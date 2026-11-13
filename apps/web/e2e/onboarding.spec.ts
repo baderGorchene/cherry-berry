@@ -19,6 +19,7 @@ test("second user joins with ID and password", async ({ browser }) => {
   await a.getByLabel("Password for joining").fill("joinpass1");
   await a.getByRole("button", { name: "Create workspace" }).click();
   await expect(a).toHaveURL(/\/$/);
+  await a.getByRole("button", { name: /^Workspace: / }).click();
   const publicId = (await a.getByTestId("workspace-public-id").textContent())!.trim();
   expect(publicId).toMatch(/^berry-lab-[A-Z0-9]{4}$/);
 
