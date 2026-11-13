@@ -3,10 +3,6 @@ import { useNavigate } from "react-router";
 import { errorMessage, signIn, signUp } from "../api";
 import { useSession } from "../App";
 
-const pill: React.CSSProperties = {
-  padding: "8px 14px", borderRadius: 999, background: "var(--petal)", color: "var(--deep)", fontWeight: 600, fontSize: 13,
-};
-
 export default function SignIn() {
   const { setUser } = useSession();
   const navigate = useNavigate();
@@ -33,28 +29,23 @@ export default function SignIn() {
   }
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex", flexWrap: "wrap" }}>
-      <section style={{
-        flex: "1 1 420px", background: "var(--berry)", color: "#fff", padding: "64px 56px",
-        display: "flex", flexDirection: "column", justifyContent: "space-between", gap: 48,
-      }}>
-        <p style={{ font: "700 22px 'Space Grotesk', sans-serif" }}>Cherry Berry</p>
+    <div className="auth">
+      <section className="auth-hero">
+        <p className="brand" style={{ color: "#fff", fontSize: 22 }}>Cherry Berry</p>
         <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 520 }}>
-          <h1 style={{ fontSize: "clamp(36px, 5vw, 56px)", lineHeight: 1.05, letterSpacing: "-0.02em" }}>
-            Design freely.<br />Own every file.
-          </h1>
+          <h1>Design freely. Own every file.</h1>
           <p style={{ fontSize: 18, lineHeight: 1.5, color: "#FFE3F1" }}>
-            An open-source design studio. Real vector tools, print-ready export, full brand kits — and nothing locked behind a paywall.
+            An open-source design studio. Real vector tools, print-ready export and nothing locked behind a paywall.
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <span style={pill}>MIT licensed</span>
-          <span style={pill}>Self-host or use the cloud</span>
-          <span style={pill}>Open file format</span>
+          <span className="pill">Open source</span>
+          <span className="pill">Self-hostable</span>
+          <span className="pill">Print-ready PDF</span>
         </div>
       </section>
 
-      <section style={{ flex: "999 1 520px", display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px" }}>
+      <section style={{ flex: "1 1 420px", display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px" }}>
         <form onSubmit={submit} style={{ width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 22 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <h2 style={{ fontSize: 32, letterSpacing: "-0.01em" }}>{mode === "in" ? "Sign in" : "Create your account"}</h2>

@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
-import { createDesign, errorMessage, myWorkspaces } from "../api";
+import { createDesign, errorMessage, myWorkspaces, type NewDesign } from "../api";
 import { currentWorkspace } from "../App";
+import { IconClose } from "../icons";
+import { PRESETS } from "./Home";
 
 const DEFAULT_BLEED: Record<string, number> = { mm: 3, in: 0.125 };
 
@@ -11,21 +13,12 @@ export default function NewDesign() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
-  async function submit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
+  async function create(body: NewDesign) {
     setBusy(true); setError("");
     try {
       const ws = currentWorkspace.pick((await myWorkspaces()).workspaces);
       if (!ws) return navigate("/workspaces");
-      const { design } = await createDesign(ws.id, {
-        title: String(f.get("title")).trim() || "Untitled design",
-        width: Number(f.get("width")),
-        height: Number(f.get("height")),
-        unit,
-        colorMode: String(f.get("colorMode")),
-        ...(unit === "px" ? {} : { bleed: Number(f.get("bleed")) }),
-      });
+      const { design } = await createDesign(ws.id, body);
       navigate(`/d/${design.id}`);
     } catch (err) {
       setError(errorMessage(err));
@@ -33,10 +26,44 @@ export default function NewDesign() {
     }
   }
 
+  function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const f = new FormData(e.currentTarget);
+    return create({
+      title: String(f.get("title")).trim() || "Untitled design",
+      width: Number(f.get("width")),
+      height: Number(f.get("height")),
+      unit,
+      colorMode: String(f.get("colorMode")),
+      ...(unit === "px" ? {} : { bleed: Number(f.get("bleed")) }),
+    });
+  }
+
   return (
-    <div style={{ minHeight: "100vh", padding: "48px 16px", display: "flex", justifyContent: "center", alignItems: "flex-start" }}>
-      <form className="card" onSubmit={submit} style={{ width: "100%", maxWidth: 520 }}>
-        <h1 style={{ fontSize: 22 }}>New design</h1>
+    <div className="dlg-page">
+      <div className="dlg">
+        <header style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+          <h1 style={{ fontSize: 24 }}>New design</h1>
+          <Link to="/" className="btn" aria-label="Close" style={{ padding: 0, width: 44 }}><IconClose /></Link>
+        </header>
+        <div className="dlg-cols">
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <p className="ph">Presets</p>
+            {PRESETS.map((p) => (
+              <button key={p.name} type="button" className="row" disabled={busy} onClick={() => create(p.body)}
+                style={{ background: "#fff", font: "inherit", color: "inherit", textAlign: "left", cursor: "pointer" }}>
+                <span style={{ width: 48, height: 48, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--tint)", borderRadius: 10 }}>
+                  <span style={{ width: p.w / 2, height: p.h / 2, background: p.bg, borderRadius: 3, border: p.bg === "#fff" ? "2px solid var(--berry)" : 0 }} />
+                </span>
+                <span>
+                  <strong style={{ display: "block", fontSize: 14 }}>{p.name}</strong>
+                  <span className="muted" style={{ fontSize: 13 }}>{p.size}</span>
+                </span>
+              </button>
+            ))}
+          </div>
+          <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <p className="ph">Custom size</p>
         <div>
           <label className="lbl" htmlFor="title">Title</label>
           <input id="title" name="title" className="inp" defaultValue="Untitled design" maxLength={120} />
@@ -72,10 +99,11 @@ export default function NewDesign() {
         )}
         {error && <p role="alert" className="field-error">{error}</p>}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-          <Link to="/" className="btn">Cancel</Link>
           <button className="btn btn-p" type="submit" disabled={busy}>Create</button>
         </div>
       </form>
+        </div>
+      </div>
     </div>
   );
 }

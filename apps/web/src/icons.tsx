@@ -11,6 +11,7 @@ export const IconHome = svg(p("M3 11l9-8 9 8"), p("M5 10v10h14V10"), p("M10 20v-
 export const IconImage = svg(<rect key="r" x="3" y="4" width="18" height="16" rx="2" />, <circle key="c" cx="9" cy="10" r="1.5" />, p("M21 16l-5-5-8 9"));
 export const IconShapes = svg(<circle key="c" cx="7.5" cy="7.5" r="4" />, <rect key="r" x="13" y="13" width="8" height="8" rx="1" />, p("M7 21l-4-7h8z"));
 export const IconPlus = svg(p("M12 5v14M5 12h14"));
+export const IconClose = svg(p("M6 6l12 12M18 6L6 18"));
 export const IconSearch = svg(<circle key="c" cx="11" cy="11" r="7" />, p("M20 20l-4-4"));
 export const IconChevron = svg(p("M6 9l6 6 6-6"));
 export const IconBack = svg(p("M15 6l-6 6 6 6"));

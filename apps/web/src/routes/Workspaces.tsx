@@ -47,14 +47,14 @@ export default function Workspaces() {
   const fields = (e: FormEvent<HTMLFormElement>) => { e.preventDefault(); return new FormData(e.currentTarget); };
 
   return (
-    <div style={{ minHeight: "100vh", padding: "48px 24px" }}>
+    <div style={{ minHeight: "100vh", padding: "48px clamp(16px, 4vw, 48px)" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <Link to="/" className="brand" style={{ textDecoration: "none" }}>Cherry Berry</Link>
           <span className="muted" style={{ fontSize: 14 }}>Signed in as {user?.email}</span>
         </header>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          <h1 style={{ fontSize: 40, letterSpacing: "-0.02em" }}>Pick a workspace</h1>
+          <h1 style={{ fontSize: 40, letterSpacing: "-0.02em", overflowWrap: "anywhere" }}>Pick a workspace</h1>
           <p className="muted" style={{ fontSize: 16 }}>Workspaces hold your designs, brand kits and shared visual library.</p>
         </div>
 

@@ -95,3 +95,24 @@ test("library and shapes keep the detail panel beside the grid on wide screens",
   const sa = (await page.getByRole("complementary", { name: "New shape" }).boundingBox())!;
   expect(Math.round(sa.x + sa.width)).toBe(1280);
 });
+
+test("sign in shows the welcome panel on wide screens only", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto("/sign-in");
+  const h = page.getByRole("heading", { name: "Design freely. Own every file." });
+  await expect(h).toBeVisible();
+  for (const b of ["Open source", "Self-hostable", "Print-ready PDF"]) await expect(page.getByText(b, { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(h).toBeHidden();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+});
+
+test("new design lists presets beside the custom form", async ({ page }) => {
+  await signUp(page, unique("new"));
+  await createWorkspace(page, "New Studio");
+  await page.goto("/new");
+  await expect(page.getByLabel("Width")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/");
+  await page.getByRole("button", { name: /Social post/ }).click();
+  await expect(page).toHaveURL(/\/d\//);
+});
