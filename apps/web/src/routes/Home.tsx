@@ -158,10 +158,11 @@ export default function Home() {
                 <li key={d.id}>
                   <Link to={`/d/${d.id}`} className="card" style={{ ...tile, height: "100%" }}>
                     <span style={{ ...thumbBox, height: 160, overflow: "hidden" }}>
-                      <span style={{
-                        background: "#fff", border: "1px solid var(--line)", borderRadius: 4,
-                        aspectRatio: `${d.width} / ${d.height}`, maxWidth: "80%", maxHeight: "80%",
-                        [d.width >= d.height ? "width" : "height"]: "80%",
+                      <span data-testid="design-preview" style={{
+                        background: "#fff", border: "1px solid var(--line)", borderRadius: 4, boxSizing: "border-box",
+                        aspectRatio: `${d.width} / ${d.height}`,
+                        // height never exceeds 80% of the 160px box (128px); width follows from the ratio
+                        width: `min(80%, ${(128 * d.width) / d.height}px)`,
                       }} />
                     </span>
                     <span>
