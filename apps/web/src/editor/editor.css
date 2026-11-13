@@ -24,10 +24,20 @@
   flex: 0 0 64px; background: #fff; border-right: 1px solid var(--line);
   display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0; overflow-y: auto;
 }
+.ed-sep { width: 32px; margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
 .ed-left {
-  flex: 0 1 260px; background: #fff; border-right: 1px solid var(--line); padding: 14px 10px;
-  display: flex; flex-direction: column; gap: 18px; overflow-y: auto;
+  flex: 0 1 260px; min-width: 0; background: #fff; border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
 }
+.ed-ltabs { display: flex; gap: 16px; padding: 0 14px; border-bottom: 1px solid var(--line); flex: none; }
+.ed-tab {
+  min-height: 40px; padding: 0 2px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px; background: none;
+  color: var(--muted); font: 600 13px Inter, sans-serif; cursor: pointer;
+}
+.ed-tab[aria-selected="true"] { color: var(--berry); border-bottom-color: var(--berry); }
+.ed-tab:disabled { opacity: .45; cursor: default; }
+.ed-tab:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px; }
+.ed-pane { flex: 1; min-height: 0; padding: 14px 10px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
 .ed-props {
   flex: 0 1 290px; background: #fff; border-left: 1px solid var(--line); padding: 16px;
   display: flex; flex-direction: column; gap: 18px; overflow-y: auto;
@@ -100,10 +110,7 @@
 }
 .ed-op:hover { color: var(--berry); border-color: var(--blush); }
 
-.ed-shapes {
-  flex: 0 0 240px; background: #fff; border-right: 1px solid var(--line); padding: 12px 10px;
-  display: flex; flex-direction: column; gap: 10px; overflow-y: auto;
-}
+.ed-shapes { flex: 1; min-height: 0; padding: 12px 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 .ed-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
 .ed-shapes input[type="search"] { min-height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; font: 13px Inter, sans-serif; }
 .ed-shapegrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }

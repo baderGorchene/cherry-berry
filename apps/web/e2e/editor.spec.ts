@@ -17,6 +17,8 @@ async function place(page: Page, tool: string) {
 }
 
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
+/** Shapes and Visuals share the left panel with Layers; switch back to see the layers. */
+const showLayers = (page: Page) => page.getByRole("tab", { name: "Layers", exact: true }).click();
 const status = (page: Page) => page.getByRole("status");
 
 /** Pen-draws a closed triangle around the canvas center; returns its first anchor and an inside point (screen px). */
@@ -145,6 +147,23 @@ test("viewer is read-only", async ({ browser }) => {
   await newSocialPost(owner);
   const viewer = await openAsViewer(browser, owner);
   await expect(viewer.getByRole("button", { name: "Rectangle (R)" })).toBeDisabled();
+  await viewer.getByRole("tab", { name: "Shapes", exact: true }).click();
+  await expect(viewer.getByRole("button", { name: "Import SVG…" })).toBeDisabled();
+});
+
+test("left panel tabs switch between layers, shapes and visuals", async ({ page }) => {
+  await newSocialPost(page);
+  const tab = (name: string) => page.getByRole("tab", { name, exact: true });
+  await expect(tab("Layers")).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await expect(tab("Shapes")).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("complementary", { name: "Shapes panel" })).toBeVisible();
+  await expect(layers(page)).not.toBeVisible();
+  await tab("Visuals").click();
+  await expect(page.getByRole("complementary", { name: "Visuals panel" })).toBeVisible();
+  await tab("Layers").click();
+  await page.keyboard.press("r");
+  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("pen draws a closed path", async ({ page }) => {
@@ -346,6 +365,7 @@ test("save a shape and drop it into another design", async ({ page }) => {
   await page.getByRole("button", { name: "Shapes", exact: true }).click();
   await page.getByRole("tab", { name: "My shapes" }).click();
   await page.getByRole("complementary", { name: "Shapes panel" }).getByRole("button", { name: "Peak" }).click();
+  await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Peak", exact: true })).toBeVisible();
 });
 
@@ -364,6 +384,7 @@ test("import an SVG into a design", async ({ page }) => {
   await newSocialPost(page);
   await page.getByRole("button", { name: "Shapes", exact: true }).click();
   await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/berry.svg");
+  await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Imported 1", exact: true })).toBeVisible();
   await expect(layers(page).getByRole("button", { name: "Imported 2", exact: true })).toBeVisible();
   await page.keyboard.press("Control+z");
@@ -374,6 +395,7 @@ test("import keeps the SVG's transforms", async ({ page }) => {
   await newSocialPost(page);
   await page.getByRole("button", { name: "Shapes", exact: true }).click();
   await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/transformed.svg");
+  await showLayers(page);
   const width = async (name: string) => {
     await layers(page).getByRole("button", { name, exact: true }).click();
     return Number(await page.getByLabel("W", { exact: true }).inputValue());
@@ -388,6 +410,7 @@ test("hostile SVG imports only its plain shapes", async ({ page }) => {
   await newSocialPost(page);
   await page.getByRole("button", { name: "Shapes", exact: true }).click();
   await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/hostile.svg");
+  await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Imported 1", exact: true })).toBeVisible();
   await expect(layers(page).getByRole("button", { name: "Imported 5", exact: true })).toBeVisible();
   await expect(layers(page).getByRole("button", { name: "Imported 6", exact: true })).toHaveCount(0);
@@ -405,6 +428,7 @@ test("too-large file is refused", async ({ page }) => {
     buffer: Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg">${body}</svg>`),
   });
   await expect(page.getByRole("alert").filter({ hasText: "That file is too large (1 MB max)." })).toBeVisible();
+  await showLayers(page);
   await expect(layers(page).getByRole("button", { name: /Imported/ })).toHaveCount(0);
 });
 
@@ -431,6 +455,7 @@ test("insert a visual into a design", async ({ page }) => {
   const loaded = page.waitForResponse((r) => fileUrl(id).test(r.url()));
   await visualsPanel(page).getByRole("button", { name: "Dot" }).click();
   expect((await loaded).status()).toBe(200);
+  await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toBeVisible();
   await expect(page.getByRole("complementary", { name: "Properties" }).getByText("CC0", { exact: true })).toBeVisible();
   await expect(status(page)).toHaveText("Saved");
@@ -472,6 +497,7 @@ test("a failed link adds no layer and leaves nothing to redo", async ({ page }) 
   await visualsPanel(page).getByRole("button", { name: "Workspace", exact: true }).click();
   await visualsPanel(page).getByRole("button", { name: "Unlinked dot" }).click();
   await expect(visualsPanel(page).getByRole("alert")).toHaveText("Couldn't link this visual to the design. Try again.");
+  await showLayers(page);
   const layer = layers(page).getByRole("button", { name: "Unlinked dot", exact: true });
   await expect(layer).toHaveCount(0);
   await page.keyboard.press("Control+Shift+Z");
@@ -485,6 +511,7 @@ test("a missing visual shows a placeholder, not a crash", async ({ page }) => {
   await page.getByRole("button", { name: "Visuals" }).click();
   await visualsPanel(page).getByRole("button", { name: "Workspace", exact: true }).click();
   await visualsPanel(page).getByRole("button", { name: "Gone dot" }).click();
+  await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Gone dot", exact: true })).toBeVisible();
   await expect(status(page)).toHaveText("Saved");
   await page.reload();
@@ -503,5 +530,6 @@ test("upload from the editor", async ({ page }) => {
   await dialog.getByLabel("License", { exact: true }).selectOption({ label: "CC0 · public domain" });
   await dialog.getByLabel(/I created this/).check();
   await dialog.getByRole("button", { name: "Add 1 visual" }).click();
+  await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Dot2", exact: true })).toBeVisible();
 });

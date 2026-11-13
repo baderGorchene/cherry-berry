@@ -6,6 +6,7 @@ import {
   duplicateNodes, fromPx, removeNodes, reorderNode, setTitle, updateNode, yToDoc, type CherryDocument, type CherryNode,
 } from "@cherry/doc";
 import "../editor/editor.css";
+import { IconBack, IconRedo, IconUndo } from "../icons";
 import Canvas, { type Tool } from "../editor/Canvas";
 import { NUDGE, clampZoom, fitZoom } from "../editor/geometry";
 import Layers from "../editor/Layers";
@@ -24,6 +25,9 @@ type Ready = Extract<DesignState, { state: "ready" }>;
 const TOOL_KEYS: Record<string, Tool> = { v: "select", t: "text", r: "rect", o: "ellipse", l: "line", p: "pen" };
 // In path edit mode only the vector tools are armed by key; Shift+C (convert) is checked separately.
 const EDIT_KEYS: Record<string, Tool> = { a: "direct", p: "pen", "+": "add-anchor", "=": "add-anchor" };
+
+type Panel = "layers" | "shapes" | "visuals";
+const TABS: [Panel, string][] = [["layers", "Layers"], ["shapes", "Shapes"], ["visuals", "Visuals"]];
 
 const BOOL_KEYS: Record<string, BoolOp> = { u: "union", s: "subtract", i: "intersect", e: "exclude" };
 
@@ -75,7 +79,7 @@ function Shell({ d }: { d: Ready }) {
   const [message, setMessage] = useState("");
   useEffect(() => setMessage(""), [sel.selected.join()]);
   const [tool, setTool] = useState<Tool>("select");
-  const [panel, setPanel] = useState<"shapes" | "visuals" | null>(null);
+  const [panel, setPanel] = useState<Panel>("layers");
   const [vp, setVp] = useState({ width: 0, height: 0 });
   const [zoomSet, setZoomSet] = useState<number | null>(null); // null = fit to viewport
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -161,29 +165,24 @@ function Shell({ d }: { d: Ready }) {
     if (operands.length >= 2) setMessage(combine(ydoc, page.id, op, operands, act, select) ?? "");
   };
   const runConvert = (n: CherryNode) => setMessage(convertToPath(ydoc, page.id, n, act) ?? "");
+  const left: Panel = editNode ? "layers" : panel; // path edit mode always shows Layers
   const status = d.status === "error" ? `Not saved: ${d.statusMessage ?? ""}` : STATUS[d.status];
 
   return (
     <div className="ed">
       <header className="ed-head">
-        <Link className="ed-ib" to="/" aria-label="Back to home">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
-        </Link>
+        <Link className="ed-ib" to="/" aria-label="Back to home"><IconBack /></Link>
         <div className="ed-title">
           <input aria-label="Design title" key={doc.title} defaultValue={doc.title} disabled={readOnly} maxLength={120}
             onBlur={(e) => { const t = e.currentTarget.value.trim(); if (t && t !== doc.title) act(() => setTitle(ydoc, t)); else e.currentTarget.value = doc.title; }}
             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
-          <span className="muted">
+          <span className="muted ell">
             {page.width} × {page.height} {page.unit} · {page.colorMode.toUpperCase()} · {readOnly ? <span>View only</span> : <span role="status">{status}</span>}
             {d.statusCode === "invalid_document" && <> <button className="ed-mini" onClick={d.reload}>Reload to get the latest version</button></>}
           </span>
         </div>
-        <button className="ed-ib" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={readOnly} onClick={() => undo.undo()}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M9 14L4 9l5-5" /><path d="M4 9h11a5 5 0 0 1 0 10h-3" /></svg>
-        </button>
-        <button className="ed-ib" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={readOnly} onClick={() => undo.redo()}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M15 14l5-5-5-5" /><path d="M20 9H9a5 5 0 0 0 0 10h3" /></svg>
-        </button>
+        <button className="ed-ib" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={readOnly} onClick={() => undo.undo()}><IconUndo /></button>
+        <button className="ed-ib" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={readOnly} onClick={() => undo.redo()}><IconRedo /></button>
         {editNode && <span className="ed-pill">Editing path</span>}
         <span style={{ flex: 1 }} />
         <div className="ed-zoom" role="group" aria-label="Zoom">
@@ -195,17 +194,28 @@ function Shell({ d }: { d: Ready }) {
         {editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>}
       </header>
       <div className="ed-body">
-        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} panel={panel} onTool={setTool} onPanel={(p) => setPanel(panel === p ? null : p)} />
-        {panel === "shapes" && !editNode && (
-          <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onTool={setTool} onSelect={select} />
-        )}
-        {panel === "visuals" && !editNode && (
-          <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onSelect={select} />
-        )}
-        <aside aria-label="Layers" className="ed-left">
-          <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} act={act} onSelect={select} />
-          <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
-        </aside>
+        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} panel={panel} onTool={setTool} onPanel={(p) => setPanel(panel === p ? "layers" : p)} />
+        <div className="ed-left">
+          {/* Enter/Space on a focused tab activate it; keep them from the editor's global shortcuts. */}
+          <div role="tablist" aria-label="Left panel" className="ed-ltabs" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>
+            {TABS.map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={left === id} className="ed-tab" disabled={!!editNode && id !== "layers"}
+                onClick={(e) => { setPanel(id); e.currentTarget.blur(); }}>{label}</button>
+            ))}
+          </div>
+          {left === "layers" && (
+            <aside aria-label="Layers" className="ed-pane">
+              <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} act={act} onSelect={select} />
+              <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
+            </aside>
+          )}
+          {left === "shapes" && (
+            <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onTool={setTool} onSelect={select} />
+          )}
+          {left === "visuals" && (
+            <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onSelect={select} />
+          )}
+        </div>
         <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} tool={tool} zoom={zoom} pan={pan}
           editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys}
           act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
