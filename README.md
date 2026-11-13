@@ -9,7 +9,7 @@ Requires Node 22+ and pnpm (`packageManager: pnpm@12.18.0`).
 ```bash
 pnpm i
 cp .env.example .env   # then set AUTH_SECRET: openssl rand -base64 32
-pnpm db:up   # Postgres 17 and MinIO (object storage) via Docker Compose
+pnpm db:up   # Postgres 17 and RustFS (object storage) via Docker Compose
 pnpm dev
 ```
 
@@ -18,13 +18,13 @@ Open http://localhost:5173 (the API server listens on `:3000` by default).
 ### Running without Docker
 
 - **Database:** Set `DATABASE_URL=pglite:./.data/pg` in `.env` to use embedded Postgres (PGlite) for development and skip `pnpm db:up`.
-- **Object storage:** Set `S3_ENDPOINT=memory:` in `.env` to keep uploads in server memory (lost on restart) instead of MinIO.
+- **Object storage:** Set `S3_ENDPOINT=memory:` in `.env` to keep uploads in server memory (lost on restart) instead of RustFS.
 
-Uploads live in S3-compatible object storage (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, optional `S3_REGION`). `pnpm db:up` starts MinIO on `:9000` (console `:9001`) and creates the `cherry` bucket; any S3-compatible service works in production.
+Uploads live in S3-compatible object storage (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, optional `S3_REGION`). `pnpm db:up` starts RustFS on `:9000` (console `:9001`, sign in with `rustfsadmin` / `rustfsadmin`) and creates the `cherry` bucket; any S3-compatible service works in production.
 
 ## Workspace structure
 
-- `apps/server` (`@cherry/server`) — Fastify 5 API, Better Auth, Drizzle ORM (PostgreSQL / PGlite), and S3/MinIO asset storage
+- `apps/server` (`@cherry/server`) — Fastify 5 API, Better Auth, Drizzle ORM (PostgreSQL / PGlite), and S3-compatible asset storage
 - `apps/web` (`@cherry/web`) — React 19 + Vite 8 + Konva (`react-konva`) web editor
 - `packages/doc` (`@cherry/doc`) — `.cherry` document Zod schemas, Yjs sync, units, and I/O
 - `packages/vector` (`@cherry/vector`) — Paper.js boolean operations, SVG import/export, and path editing
@@ -33,7 +33,7 @@ Uploads live in S3-compatible object storage (`S3_ENDPOINT`, `S3_BUCKET`, `S3_AC
 
 | Command | Description |
 | :--- | :--- |
-| `pnpm db:up` | Start Postgres 17 and MinIO via Docker Compose |
+| `pnpm db:up` | Start Postgres 17 and RustFS via Docker Compose |
 | `pnpm dev` | Run all workspaces in dev mode |
 | `pnpm typecheck` | Run `tsc --noEmit` across all workspaces |
 | `pnpm test` | Run Vitest unit & integration tests across all workspaces |

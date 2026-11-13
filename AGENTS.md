@@ -2,14 +2,14 @@
 
 ## Project Overview
 - **Name:** Cherry Berry (`cherry-berry`)
-- **Stack:** TypeScript (strict), pnpm workspaces, Fastify 5, Drizzle ORM, PostgreSQL 17 / PGlite, Better Auth, S3/MinIO, React 19, Vite 8, Konva (`react-konva`), Yjs, Paper.js, Zod, Vitest, Playwright
+- **Stack:** TypeScript (strict), pnpm workspaces, Fastify 5, Drizzle ORM, PostgreSQL 17 / PGlite, Better Auth, S3 (RustFS in dev), React 19, Vite 8, Konva (`react-konva`), Yjs, Paper.js, Zod, Vitest, Playwright
 - **Role:** Open-source design studio monorepo with a collaborative `.cherry` vector document engine, a Fastify API/asset server, and a React + Konva web editor.
 
 ## Architecture & Directory Map
 ```
 cherry-berry/
 ├── apps/
-│   ├── server/          # Fastify API, Better Auth, Drizzle DB & S3/MinIO storage
+│   ├── server/          # Fastify API, Better Auth, Drizzle DB & S3 storage
 │   │   ├── drizzle/     # SQL migrations and snapshots
 │   │   ├── src/         # Feature modules: assets/, designs/, reports/, shapes/, workspaces/, db/
 │   │   └── test/        # Vitest integration & unit tests
@@ -26,7 +26,7 @@ cherry-berry/
 | Purpose | Command | Notes |
 | :--- | :--- | :--- |
 | **Install** | `pnpm i` | Node `>=22`, pnpm workspaces (`pnpm-lock.yaml`) |
-| **Dev Run** | `pnpm db:up && pnpm dev` | Starts Postgres/MinIO, server, and Vite (`http://localhost:5173`) |
+| **Dev Run** | `pnpm db:up && pnpm dev` | Starts Postgres/RustFS, server, and Vite (`http://localhost:5173`) |
 | **Typecheck** | `pnpm typecheck` | Runs `tsc --noEmit` across all workspaces (no linter configured) |
 | **Test** | `pnpm test` | Runs `vitest run` across all workspaces (`pnpm --filter @cherry/web e2e` for Playwright) |
 | **Build** | `pnpm --filter @cherry/web build` | Builds `@cherry/web` with Vite (`dist/`) |

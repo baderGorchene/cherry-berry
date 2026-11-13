@@ -16,7 +16,7 @@ it("memory storage round-trips bytes", () => roundTrip(memoryStorage()));
 describe.skipIf(!process.env.TEST_S3_ENDPOINT)("s3 storage", () => {
   it("s3 storage round-trips bytes", () => roundTrip(s3Storage({
     endpoint: process.env.TEST_S3_ENDPOINT!, bucket: process.env.TEST_S3_BUCKET ?? "cherry",
-    accessKey: process.env.TEST_S3_ACCESS_KEY ?? "minioadmin", secretKey: process.env.TEST_S3_SECRET_KEY ?? "minioadmin",
+    accessKey: process.env.TEST_S3_ACCESS_KEY ?? "rustfsadmin", secretKey: process.env.TEST_S3_SECRET_KEY ?? "rustfsadmin",
     region: process.env.TEST_S3_REGION ?? "us-east-1",
   })));
 });

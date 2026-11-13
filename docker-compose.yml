@@ -9,22 +9,31 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/initdb:/docker-entrypoint-initdb.d:ro
-  minio:
-    image: minio/minio
-    command: server /data --console-address ":9001"
+  # S3-compatible object storage (Apache-2.0). API on :9000, web console on :9001.
+  rustfs:
+    image: rustfs/rustfs:1.0.1
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_VOLUMES: /data
+      RUSTFS_CONSOLE_ENABLE: "true"
     ports: ["9000:9000", "9001:9001"]
     volumes:
-      - miniodata:/data
-  minio-init:
-    image: minio/mc
-    depends_on: [minio]
+      - rustfsdata:/data
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:9000/health"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+  # One-shot: creates the `cherry` bucket once RustFS is healthy.
+  rustfs-init:
+    image: rustfs/rc:v0.1.37
+    depends_on:
+      rustfs: { condition: service_healthy }
     restart: "no"
     entrypoint: >
-      /bin/sh -c "until mc alias set local http://minio:9000 minioadmin minioadmin; do sleep 1; done;
-      mc mb --ignore-existing local/cherry"
+      sh -c "rc alias set local http://rustfs:9000 rustfsadmin rustfsadmin &&
+      rc bucket create --ignore-existing local/cherry"
 volumes:
   pgdata:
-  miniodata:
+  rustfsdata:
