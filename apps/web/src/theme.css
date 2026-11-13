@@ -49,6 +49,9 @@ a { color: var(--berry); }
   display: flex; flex-direction: column; gap: 16px;
 }
 .row { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; }
+button.row { cursor: pointer; }
+button.row:disabled { opacity: .6; cursor: default; }
+button.row:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px; }
 .av {
   width: 40px; height: 40px; border-radius: 10px; flex: none; display: flex; align-items: center; justify-content: center;
   font: 700 15px "Space Grotesk", sans-serif; background: var(--petal); color: var(--deep);

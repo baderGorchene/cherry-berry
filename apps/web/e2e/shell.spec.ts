@@ -101,7 +101,7 @@ test("sign in shows the welcome panel on wide screens only", async ({ page }) =>
   await page.goto("/sign-in");
   const h = page.getByRole("heading", { name: "Design freely. Own every file." });
   await expect(h).toBeVisible();
-  for (const b of ["Open source", "Self-hostable", "Print-ready PDF"]) await expect(page.getByText(b, { exact: true })).toBeVisible();
+  for (const b of ["Open source", "Self-hostable", "Vector editing"]) await expect(page.getByText(b, { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(h).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
@@ -126,5 +126,6 @@ test("viewers cannot create from presets on the new design page", async ({ page,
   await viewer.goto("/new");
   await expect(viewer.getByText("You have view-only access to this workspace.")).toBeVisible();
   await expect(viewer.getByRole("button", { name: /Social post/ })).toBeDisabled();
+  await expect(viewer.getByRole("button", { name: /Social post/ })).toHaveCSS("cursor", "default");
   await expect(viewer.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
 });

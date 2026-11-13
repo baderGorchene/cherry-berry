@@ -200,7 +200,7 @@ function Shell({ d }: { d: Ready }) {
           <div role="tablist" aria-label="Left panel" className="ed-ltabs" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>
             {TABS.map(([id, label]) => (
               <button key={id} role="tab" aria-selected={left === id} className="ed-tab" disabled={!!editNode && id !== "layers"}
-                onClick={(e) => { setPanel(id); e.currentTarget.blur(); }}>{label}</button>
+                onClick={(e) => { setPanel(id); if (e.detail > 0) e.currentTarget.blur(); }}>{label}</button>
             ))}
           </div>
           {left === "layers" && (

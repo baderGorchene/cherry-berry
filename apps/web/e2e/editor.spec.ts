@@ -184,6 +184,11 @@ test("left panel tabs switch between layers, shapes and visuals", async ({ page 
   await tab("Layers").click();
   await page.keyboard.press("r");
   await expect(page.getByRole("button", { name: "Rectangle (R)" })).toHaveAttribute("aria-pressed", "true");
+  // Keyboard activation keeps focus on the tab.
+  await tab("Visuals").focus();
+  await page.keyboard.press("Enter");
+  await expect(tab("Visuals")).toHaveAttribute("aria-selected", "true");
+  await expect(tab("Visuals")).toBeFocused();
 });
 
 test("pen draws a closed path", async ({ page }) => {

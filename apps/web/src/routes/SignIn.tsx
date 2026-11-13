@@ -41,7 +41,7 @@ export default function SignIn() {
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
           <span className="pill">Open source</span>
           <span className="pill">Self-hostable</span>
-          <span className="pill">Print-ready PDF</span>
+          <span className="pill">Vector editing</span>
         </div>
       </section>
 

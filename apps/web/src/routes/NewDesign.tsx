@@ -57,7 +57,7 @@ export default function NewDesign() {
             <p className="ph">Presets</p>
             {PRESETS.map((p) => (
               <button key={p.name} type="button" className="row" disabled={busy || viewOnly} title={viewOnly ? "View-only access" : undefined} onClick={() => create(p.body)}
-                style={{ background: "#fff", font: "inherit", color: "inherit", textAlign: "left", cursor: "pointer" }}>
+                style={{ background: "#fff", font: "inherit", color: "inherit", textAlign: "left" }}>
                 <span style={{ width: 48, height: 48, flex: "none", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--tint)", borderRadius: 10 }}>
                   <span style={{ width: p.w / 2, height: p.h / 2, background: p.bg, borderRadius: 3, border: p.bg === "#fff" ? "2px solid var(--berry)" : 0 }} />
                 </span>
