@@ -11,13 +11,13 @@ export type DesignSummary = {
   id: string; workspaceId: string; title: string; width: number; height: number;
   unit: string; colorMode: string; updatedAt: string; createdBy: string; kitId: string | null;
 };
-const summaryColumns = {
+export const summaryColumns = {
   id: designs.id, workspaceId: designs.workspaceId, title: designs.title, width: designs.width,
   height: designs.height, unit: designs.unit, colorMode: designs.colorMode,
   updatedAt: designs.updatedAt, createdBy: designs.createdBy, kitId: designs.kitId,
 };
 type Row = Omit<typeof designs.$inferSelect, "state" | "createdAt">;
-const summary = (d: Row): DesignSummary => ({
+export const summary = (d: Row): DesignSummary => ({
   id: d.id, workspaceId: d.workspaceId, title: d.title, width: d.width, height: d.height,
   unit: d.unit, colorMode: d.colorMode, updatedAt: d.updatedAt.toISOString(), createdBy: d.createdBy, kitId: d.kitId,
 });

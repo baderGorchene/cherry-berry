@@ -11,6 +11,7 @@ const STATUS = {
   invitation_wrong_email: 400,
   invalid_shape: 400,
   brand_locked: 403,
+  template_private_assets: 400,
 } as const;
 
 export type WorkspaceErrorCode = keyof typeof STATUS;

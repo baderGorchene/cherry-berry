@@ -7,7 +7,7 @@ import type { Storage } from "../storage";
 import * as svc from "./service";
 
 const CreateBody = z.object({
-  targetType: z.enum(["asset", "shape"]),
+  targetType: z.enum(["asset", "shape", "template"]),
   targetId: z.string(),
   reason: z.enum(["copyright", "inappropriate", "spam", "other"]),
   note: z.string().trim().max(500).default(""),

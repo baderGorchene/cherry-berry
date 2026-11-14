@@ -189,7 +189,7 @@ export const assetUses = pgTable("asset_uses", {
 
 export const reports = pgTable("reports", {
   id: uuid("id").primaryKey().defaultRandom(),
-  // Polymorphic (asset or shape), so targetId has no foreign key; readers join to the live target.
+  // Polymorphic (asset, shape or template), so targetId has no foreign key; readers join to the live target.
   targetType: text("target_type").notNull(),
   targetId: uuid("target_id").notNull(),
   reporterId: text("reporter_id").notNull().references(() => user.id, { onDelete: "cascade" }),
@@ -200,10 +200,39 @@ export const reports = pgTable("reports", {
   resolvedBy: text("resolved_by").references(() => user.id, { onDelete: "set null" }),
   resolvedAt: timestamp("resolved_at", { withTimezone: true }),
 }, (t) => [
-  check("reports_target_type", sql`${t.targetType} in ('asset','shape')`),
+  check("reports_target_type", sql`${t.targetType} in ('asset','shape','template')`),
   check("reports_reason", sql`${t.reason} in ('copyright','inappropriate','spam','other')`),
   check("reports_note", sql`char_length(${t.note}) <= 500`),
   check("reports_status", sql`${t.status} in ('open','dismissed','removed')`),
   uniqueIndex("reports_target_reporter").on(t.targetType, t.targetId, t.reporterId),
   index("reports_target_status").on(t.targetType, t.targetId, t.status),
+]);
+
+export const templates = pgTable("templates", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  visibility: text("visibility").notNull(),
+  status: text("status").notNull().default("published"),
+  kitId: uuid("kit_id").references(() => brandKits.id, { onDelete: "set null" }),
+  name: text("name").notNull(),
+  category: text("category").notNull(),
+  license: text("license").notNull(),
+  attribution: text("attribution").notNull().default(""),
+  width: real("width").notNull(),
+  height: real("height").notNull(),
+  unit: text("unit").notNull(),
+  colorMode: text("color_mode").notNull(),
+  state: bytea("state").notNull(),
+  createdBy: text("created_by").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  check("templates_visibility", sql`${t.visibility} in ('workspace','public')`),
+  check("templates_status", sql`${t.status} in ('published','pending')`),
+  check("templates_category", sql`${t.category} in ('social','print','presentation','cards','other')`),
+  check("templates_license", sql`${t.license} in ('cc0','cc-by','workspace-only')`),
+  check("templates_workspace_only", sql`(${t.license} = 'workspace-only') = (${t.visibility} = 'workspace')`),
+  check("templates_kit", sql`${t.kitId} is null or ${t.visibility} = 'workspace'`),
+  check("templates_cc_by", sql`${t.license} <> 'cc-by' or ${t.attribution} <> ''`),
+  index("templates_visibility_created").on(t.visibility, t.createdAt.desc()),
+  index("templates_workspace").on(t.workspaceId),
 ]);

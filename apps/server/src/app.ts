@@ -9,6 +9,7 @@ import { registerBrandRoutes } from "./brand/routes";
 import { registerDesignRoutes } from "./designs/routes";
 import { registerReportRoutes } from "./reports/routes";
 import { registerShapeRoutes } from "./shapes/routes";
+import { registerTemplateRoutes } from "./templates/routes";
 import { registerWorkspaceRoutes } from "./workspaces/routes";
 import rateLimit from "@fastify/rate-limit";
 
@@ -66,5 +67,6 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage 
   registerShapeRoutes(app, deps.db, requireUser);
   registerAssetRoutes(app, deps.db, deps.storage, requireUser);
   registerReportRoutes(app, deps.db, deps.storage, requireUser);
+  registerTemplateRoutes(app, deps.db, deps.storage, requireUser);
   return app;
 }

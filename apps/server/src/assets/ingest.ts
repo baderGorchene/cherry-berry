@@ -57,7 +57,7 @@ function sharpError(e: unknown): IngestError {
   return new IngestError(/pixel limit/i.test(m) ? "too_large" : "invalid_image", m);
 }
 
-async function thumbnail(input: Uint8Array): Promise<Uint8Array> {
+export async function thumbnail(input: Uint8Array): Promise<Uint8Array> {
   try {
     const out = await sharp(input, opts).autoOrient()
       .resize(THUMB, THUMB, { fit: "inside", withoutEnlargement: true }).webp().toBuffer();

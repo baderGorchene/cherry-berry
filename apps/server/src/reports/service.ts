@@ -4,11 +4,12 @@ import { assets, reports, shapes, user } from "../db/schema";
 import { HttpError } from "../errors";
 import { canSeeAsset, deleteAsset } from "../assets/service";
 import { deleteShape, findVisibleShape } from "../shapes/service";
+import { findPublicTemplate } from "../templates/service";
 import type { Storage } from "../storage";
 import { WorkspaceError } from "../workspaces/errors";
 import { getRole, UUID } from "../workspaces/service";
 
-export type TargetType = "asset" | "shape";
+export type TargetType = "asset" | "shape" | "template";
 export type Reason = "copyright" | "inappropriate" | "spam" | "other";
 export type QueueRow = {
   id: string; targetType: TargetType; targetId: string; title: string; reason: Reason; note: string;
@@ -18,6 +19,10 @@ export type QueueRow = {
 /** The target's uploader if `userId` can see it (the base visibility rule, not design-use access). */
 async function visibleTarget(db: Db, userId: string, type: TargetType, id: string) {
   if (!UUID.test(id)) return undefined;
+  if (type === "template") {
+    const found = await findPublicTemplate(db, userId, id);
+    return found && { createdBy: found.createdBy };
+  }
   if (type === "shape") {
     const found = await findVisibleShape(db, userId, id);
     return found && { createdBy: found.s.createdBy };

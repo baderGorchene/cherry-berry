@@ -57,6 +57,13 @@
       "when": 1794637327394,
       "tag": "0007_spotty_shard",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794637710150,
+      "tag": "0008_omniscient_morph",
+      "breakpoints": true
     }
   ]
 }
