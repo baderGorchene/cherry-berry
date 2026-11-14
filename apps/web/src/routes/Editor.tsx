@@ -13,7 +13,7 @@ import "../editor/editor.css";
 import BrandPanel from "../editor/BrandPanel";
 import { IconBack, IconRedo, IconUndo } from "../icons";
 import Canvas, { type Tool } from "../editor/Canvas";
-import { NUDGE, clampZoom, fitZoom } from "../editor/geometry";
+import { NUDGE, allIds, clampZoom, fitZoom } from "../editor/geometry";
 import Layers from "../editor/Layers";
 import PublishDialog from "../editor/PublishDialog";
 import Pages from "../editor/Pages";
@@ -79,7 +79,7 @@ function Shell({ d }: { d: Ready }) {
   const page = doc.pages.find((p) => p.id === sel.pageId) ?? doc.pages[0]!;
 
   // Drop a vanished page or selected ids when the page's nodes change.
-  const nodeIds = page.nodes.map((n) => n.id).join();
+  const nodeIds = allIds(page.nodes).join();
   useEffect(() => {
     const selected = sel.selected.filter((s) => findNode(page.nodes, s));
     if (page.id !== sel.pageId || selected.length !== sel.selected.length) setSel({ pageId: page.id, selected });

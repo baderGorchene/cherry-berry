@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { initials, type PresenceUser } from "./presence";
 
 /** Distinct people (me first), up to 4 circles then "+N". */
@@ -17,22 +17,32 @@ export function Avatars({ people }: { people: PresenceUser[] }) {
 export function SharePopover({ workspace }: { workspace: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [manual, setManual] = useState(false);
+  const toggle = useRef<HTMLButtonElement>(null);
+  const copyBtn = useRef<HTMLButtonElement>(null);
+  const input = useRef<HTMLInputElement>(null);
   const link = location.origin + location.pathname;
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [open]);
+  const close = () => { setOpen(false); toggle.current?.focus(); };
+  useEffect(() => { if (open) copyBtn.current?.focus(); }, [open]);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(link); // undefined on non-secure origins
+      setCopied(true);
+      setManual(false);
+    } catch {
+      setCopied(false);
+      setManual(true);
+      input.current?.select();
+    }
+  };
   return (
     <div className="ed-share">
-      <button className="btn" aria-expanded={open} onClick={() => { setOpen(!open); setCopied(false); }}>Share</button>
+      <button ref={toggle} className="btn" aria-expanded={open} onClick={() => { if (open) close(); else { setOpen(true); setCopied(false); setManual(false); } }}>Share</button>
       {open && (
-        <div className="ed-pop" role="dialog" aria-label="Share">
-          <input className="inp" readOnly aria-label="Design link" value={link} onFocus={(e) => e.currentTarget.select()} />
-          <button className="btn btn-p" onClick={() => navigator.clipboard.writeText(link).then(() => setCopied(true), () => {})}>
-            {copied ? "Copied" : "Copy link"}
-          </button>
+        <div className="ed-pop" role="dialog" aria-label="Share" onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); close(); } }}>
+          <input ref={input} className="inp" readOnly aria-label="Design link" value={link} onFocus={(e) => e.currentTarget.select()} />
+          <button ref={copyBtn} className="btn btn-p" onClick={copy}>{copied ? "Copied" : "Copy link"}</button>
+          {manual && <p role="status">Press Ctrl+C to copy</p>}
           <p className="muted">People in {workspace} can open this link.</p>
         </div>
       )}

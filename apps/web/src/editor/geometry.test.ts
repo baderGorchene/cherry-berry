@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest";
 import { createShape, createText, type CherryNode } from "@cherry/doc";
 import { scalePath } from "@cherry/vector";
-import { fitZoom, fromKonvaTransform, toKonvaAttrs } from "./geometry";
+import { allIds, fitZoom, fromKonvaTransform, toKonvaAttrs } from "./geometry";
 
 const rect = { ...createShape("rect", { x: 10, y: 20, width: 100, height: 50 }), rotation: 30 } as CherryNode;
 
@@ -43,5 +43,13 @@ describe("geometry", () => {
     // Bleed widens the page on both sides; mm pages are converted to px.
     expect(fitZoom({ width: 100, height: 100, unit: "mm", bleed: 5 }, { width: 1000, height: 1000 }))
       .toBeCloseTo((1000 - 96) / (110 * 96 / 25.4));
+  });
+});
+
+describe("allIds", () => {
+  test("includes group children", () => {
+    const a = createShape("rect", { x: 0, y: 0, width: 1, height: 1 }), b = createShape("rect", { x: 0, y: 0, width: 1, height: 1 });
+    const g = { ...createShape("rect", { x: 0, y: 0, width: 1, height: 1 }), kind: "group", children: [b] } as unknown as CherryNode;
+    expect(allIds([a, g])).toEqual([a.id, g.id, b.id]);
   });
 });

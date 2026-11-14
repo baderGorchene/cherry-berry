@@ -36,3 +36,7 @@ export function fitZoom(
     (viewport.height - 2 * padding) / toPx(page.height + b, page.unit),
   ));
 }
+
+/** Every node id on a page, including group children. */
+export const allIds = (nodes: CherryNode[]): string[] =>
+  nodes.flatMap((n) => [n.id, ...(n.kind === "group" ? allIds(n.children) : [])]);

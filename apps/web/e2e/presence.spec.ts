@@ -58,3 +58,16 @@ test("share copies the link", async ({ page, context }) => {
   await expect(page.getByRole("button", { name: "Copied" })).toBeVisible();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(page.url());
 });
+
+test("share falls back when the clipboard is unavailable, and Escape only closes it", async ({ page }) => {
+  await page.addInitScript(() => Object.defineProperty(navigator, "clipboard", { value: undefined }));
+  await newPost(page);
+  const share = page.getByRole("button", { name: "Share" });
+  await share.click();
+  await expect(page.getByRole("button", { name: "Copy link" })).toBeFocused();
+  await page.getByRole("button", { name: "Copy link" }).click();
+  await expect(page.getByText("Press Ctrl+C to copy")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Share" })).toHaveCount(0);
+  await expect(share).toBeFocused();
+});
