@@ -60,6 +60,8 @@ export default function Brand() {
   const ws = list && currentWorkspace.pick(list);
   const canEdit = ws?.role === "owner" || ws?.role === "admin";
   const kit = kits?.find((k) => k.id === kitId) ?? null;
+  const kitsRef = useRef(kits);
+  kitsRef.current = kits;
   useKitFonts(kit);
 
   const load = (pick?: string) => ws && listKits(ws.id).then((k) => {
@@ -77,13 +79,17 @@ export default function Brand() {
 
   const fail = (e: unknown) => setError(errorMessage(e));
   // ponytail: whole-kit PUT, last write wins; add per-field patches if two admins edit at once
-  const save = (content: BrandKitContent, name = kit!.name) => {
-    const id = kit!.id;
+  // Every change is computed from the latest kit state (a ref, so awaits and quick successive edits never use a stale render).
+  const update = (id: string, fn: (c: BrandKitContent) => BrandKitContent) => {
+    const cur = kitsRef.current?.find((k) => k.id === id);
+    if (!cur) return;
+    const content = fn(cur.content);
+    kitsRef.current = kitsRef.current!.map((k) => (k.id === id ? { ...k, content } : k));
+    setKits(kitsRef.current);
     setError("");
-    setKits((ks) => ks && ks.map((k) => (k.id === id ? { ...k, name, content } : k)));
-    saveKit(id, { name, content }).catch((e) => { fail(e); void load(); });
+    saveKit(id, { name: cur.name, content }).catch((e) => { fail(e); void load(); });
   };
-  const edit = (fn: (c: BrandKitContent) => BrandKitContent) => save(fn(kit!.content));
+  const edit = (fn: (c: BrandKitContent) => BrandKitContent) => update(kit!.id, fn);
 
   const newKit = async (name: string | null, content?: BrandKitContent) => {
     if (!name?.trim()) return;
@@ -111,8 +117,7 @@ export default function Brand() {
   const saveColor = () => {
     if (!colorForm) return;
     const { isNew, ...c } = colorForm;
-    const colors = isNew ? [...kit!.content.colors, c] : kit!.content.colors.map((x) => (x.id === c.id ? c : x));
-    edit((k) => ({ ...k, colors }));
+    edit((k) => ({ ...k, colors: isNew ? [...k.colors, c] : k.colors.map((x) => (x.id === c.id ? c : x)) }));
     setColorForm(null);
   };
 
@@ -125,13 +130,13 @@ export default function Brand() {
     if (!file || !kit) return;
     const pre = precheck(file);
     if (pre !== "ok") return fail(new ApiError(400, pre === "too_large" ? "upload_too_large" : pre));
-    const key = logoSlot.current;
+    const key = logoSlot.current, id = kit.id;
     try {
       const { asset } = await uploadAsset(file, {
         title: `${kit.name} logo – ${SLOTS.find((s) => s[0] === key)![1]}`, tags: ["logo"], license: "own", attribution: "",
         visibility: "workspace", workspaceId: ws.id,
       });
-      edit((c) => ({ ...c, logos: { ...c.logos, [key]: asset.id } }));
+      update(id, (c) => ({ ...c, logos: { ...c.logos, [key]: asset.id } }));
     } catch (e) { fail(e); }
   };
 
@@ -233,7 +238,7 @@ export default function Brand() {
               </div>
               {STYLES.map(([key, label, sample]) => {
                 const s = kit.content.typography[key];
-                const set = (p: Partial<typeof s>) => edit((c) => ({ ...c, typography: { ...c.typography, [key]: { ...s, ...p } } }));
+                const set = (p: Partial<typeof s>) => edit((c) => ({ ...c, typography: { ...c.typography, [key]: { ...c.typography[key], ...p } } }));
                 const families = kitFamilies(kit);
                 return (
                   <div key={key} className="tt-row">
@@ -332,7 +337,7 @@ export default function Brand() {
                   <div key={key} className="tgl">
                     <span>{text}</span>
                     <button type="button" role="switch" aria-checked={on} aria-label={name} className="tgl-sw" disabled={!canEdit}
-                      onClick={() => edit((c) => ({ ...c, rules: { ...c.rules, [key]: !on } }))} />
+                      onClick={() => edit((c) => ({ ...c, rules: { ...c.rules, [key]: !c.rules[key] } }))} />
                   </div>
                 );
               })}

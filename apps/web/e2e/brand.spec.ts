@@ -12,12 +12,19 @@ async function startKit(page: Page, name = "North Studio brand") {
   await expect(page.getByLabel("Brand kit", { exact: true })).toContainText(name);
 }
 
+/** Runs an edit and waits for its PUT to finish, so a reload never races the save. */
+const saved = async (page: Page, act: () => Promise<unknown>) => {
+  const put = page.waitForResponse((r) => r.request().method() === "PUT" && r.url().includes("/api/brand-kits/"));
+  await act();
+  expect((await put).ok()).toBe(true);
+};
+
 async function addColor(page: Page, name: string, hex: string, role = "primary") {
   await page.getByRole("button", { name: "+ Add color" }).click();
   await page.getByLabel("Color name").fill(name);
   await page.getByLabel("Color role").selectOption(role);
   await page.getByLabel("Hex", { exact: true }).fill(hex);
-  await page.getByRole("button", { name: "Save color" }).click();
+  await saved(page, () => page.getByRole("button", { name: "Save color" }).click());
 }
 
 test("admin builds a kit", async ({ page }) => {
@@ -26,10 +33,10 @@ test("admin builds a kit", async ({ page }) => {
   await expect(page.getByText("AAA text")).toBeVisible();
   await addColor(page, "Petal", "#FFC0DE", "surface");
   await expect(page.getByText("Background only")).toBeVisible();
-  await page.getByLabel("Heading font", { exact: true }).selectOption("Georgia");
+  await saved(page, () => page.getByLabel("Heading font", { exact: true }).selectOption("Georgia"));
   const sw = page.getByRole("switch", { name: "Lock logos" });
   await expect(sw).toHaveAttribute("aria-checked", "true");
-  await sw.click();
+  await saved(page, () => sw.click());
   await expect(sw).toHaveAttribute("aria-checked", "false");
   await expect(page.getByRole("alert")).toHaveCount(0);
 
@@ -61,13 +68,13 @@ test("uploads a font and a logo", async ({ page }) => {
   page.once("dialog", (d) => { expect(d.message()).toBe("Only upload a logo your organisation owns. Continue?"); void d.accept(); });
   const chooser = page.waitForEvent("filechooser");
   await slot.getByRole("button", { name: /Primary/ }).click();
-  await (await chooser).setFiles({ name: "logo.png", mimeType: "image/png", buffer: uniquePng() });
+  await saved(page, async () => (await chooser).setFiles({ name: "logo.png", mimeType: "image/png", buffer: uniquePng() }));
   await expect(slot.getByRole("img", { name: "Primary logo" })).toBeVisible();
   await expect(slot.getByRole("button", { name: "Replace" })).toBeVisible();
 
   await page.reload();
   await expect(slot.getByRole("img", { name: "Primary logo" })).toBeVisible();
-  await slot.getByRole("button", { name: "Remove" }).click();
+  await saved(page, () => slot.getByRole("button", { name: "Remove" }).click());
   await expect(slot.getByRole("img")).toHaveCount(0);
   await expect(slot.getByRole("button", { name: /Primary/ })).toBeVisible();
 });
