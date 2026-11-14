@@ -1,12 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router";
 import { getSession, type User, type Workspace } from "./api";
+import Brand from "./routes/Brand";
 import Editor from "./routes/Editor";
 import Home from "./routes/Home";
 import Library from "./routes/Library";
 import NewDesign from "./routes/NewDesign";
 import Shapes from "./routes/Shapes";
 import SignIn from "./routes/SignIn";
+import Templates from "./routes/Templates";
 import Workspaces from "./routes/Workspaces";
 
 type SessionState = { user: User | null; setUser(u: User | null): void };
@@ -40,6 +42,8 @@ export default function App() {
         <Route path="/" element={<RequireUser><Home /></RequireUser>} />
         <Route path="/library" element={<RequireUser><Library /></RequireUser>} />
         <Route path="/shapes" element={<RequireUser><Shapes /></RequireUser>} />
+        <Route path="/brand" element={<RequireUser><Brand /></RequireUser>} />
+        <Route path="/templates" element={<RequireUser><Templates /></RequireUser>} />
         <Route path="/new" element={<RequireUser><NewDesign /></RequireUser>} />
         <Route path="/d/:id" element={<RequireUser><Editor /></RequireUser>} />
         <Route path="*" element={<Navigate to="/" replace />} />

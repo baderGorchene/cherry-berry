@@ -2,14 +2,17 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { ApiError, myWorkspaces, signOut, type Workspace } from "./api";
 import { currentWorkspace, useSession } from "./App";
-import { IconChevron, IconHome, IconImage, IconShapes } from "./icons";
+import { IconBrand, IconChevron, IconHome, IconImage, IconShapes, IconTemplate } from "./icons";
 import { initials } from "./routes/Workspaces";
 
 const ROLE: Record<string, string> = { owner: "Owner", admin: "Admin", editor: "Editor", viewer: "Viewer" };
-const LINKS = [["home", "/", "Home", IconHome], ["library", "/library", "Visual library", IconImage], ["shapes", "/shapes", "Shapes", IconShapes]] as const;
+const LINKS = [
+  ["home", "/", "Home", IconHome], ["templates", "/templates", "Templates", IconTemplate], ["library", "/library", "Visual library", IconImage],
+  ["shapes", "/shapes", "Shapes", IconShapes], ["brand", "/brand", "Brand kits", IconBrand],
+] as const;
 
 /** Page frame: brand, workspace switcher, page links and sign out (bottom tab bar on phones). `onSwitch` lets the page follow a workspace change; `bleed` drops the page padding so the page can run a flush side panel. */
-export default function AppShell({ active, onSwitch, bleed, children }: { active: "home" | "library" | "shapes"; onSwitch?(id: string): void; bleed?: boolean; children: ReactNode }) {
+export default function AppShell({ active, onSwitch, bleed, children }: { active: "home" | "templates" | "library" | "shapes" | "brand"; onSwitch?(id: string): void; bleed?: boolean; children: ReactNode }) {
   const { setUser } = useSession();
   const [list, setList] = useState<Workspace[]>([]);
   const [currentId, setCurrentId] = useState(currentWorkspace.get());

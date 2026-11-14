@@ -1,4 +1,4 @@
-import type { Paint, Stroke } from "@cherry/doc";
+import type { BrandKitContent, Paint, Stroke } from "@cherry/doc";
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string) { super(code); }
@@ -50,7 +50,7 @@ export const acceptInvitation = (token: string) =>
 
 export type Design = {
   id: string; workspaceId: string; title: string; width: number; height: number;
-  unit: string; colorMode: string; updatedAt: string; createdBy: string;
+  unit: string; colorMode: string; updatedAt: string; createdBy: string; kitId: string | null;
 };
 export type NewDesign = { title: string; width: number; height: number; unit: string; colorMode: string; bleed?: number };
 
@@ -140,6 +140,44 @@ export const assetUrl = (id: string, kind: "file" | "thumb") => `/api/assets/${e
 export type ReportBody = { targetType: "asset" | "shape"; targetId: string; reason: "copyright" | "inappropriate" | "spam" | "other"; note?: string };
 export const reportItem = (body: ReportBody) => lib(api<{ report: { id: string } }>("/api/reports", { body }));
 
+export type Font = { id: string; kitId: string; family: string; weight: number; style: "normal" | "italic"; format: "woff2" | "woff" | "ttf" | "otf"; bytes: number };
+export type BrandKit = { id: string; workspaceId: string; name: string; content: BrandKitContent; fonts: Font[]; updatedAt: string };
+
+export const listKits = (workspaceId: string) => api<{ kits: BrandKit[] }>(`/api/workspaces/${enc(workspaceId)}/brand-kits`).then((r) => r.kits);
+export const createKit = (workspaceId: string, body: { name: string; content?: BrandKitContent }) =>
+  api<{ kit: BrandKit }>(`/api/workspaces/${enc(workspaceId)}/brand-kits`, { body }).then((r) => r.kit);
+export const getKit = (id: string) => api<{ kit: BrandKit }>(`/api/brand-kits/${enc(id)}`).then((r) => r.kit);
+export const saveKit = (id: string, body: { name: string; content: BrandKitContent }) =>
+  api<{ kit: BrandKit }>(`/api/brand-kits/${enc(id)}`, { method: "PUT", body }).then((r) => r.kit);
+export const deleteKit = (id: string) => api<void>(`/api/brand-kits/${enc(id)}`, { method: "DELETE" });
+export const uploadFont = (kitId: string, file: File, meta: { family: string; weight: number; style: "normal" | "italic" }) => {
+  const f = new FormData();
+  f.set("family", meta.family);
+  f.set("weight", String(meta.weight));
+  f.set("style", meta.style);
+  f.set("confirmed", "true"); // the caller's dialog collects the rights confirmation
+  f.set("file", file); // after the fields, so the server has them when it reads the file part
+  return api<{ font: Font }>(`/api/brand-kits/${enc(kitId)}/fonts`, { body: f }).then((r) => r.font);
+};
+export const deleteFont = (id: string) => api<void>(`/api/fonts/${enc(id)}`, { method: "DELETE" });
+export const fontUrl = (id: string) => `/api/fonts/${enc(id)}/file`;
+export const setDesignKit = (designId: string, kitId: string | null) =>
+  api<{ design: Design }>(`/api/designs/${enc(designId)}`, { method: "PATCH", body: { kitId } }).then((r) => r.design);
+
+export type TemplateCategory = "social" | "print" | "presentation" | "cards" | "other";
+export type Template = {
+  id: string; workspaceId: string; visibility: "workspace" | "public"; status: "published" | "pending";
+  kitId: string | null; kitName: string | null; name: string; category: TemplateCategory; license: "cc0" | "cc-by" | "workspace-only";
+  attribution: string; width: number; height: number; unit: string; colorMode: string;
+  createdBy: string; authorName: string; createdAt: string; mine: boolean;
+};
+export const listTemplates = (scope: "workspace" | "public", opts: { workspaceId?: string; q?: string; category?: TemplateCategory } = {}) => {
+  const qs = new URLSearchParams({ scope });
+  for (const [k, v] of Object.entries(opts)) if (v) qs.set(k, v);
+  return api<{ templates: Template[] }>(`/api/templates?${qs}`).then((r) => r.templates);
+};
+export const templateThumbUrl = (id: string) => `/api/templates/${enc(id)}/thumb`;
+
 export function toBase64(u8: Uint8Array): string {
   let s = "";
   for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
@@ -176,6 +214,10 @@ const COPY: Record<string, string> = {
   rights_not_confirmed: "Confirm you have the right to share this file.",
   too_large: "This design is too large to save.",
   forbidden: "You have view-only access to this design.",
+  brand_locked: "A brand kit locks that part of the design.",
+  invalid_logo: "That logo isn't available to this workspace.",
+  invalid_font: "That file isn't a font we can use. Choose WOFF2, WOFF, TTF or OTF.",
+  template_private_assets: "Every image in a template must be visible to everyone who can see the template.",
   invalid_document: "This change couldn't be saved because the design became invalid.",
 };
 

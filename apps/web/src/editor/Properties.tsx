@@ -5,9 +5,9 @@ import { scalePath, type BoolOp } from "@cherry/vector";
 import ReuseShape from "./SaveShapeDialog";
 import { withTextHeight } from "./Canvas";
 import { getAsset, type Asset } from "../api";
+import { BUILT_IN_FONTS } from "../brand/fonts";
 import { LICENSES } from "../library/assets";
 
-const FONTS = ["Inter", "Space Grotesk", "Georgia", "Arial", "Times New Roman", "Courier New"];
 const HEX = /^#[0-9A-Fa-f]{6}$/;
 const round2 = (n: number) => String(Math.round(n * 100) / 100);
 
@@ -190,7 +190,7 @@ export default function Properties({ ydoc, page, workspaceId, nodes, readOnly, a
           <h2 className="ed-ph">Text</h2>
           <label className="ed-f"><b>Font</b>
             <select value={n.fontFamily} disabled={readOnly} onChange={(e) => set(n, { fontFamily: e.target.value })}>
-              {(FONTS.includes(n.fontFamily) ? FONTS : [n.fontFamily, ...FONTS]).map((f) => <option key={f}>{f}</option>)}
+              {(BUILT_IN_FONTS.includes(n.fontFamily) ? BUILT_IN_FONTS : [n.fontFamily, ...BUILT_IN_FONTS]).map((f) => <option key={f}>{f}</option>)}
             </select>
           </label>
           <div className="ed-grid">

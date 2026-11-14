@@ -49,7 +49,7 @@ test("phone width has a bottom nav and no horizontal scroll", async ({ page }) =
   await signUp(page, unique("phone"));
   await createWorkspace(page, "Phone Studio");
   await page.setViewportSize({ width: 390, height: 844 });
-  for (const path of ["/", "/library", "/shapes", "/workspaces", "/new"]) {
+  for (const path of ["/", "/templates", "/library", "/shapes", "/brand", "/workspaces", "/new"]) {
     await page.goto(path);
     if (!["/workspaces", "/new"].includes(path)) await expect(main(page).getByRole("link", { name: "Visual library" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);

@@ -69,3 +69,19 @@ export function uniquePng(): Buffer {
     chunk("IDAT", deflateSync(raw)), chunk("IEND", Buffer.alloc(0)),
   ]);
 }
+
+/** Invites a new user as an editor of `owner`'s workspace and returns that user's page, signed in and on the home page. */
+export async function openAsEditor(browser: Browser, owner: Page): Promise<Page> {
+  const { workspaces } = await (await owner.request.get("/api/workspaces/mine")).json();
+  const email = unique("editor");
+  const res = await owner.request.post(`/api/workspaces/${workspaces[0].id}/invitations`, { data: { email, role: "editor" } });
+  expect(res.status()).toBe(201);
+  const { token } = await res.json();
+
+  const editor = await (await browser.newContext()).newPage();
+  await signUp(editor, email);
+  await editor.getByLabel("Invitation link").fill(token);
+  await editor.getByRole("button", { name: "Accept invitation" }).click();
+  await expect(editor).toHaveURL(/\/$/);
+  return editor;
+}
