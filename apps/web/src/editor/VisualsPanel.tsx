@@ -19,6 +19,22 @@ function Chips<T>({ label, options, value, onPick }: { label: string; options: [
   );
 }
 
+/** Links the asset to the design, then places it centred on the page and selects it. Returns an error message, or null. */
+export async function placeAsset(
+  ydoc: Y.Doc, page: Page, designId: string, a: Asset, act: (fn: () => void) => void, onSelect: (ids: string[]) => void,
+): Promise<string | null> {
+  try {
+    await linkAssetToDesign(designId, a.id);
+  } catch {
+    return "Couldn't link this visual to the design. Try again.";
+  }
+  // Placed even if the panel closed meanwhile: the person asked for it and the link now exists.
+  const n = imageNode(a, page);
+  act(() => addNode(ydoc, page.id, n));
+  onSelect([n.id]);
+  return null;
+}
+
 export default function VisualsPanel({ ydoc, page, designId, workspaceId, readOnly, act, onSelect }: {
   ydoc: Y.Doc; page: Page; designId: string; workspaceId: string; readOnly: boolean;
   act(fn: () => void): void; onSelect(ids: string[]): void;
@@ -34,15 +50,8 @@ export default function VisualsPanel({ ydoc, page, designId, workspaceId, readOn
 
   const insert = async (a: Asset) => {
     setError("");
-    try {
-      await linkAssetToDesign(designId, a.id);
-    } catch {
-      return setError("Couldn't link this visual to the design. Try again.");
-    }
-    // Inserted even if the panel closed meanwhile: the person asked for it and the link now exists.
-    const n = imageNode(a, page);
-    act(() => addNode(ydoc, page.id, n));
-    onSelect([n.id]);
+    const err = await placeAsset(ydoc, page, designId, a, act, onSelect);
+    if (err) setError(err);
   };
 
   return (

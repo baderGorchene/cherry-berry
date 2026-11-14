@@ -4,8 +4,9 @@ import { LOCAL, removeNodes, updateNode, type CherryNode, type Page } from "@che
 import { scalePath, type BoolOp } from "@cherry/vector";
 import ReuseShape from "./SaveShapeDialog";
 import { withTextHeight } from "./Canvas";
-import { getAsset, type Asset } from "../api";
-import { BUILT_IN_FONTS } from "../brand/fonts";
+import { getAsset, type Asset, type BrandKit } from "../api";
+import { BUILT_IN_FONTS, kitFamilies } from "../brand/fonts";
+import { KitSelect } from "./BrandPanel";
 import { LICENSES } from "../library/assets";
 
 const HEX = /^#[0-9A-Fa-f]{6}$/;
@@ -94,8 +95,8 @@ function VisualInfo({ assetId }: { assetId: string }) {
   );
 }
 
-export default function Properties({ ydoc, page, workspaceId, nodes, readOnly, act, combinable, canConvert, message, onCombine, onConvert }: {
-  ydoc: Y.Doc; page: Page; workspaceId: string; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
+export default function Properties({ ydoc, page, workspaceId, designId, kit, onLinked, nodes, readOnly, act, combinable, canConvert, message, onCombine, onConvert }: {
+  ydoc: Y.Doc; page: Page; workspaceId: string; designId: string; kit: BrandKit | null; onLinked(kitId: string | null): void; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
   combinable: boolean; canConvert: boolean; message: string; onCombine(op: BoolOp): void; onConvert(n: CherryNode): void;
 }) {
   const { id: pageId, unit } = page;
@@ -105,6 +106,7 @@ export default function Properties({ ydoc, page, workspaceId, nodes, readOnly, a
         <h2 className="ed-ph">Page</h2>
         <p style={{ fontSize: 13 }}>{page.width} × {page.height} {unit}</p>
         <p style={{ fontSize: 13 }}>{page.colorMode.toUpperCase()}</p>
+        {!readOnly && <KitSelect label="Brand kit" workspaceId={workspaceId} designId={designId} kitId={kit?.id ?? null} onLinked={onLinked} />}
       </section>
       <p className="muted" style={{ fontSize: 13 }}>
         {readOnly ? "Select a layer to see its properties." : "Select a layer to edit it, or pick a tool on the left."}
@@ -163,6 +165,19 @@ export default function Properties({ ydoc, page, workspaceId, nodes, readOnly, a
   const stroke = n.kind === "rect" || n.kind === "ellipse" || n.kind === "path" ? n.stroke : undefined;
   const hasStroke = n.kind === "rect" || n.kind === "ellipse" || n.kind === "path";
   const hasFill = hasStroke || n.kind === "text";
+  const swatches = !!kit?.content.rules.kitColorsOnly && kit.content.colors.length > 0;
+  const fonts = kit ? kitFamilies(kit) : BUILT_IN_FONTS;
+  const colorInput = (label: string, color: string, onCommit: (hex: string) => void) => swatches ? (
+    <div>
+      <div className="chips">
+        {kit.content.colors.map((c) => (
+          <button key={c.id} type="button" className="ed-swatch" aria-label={c.name} title={`${c.name} ${c.hex}`}
+            disabled={readOnly} style={{ background: c.hex }} onClick={() => onCommit(c.hex.toUpperCase())} />
+        ))}
+      </div>
+      <p className="muted" style={{ fontSize: 13 }}>{color || "None"}</p>
+    </div>
+  ) : <ColorField label={label} color={color} disabled={readOnly} onCommit={onCommit} />;
   const paint = (color: string, prev?: Paint): Paint => ({ type: "solid", color, opacity: prev?.opacity ?? 1 });
 
   return (
@@ -190,7 +205,7 @@ export default function Properties({ ydoc, page, workspaceId, nodes, readOnly, a
           <h2 className="ed-ph">Text</h2>
           <label className="ed-f"><b>Font</b>
             <select value={n.fontFamily} disabled={readOnly} onChange={(e) => set(n, { fontFamily: e.target.value })}>
-              {(BUILT_IN_FONTS.includes(n.fontFamily) ? BUILT_IN_FONTS : [n.fontFamily, ...BUILT_IN_FONTS]).map((f) => <option key={f}>{f}</option>)}
+              {(fonts.includes(n.fontFamily) ? fonts : [n.fontFamily, ...fonts]).map((f) => <option key={f}>{f}</option>)}
             </select>
           </label>
           <div className="ed-grid">
@@ -215,16 +230,14 @@ export default function Properties({ ydoc, page, workspaceId, nodes, readOnly, a
       {hasFill && (
         <section className="ed-sec">
           <h2 className="ed-ph">Fill</h2>
-          <ColorField label="Fill" color={fill?.color ?? ""} disabled={readOnly}
-            onCommit={(c) => set(n, { fill: c ? paint(c, fill) : undefined })} />
+          {colorInput("Fill", fill?.color ?? "", (c) => set(n, { fill: c ? paint(c, fill) : undefined }))}
         </section>
       )}
 
       {hasStroke && (
         <section className="ed-sec">
           <h2 className="ed-ph">Stroke</h2>
-          <ColorField label="Stroke" color={stroke?.paint.color ?? ""} disabled={readOnly}
-            onCommit={(c) => set(n, { stroke: c ? { paint: paint(c, stroke?.paint), width: stroke?.width ?? 1 } : undefined })} />
+          {colorInput("Stroke", stroke?.paint.color ?? "", (c) => set(n, { stroke: c ? { paint: paint(c, stroke?.paint), width: stroke?.width ?? 1 } : undefined }))}
           <Num label="Stroke width" unit={unit} value={stroke?.width ?? 0} disabled={readOnly}
             onCommit={(w) => set(n, { stroke: { paint: stroke?.paint ?? paint("#22142A"), width: Math.max(0, w) } })} />
         </section>

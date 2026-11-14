@@ -20,7 +20,7 @@ const PEN = svg(<><path d="M12 19l7-7 3 3-7 7z" /><path d="M18 13l-1.5-7.5L2 2l3
 
 /** Every button arms a tool; Text and shape tools then place on the canvas (click, or drag out a box). */
 export default function Toolbar({ readOnly, tool, editing, panel, onTool, onPanel }: {
-  readOnly: boolean; tool: Tool; editing: boolean; panel: "layers" | "shapes" | "visuals"; onTool(t: Tool): void; onPanel(p: "shapes" | "visuals"): void;
+  readOnly: boolean; tool: Tool; editing: boolean; panel: "layers" | "shapes" | "visuals" | "brand"; onTool(t: Tool): void; onPanel(p: "shapes" | "visuals"): void;
 }) {
   const on = (t: Tool, label: string) => ({
     className: `ed-ib${tool === t ? " ed-ib-on" : ""}`, "aria-pressed": tool === t, disabled: readOnly, onClick: () => onTool(t),

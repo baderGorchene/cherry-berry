@@ -11,6 +11,7 @@ import {
 import { fromKonvaTransform, toKonvaAttrs } from "./geometry";
 import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
 import TextEditor from "./TextEditor";
+import type { BrandKit } from "../api";
 import { useAssetImage } from "./useAssetImage";
 
 export type Tool = "select" | "text" | "pen" | "direct" | "add-anchor" | "convert-anchor" | BasicShape;
@@ -88,11 +89,11 @@ function NodeView({ n, unit, top, editing, ...events }: {
 }
 
 export default function Canvas({
-  ydoc, page, selected, readOnly, tool, zoom, pan, editingPath, anchors, pathKeys,
+  ydoc, page, selected, readOnly, tool, zoom, pan, editingPath, anchors, pathKeys, kit, fontsVersion,
   act, onSelect, onTool, onPan, onZoom, onViewport, onAnchors, onEditPath,
 }: {
   ydoc: Y.Doc; page: Page; selected: string[]; readOnly: boolean; tool: Tool; zoom: number; pan: Pt;
-  editingPath: string | null; anchors: AnchorRef[]; pathKeys: PathKeys;
+  editingPath: string | null; anchors: AnchorRef[]; pathKeys: PathKeys; kit: BrandKit | null; fontsVersion: number;
   act(fn: () => void): void; onSelect(ids: string[]): void; onTool(t: Tool): void;
   onPan(p: Pt): void; onZoom(z: number): void; onViewport(v: { width: number; height: number }): void;
   onAnchors(a: AnchorRef[]): void; onEditPath(id: string): void;
@@ -245,6 +246,9 @@ export default function Canvas({
     } else act(() => updateNode(ydoc, page.id, n.id, patch));
   };
 
+  // A selected logo keeps its proportions when the kit locks logos.
+  const logoIds = kit?.content.rules.lockLogos ? Object.values(kit.content.logos) : [];
+  const keepRatio = selected.some((s) => { const n = top(s); return n?.kind === "image" && logoIds.includes(n.assetId); });
   const narrow = selected.some((s) => { const n = top(s); return !!n && (n.kind === "text" || isLine(n)); });
   const editNode = draft ?? (editing ? top(editing) : undefined);
   const preview = drag && {
@@ -257,7 +261,7 @@ export default function Canvas({
       style={{ cursor: tool === "select" || tool === "direct" || readOnly ? "default" : "crosshair" }}>
       <Stage width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove}
         onMouseLeave={() => pathInput.current?.hover(null)} onWheel={onWheel}>
-        <Layer>
+        <Layer key={fontsVersion}>
           <Group x={origin.x} y={origin.y} scaleX={scale} scaleY={scale}>
             {page.bleed > 0 && (
               <Rect x={-page.bleed} y={-page.bleed} width={page.width + 2 * page.bleed} height={page.height + 2 * page.bleed}
@@ -289,7 +293,7 @@ export default function Canvas({
             )}
           </Group>
           {!readOnly && (
-            <Transformer ref={trRef} flipEnabled={false} rotateEnabled
+            <Transformer ref={trRef} flipEnabled={false} rotateEnabled keepRatio={keepRatio}
               borderStroke="#8E1EA2" anchorStroke="#8E1EA2" anchorFill="#fff" anchorSize={10} anchorCornerRadius={2}
               enabledAnchors={narrow ? ["middle-left", "middle-right"] : undefined}
               onTransformEnd={() => commitKonva(trRef.current!.nodes())} />

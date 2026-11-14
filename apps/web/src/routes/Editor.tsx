@@ -3,9 +3,12 @@ import { Link, useParams } from "react-router";
 import * as Y from "yjs";
 import type { AnchorRef, BoolOp } from "@cherry/vector";
 import {
-  duplicateNodes, fromPx, removeNodes, reorderNode, setTitle, updateNode, yToDoc, type CherryDocument, type CherryNode,
+  brandIssues, duplicateNodes, fromPx, removeNodes, reorderNode, setTitle, updateNode, yToDoc, type CherryDocument, type CherryNode,
 } from "@cherry/doc";
+import { getKit, type BrandKit } from "../api";
+import { useKitFonts } from "../brand/fonts";
 import "../editor/editor.css";
+import BrandPanel from "../editor/BrandPanel";
 import { IconBack, IconRedo, IconUndo } from "../icons";
 import Canvas, { type Tool } from "../editor/Canvas";
 import { NUDGE, clampZoom, fitZoom } from "../editor/geometry";
@@ -26,8 +29,8 @@ const TOOL_KEYS: Record<string, Tool> = { v: "select", t: "text", r: "rect", o: 
 // In path edit mode only the vector tools are armed by key; Shift+C (convert) is checked separately.
 const EDIT_KEYS: Record<string, Tool> = { a: "direct", p: "pen", "+": "add-anchor", "=": "add-anchor" };
 
-type Panel = "layers" | "shapes" | "visuals";
-const TABS: [Panel, string][] = [["layers", "Layers"], ["shapes", "Shapes"], ["visuals", "Visuals"]];
+type Panel = "layers" | "shapes" | "visuals" | "brand";
+const TABS: [Panel, string][] = [["layers", "Layers"], ["shapes", "Shapes"], ["visuals", "Visuals"], ["brand", "Brand"]];
 
 const BOOL_KEYS: Record<string, BoolOp> = { u: "union", s: "subtract", i: "intersect", e: "exclude" };
 
@@ -75,6 +78,18 @@ function Shell({ d }: { d: Ready }) {
     const selected = sel.selected.filter((s) => findNode(page.nodes, s));
     if (page.id !== sel.pageId || selected.length !== sel.selected.length) setSel({ pageId: page.id, selected });
   }, [doc]);
+
+  // The linked kit; a kit that is gone or unreadable leaves the design unlinked.
+  const [kitId, setKitId] = useState(d.design.kitId);
+  const [kit, setKit] = useState<BrandKit | null>(null);
+  useEffect(() => {
+    if (!kitId) return setKit(null);
+    let stale = false;
+    getKit(kitId).then((k) => !stale && setKit(k), () => !stale && setKit(null));
+    return () => { stale = true; };
+  }, [kitId]);
+  const fontsVersion = useKitFonts(kit);
+  const issueCount = kit ? brandIssues(page, kit.content).length : 0;
 
   const [message, setMessage] = useState("");
   useEffect(() => setMessage(""), [sel.selected.join()]);
@@ -200,7 +215,7 @@ function Shell({ d }: { d: Ready }) {
           <div role="tablist" aria-label="Left panel" className="ed-ltabs" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>
             {TABS.map(([id, label]) => (
               <button key={id} role="tab" aria-selected={left === id} className="ed-tab" disabled={!!editNode && id !== "layers"}
-                onClick={(e) => { setPanel(id); if (e.detail > 0) e.currentTarget.blur(); }}>{label}</button>
+                onClick={(e) => { setPanel(id); if (e.detail > 0) e.currentTarget.blur(); }}>{id === "brand" && issueCount ? `${label} (${issueCount})` : label}</button>
             ))}
           </div>
           {left === "layers" && (
@@ -215,14 +230,19 @@ function Shell({ d }: { d: Ready }) {
           {left === "visuals" && (
             <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onSelect={select} />
           )}
+          {left === "brand" && (
+            <BrandPanel ydoc={ydoc} page={page} kit={kit} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly}
+              act={act} selected={sel.selected} onSelect={select} onLinked={setKitId} />
+          )}
         </div>
         <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} tool={tool} zoom={zoom} pan={pan}
           editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys}
+          kit={kit} fontsVersion={fontsVersion}
           act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
           onAnchors={setAnchors} onEditPath={enterEdit} />
         {editNode
           ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
-          : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} nodes={selectedNodes} readOnly={readOnly} act={act}
+          : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} kit={kit} onLinked={setKitId} nodes={selectedNodes} readOnly={readOnly} act={act}
             combinable={operands.length >= 2} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} />}
       </div>
     </div>
