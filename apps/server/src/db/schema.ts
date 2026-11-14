@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, check, customType, integer, jsonb, index, pgTable, primaryKey, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { type AnyPgColumn, boolean, check, customType, integer, jsonb, index, pgTable, primaryKey, real, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 // PGlite returns bytea as Uint8Array, node-postgres as Buffer.
 const bytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
@@ -97,10 +97,21 @@ export const designs = pgTable("designs", {
   unit: text("unit").notNull(),
   colorMode: text("color_mode").notNull(),
   state: bytea("state").notNull(),
+  kitId: uuid("kit_id").references((): AnyPgColumn => brandKits.id, { onDelete: "set null" }),
   createdBy: text("created_by").notNull().references(() => user.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("designs_workspace_updated").on(t.workspaceId, t.updatedAt.desc())]);
+
+export const brandKits = pgTable("brand_kits", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  workspaceId: uuid("workspace_id").notNull().references(() => workspaces.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  content: jsonb("content").notNull(),
+  createdBy: text("created_by").notNull().references(() => user.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index("brand_kits_workspace").on(t.workspaceId)]);
 
 export const shapes = pgTable("shapes", {
   id: uuid("id").primaryKey().defaultRandom(),

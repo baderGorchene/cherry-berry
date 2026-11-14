@@ -43,6 +43,13 @@
       "when": 1794463321569,
       "tag": "0005_yummy_moira_mactaggert",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794636834588,
+      "tag": "0006_mean_wallow",
+      "breakpoints": true
     }
   ]
 }

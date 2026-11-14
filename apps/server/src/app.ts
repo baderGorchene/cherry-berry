@@ -5,6 +5,7 @@ import type { Db } from "./db/client";
 import type { Storage } from "./storage";
 import { HttpError } from "./errors";
 import { registerAssetRoutes } from "./assets/routes";
+import { registerBrandRoutes } from "./brand/routes";
 import { registerDesignRoutes } from "./designs/routes";
 import { registerReportRoutes } from "./reports/routes";
 import { registerShapeRoutes } from "./shapes/routes";
@@ -61,6 +62,7 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage 
   await app.register(rateLimit, { global: false });
   registerWorkspaceRoutes(app, deps.db, requireUser);
   registerDesignRoutes(app, deps.db, requireUser);
+  registerBrandRoutes(app, deps.db, requireUser);
   registerShapeRoutes(app, deps.db, requireUser);
   registerAssetRoutes(app, deps.db, deps.storage, requireUser);
   registerReportRoutes(app, deps.db, deps.storage, requireUser);

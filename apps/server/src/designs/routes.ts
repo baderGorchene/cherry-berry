@@ -15,6 +15,7 @@ const CreateBody = z.object({
 });
 const BASE64 = /^[A-Za-z0-9+/]*={0,2}$/;
 const StateBody = z.object({ state: z.string().refine((s) => s.length % 4 === 0 && BASE64.test(s)) });
+const KitBody = z.object({ kitId: z.string().nullable() });
 const IdParams = z.object({ id: z.string() });
 
 export function registerDesignRoutes(
@@ -34,6 +35,12 @@ export function registerDesignRoutes(
   app.get("/api/designs/:id", async (req) => {
     const user = await requireUser(req);
     return svc.openDesign(db, user.id, parse(IdParams, req.params).id);
+  });
+
+  app.patch("/api/designs/:id", async (req) => {
+    const user = await requireUser(req);
+    const id = parse(IdParams, req.params).id;
+    return { design: await svc.setDesignKit(db, user.id, id, parse(KitBody, req.body).kitId) };
   });
 
   app.put("/api/designs/:id/state", { bodyLimit: 10 * 1024 * 1024 }, async (req) => {

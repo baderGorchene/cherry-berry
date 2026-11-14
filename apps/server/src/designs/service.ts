@@ -1,25 +1,25 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import * as Y from "yjs";
-import { createDocument, docToY, yToDoc } from "@cherry/doc";
+import { brandLockViolation, createDocument, docToY, yToDoc } from "@cherry/doc";
 import type { Db } from "../db/client";
-import { designs } from "../db/schema";
+import { brandKits, designs } from "../db/schema";
 import { HttpError } from "../errors";
 import { WorkspaceError } from "../workspaces/errors";
 import { getRole, UUID, type Role } from "../workspaces/service";
 
 export type DesignSummary = {
   id: string; workspaceId: string; title: string; width: number; height: number;
-  unit: string; colorMode: string; updatedAt: string; createdBy: string;
+  unit: string; colorMode: string; updatedAt: string; createdBy: string; kitId: string | null;
 };
 const summaryColumns = {
   id: designs.id, workspaceId: designs.workspaceId, title: designs.title, width: designs.width,
   height: designs.height, unit: designs.unit, colorMode: designs.colorMode,
-  updatedAt: designs.updatedAt, createdBy: designs.createdBy,
+  updatedAt: designs.updatedAt, createdBy: designs.createdBy, kitId: designs.kitId,
 };
 type Row = Omit<typeof designs.$inferSelect, "state" | "createdAt">;
 const summary = (d: Row): DesignSummary => ({
   id: d.id, workspaceId: d.workspaceId, title: d.title, width: d.width, height: d.height,
-  unit: d.unit, colorMode: d.colorMode, updatedAt: d.updatedAt.toISOString(), createdBy: d.createdBy,
+  unit: d.unit, colorMode: d.colorMode, updatedAt: d.updatedAt.toISOString(), createdBy: d.createdBy, kitId: d.kitId,
 });
 const b64 = (u: Uint8Array) => Buffer.from(u).toString("base64");
 
@@ -73,9 +73,12 @@ export async function saveDesignState(db: Db, userId: string, id: string, incomi
     if (!row) throw new WorkspaceError("not_found");
     const ydoc = new Y.Doc();
     Y.applyUpdate(ydoc, row.state);
+    // Owners and admins are never checked, so only editors need the stored document.
+    const stored = role === "editor" ? yToDoc(ydoc) : undefined;
     try { Y.applyUpdate(ydoc, incoming); } catch { throw new HttpError(400, "invalid_document"); }
     const parsed = yToDoc(ydoc);
     if (!parsed.ok) throw new HttpError(400, "invalid_document");
+    if (stored?.ok && brandLockViolation(stored.doc, parsed.doc)) throw new WorkspaceError("brand_locked");
     const state = Y.encodeStateAsUpdate(ydoc);
     const page = parsed.doc.pages[0]!;
     const title = parsed.doc.title.trim().slice(0, 120) || "Untitled design";
@@ -85,4 +88,18 @@ export async function saveDesignState(db: Db, userId: string, id: string, incomi
     }).where(eq(designs.id, id)).returning(summaryColumns);
     return { design: summary(d!), state: b64(state) };
   });
+}
+
+/** Links a design to a brand kit of its own workspace, or unlinks it with null. */
+export async function setDesignKit(db: Db, userId: string, id: string, kitId: string | null): Promise<DesignSummary> {
+  const { design, role } = await loadWithRole(db, id, userId);
+  if (role === "viewer") throw new WorkspaceError("forbidden");
+  if (kitId !== null) {
+    const [kit] = UUID.test(kitId)
+      ? await db.select({ id: brandKits.id }).from(brandKits).where(and(eq(brandKits.id, kitId), eq(brandKits.workspaceId, design.workspaceId)))
+      : [];
+    if (!kit) throw new WorkspaceError("not_found");
+  }
+  const [d] = await db.update(designs).set({ kitId }).where(eq(designs.id, id)).returning(summaryColumns);
+  return summary(d!);
 }
