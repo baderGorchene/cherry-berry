@@ -96,7 +96,7 @@ async function processSvg(svg: Uint8Array): Promise<SvgResult> {
 // child that is mid-start (~1.5 s). A pool of reusable children would fix that if upload latency matters.
 type Child = { proc: ChildProcessWithoutNullStreams; ready: Promise<void>; done: Promise<{ out: Buffer; err: string }> };
 // Limits and the idle spare, exported so tests can force a cold child or shorten the clocks.
-export const svgChild: { jobMs: number; readyMs: number; maxWaiting: number; spare?: Child } = { jobMs: RENDER_MS, readyMs: 10_000, maxWaiting: 8 };
+export const svgChild: { jobMs: number; readyMs: number; maxWaiting: number; spare?: Child } = { jobMs: RENDER_MS, readyMs: 30_000, maxWaiting: 8 };
 const READY = "\u0006ready\n"; // render.mjs writes this on stderr once jsdom is loaded
 function startChild(): Child {
   const proc = spawn(process.execPath, [RENDER_SCRIPT, String(THUMB), String(MAX_PIXELS)], { stdio: ["pipe", "pipe", "pipe"] });
@@ -120,6 +120,8 @@ function startChild(): Child {
   for (const s of [proc.stdin, proc.stdout, proc.stderr]) (s as unknown as { unref(): void }).unref();
   return { proc, ready, done };
 }
+// Start the idle spare ahead of the first upload, so a cold jsdom load (slow on a busy machine) is not on its critical path.
+export function warmSvgChild() { svgChild.spare ??= startChild(); }
 function takeChild(): Child {
   const { spare } = svgChild;
   const c = spare && spare.proc.exitCode === null && !spare.proc.killed ? spare : startChild();

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { crc32 } from "node:zlib";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
-import { ingest, IngestError, renderStats, svgChild } from "../src/assets/ingest";
+import { ingest, IngestError, renderStats, svgChild, warmSvgChild } from "../src/assets/ingest";
 
 const solid = (w: number, h: number) =>
   sharp({ create: { width: w, height: h, channels: 3, background: "#8E1EA2" } });
@@ -244,7 +244,15 @@ describe("svg child lifecycle", () => {
     svgChild.readyMs = 50;
     try {
       expect(await code(ingest(small))).toBe("invalid_image");
-    } finally { svgChild.readyMs = 10000; }
+    } finally { svgChild.readyMs = 30000; }
+  });
+  it("warmSvgChild starts an idle spare once", () => {
+    svgChild.spare = undefined;
+    warmSvgChild();
+    const spare = svgChild.spare;
+    expect(spare).toBeDefined();
+    warmSvgChild();
+    expect(svgChild.spare).toBe(spare);
   });
   it("a full queue rejects the next svg as busy at once", async () => {
     svgChild.maxWaiting = 1;

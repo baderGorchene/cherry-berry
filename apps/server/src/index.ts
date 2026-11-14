@@ -1,6 +1,7 @@
 import { config as loadEnv } from "dotenv";
 import { fileURLToPath } from "node:url";
 import { buildApp } from "./app";
+import { warmSvgChild } from "./assets/ingest";
 import { loadConfig } from "./config";
 import { createDb } from "./db/client";
 import { runMigrations } from "./db/migrate";
@@ -12,4 +13,5 @@ const { db } = createDb(config.databaseUrl);
 await runMigrations(db);
 const app = await buildApp(config, { db, storage: createStorage(config.s3) });
 await app.listen({ port: config.port, host: "0.0.0.0" });
+warmSvgChild();
 console.log(`Cherry Berry server on :${config.port}`);
