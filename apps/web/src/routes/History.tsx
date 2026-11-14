@@ -37,14 +37,29 @@ function when(iso: string, now = Date.now()): string {
 const plural = (n: number) => `${n} ${n === 1 ? "change" : "changes"} outlined`;
 
 function Modal({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const opener = useRef(document.activeElement); // read during the first render, before any autofocus
+  const focusables = () => [...box.current!.querySelectorAll<HTMLElement>("button:not(:disabled), input, select, a[href]")];
+  useEffect(() => {
+    const el = opener.current;
+    if (!box.current!.contains(document.activeElement)) (box.current!.querySelector<HTMLElement>("[data-autofocus]") ?? focusables()[0])?.focus();
+    return () => { if (el instanceof HTMLElement && el.isConnected) el.focus(); };
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
   }, [onClose]);
+  const trap = (e: React.KeyboardEvent) => {
+    if (e.key !== "Tab") return;
+    const f = focusables(), first = f[0], end = f[f.length - 1];
+    if (!first || !end) return;
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); end.focus(); }
+    else if (!e.shiftKey && document.activeElement === end) { e.preventDefault(); first.focus(); }
+  };
   return (
     <div className="hist-scrim">
-      <div role="dialog" aria-modal="true" aria-labelledby="hist-dlg" className="card hist-dlg">
+      <div ref={box} role="dialog" aria-modal="true" aria-labelledby="hist-dlg" className="card hist-dlg" onKeyDown={trap}>
         <h2 id="hist-dlg" style={{ fontSize: 18 }}>{title}</h2>
         {children}
       </div>
@@ -116,11 +131,14 @@ function Page({ d }: { d: Ready }) {
     if (!selected) return;
     let stale = false;
     versionState(selected.id).then((s) => {
-      const y = new Y.Doc();
-      Y.applyUpdate(y, fromBase64(s));
-      const r = yToDoc(y);
       if (stale) return;
-      if (r.ok) setVdoc({ id: selected.id, doc: r.doc }); else setError(errorMessage(null));
+      try {
+        const y = new Y.Doc();
+        Y.applyUpdate(y, fromBase64(s));
+        const r = yToDoc(y);
+        if (!r.ok) throw new Error("invalid");
+        setVdoc({ id: selected.id, doc: r.doc });
+      } catch { setError("This version couldn't be opened."); }
     }, (e) => !stale && setError(errorMessage(e)));
     return () => { stale = true; };
   }, [selected?.id]);
@@ -220,7 +238,7 @@ function Page({ d }: { d: Ready }) {
           onSubmit={(name) => run(async () => { const v = await nameVersion(d.design.id, name); await refresh(); setSelId(v.id); })} />
       )}
       {dialog === "branch" && selected && (
-        <NameDialog title="Branch from here" action="Create branch" initial={selected.name ?? "Branch"} onClose={() => setDialog(null)}
+        <NameDialog title="Branch from here" action="Create branch" initial={(selected.name ?? "Branch").slice(0, 60)} onClose={() => setDialog(null)}
           onSubmit={(name) => run(async () => { const nd = await branchVersion(selected.id, name); navigate(`/d/${nd.id}`); })} />
       )}
       {dialog === "restore" && selected && (
@@ -228,7 +246,7 @@ function Page({ d }: { d: Ready }) {
           <p>Restore this version? Everyone editing will see it. The current design is kept as “Before restore”.</p>
           <div className="hist-actions">
             <button className="btn" onClick={() => setDialog(null)}>Cancel</button>
-            <button className="btn btn-p" onClick={() => void run(async () => { await restoreVersion(selected.id); await refresh(); setSelId(null); })}>Restore</button>
+            <button className="btn btn-p" data-autofocus onClick={() => void run(async () => { await restoreVersion(selected.id); await refresh(); setSelId(null); })}>Restore</button>
           </div>
         </Modal>
       )}

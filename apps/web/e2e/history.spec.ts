@@ -63,8 +63,18 @@ test("restore brings the old design back for everyone", async ({ page: owner, br
 
   await owner.getByRole("link", { name: "History" }).click();
   await versions(owner).getByRole("button", { name: /Client review v1/ }).click();
-  await owner.getByRole("button", { name: "Restore", exact: true }).click();
+  const rowRestore = owner.getByRole("button", { name: "Restore", exact: true });
+  await rowRestore.click();
   const dialog = owner.getByRole("dialog");
+  await expect(dialog.getByRole("button", { name: "Restore", exact: true })).toBeFocused();
+  await owner.keyboard.press("Tab");
+  await owner.keyboard.press("Tab");
+  await expect(dialog.getByRole("button", { name: "Cancel" })).not.toBeFocused(); // wrapped back inside the dialog
+  await expect(dialog.locator(":focus")).toHaveCount(1);
+  await owner.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(rowRestore).toBeFocused();
+  await rowRestore.click();
   await expect(dialog).toContainText("Restore this version? Everyone editing will see it. The current design is kept as “Before restore”.");
   await dialog.getByRole("button", { name: "Restore", exact: true }).click();
 
