@@ -5,7 +5,8 @@ import type { AnchorRef, BoolOp } from "@cherry/vector";
 import {
   brandIssues, duplicateNodes, fromPx, removeNodes, reorderNode, setTitle, updateNode, yToDoc, type CherryDocument, type CherryNode,
 } from "@cherry/doc";
-import { getKit, type BrandKit } from "../api";
+import { getKit, myWorkspaces, type BrandKit } from "../api";
+import { useSession } from "../App";
 import { canDelete, canEditContent, canMove } from "../editor/brandLock";
 import { useKitFonts } from "../brand/fonts";
 import "../editor/editor.css";
@@ -22,6 +23,8 @@ import PathPanel from "../editor/PathPanel";
 import ShapesPanel from "../editor/ShapesPanel";
 import VisualsPanel from "../editor/VisualsPanel";
 import Properties from "../editor/Properties";
+import { Avatars, SharePopover } from "../editor/PresenceBar";
+import { colorFor, usePeers, type PresenceUser } from "../editor/presence";
 import Toolbar from "../editor/Toolbar";
 import { useDesign, type DesignState } from "../editor/useDesign";
 import { useYValue } from "../editor/useYValue";
@@ -75,11 +78,35 @@ function Shell({ d }: { d: Ready }) {
   const [sel, setSel] = useState<{ pageId: string; selected: string[] }>({ pageId: doc.pages[0]!.id, selected: [] });
   const page = doc.pages.find((p) => p.id === sel.pageId) ?? doc.pages[0]!;
 
-  // Drop a vanished page or selected ids after every change.
+  // Drop a vanished page or selected ids when the page's nodes change.
+  const nodeIds = page.nodes.map((n) => n.id).join();
   useEffect(() => {
     const selected = sel.selected.filter((s) => findNode(page.nodes, s));
     if (page.id !== sel.pageId || selected.length !== sel.selected.length) setSel({ pageId: page.id, selected });
-  }, [doc]);
+  }, [page.id, nodeIds]);
+
+  // Presence: publish my page and selection, and read everyone else's.
+  const { user } = useSession();
+  const me = useMemo<PresenceUser>(() => ({ id: user?.id ?? "", name: user?.name ?? "", color: colorFor(user?.id ?? "") }), [user]);
+  const awareness = d.provider.awareness!;
+  const peers = usePeers(awareness);
+  useEffect(() => { awareness.setLocalStateField("user", me); }, [awareness, me]);
+  useEffect(() => { awareness.setLocalStateField("pageId", page.id); }, [awareness, page.id]);
+  const selKey = sel.selected.join();
+  useEffect(() => { awareness.setLocalStateField("selection", sel.selected); }, [awareness, selKey]);
+  const lastCursor = useRef(0);
+  const onCursor = (c: { x: number; y: number } | null) => {
+    const now = Date.now();
+    if (c && now - lastCursor.current < 50) return;
+    lastCursor.current = now;
+    awareness.setLocalStateField("cursor", c);
+  };
+  // The same person in two tabs shows once.
+  const people = [me, ...peers.map((p) => p.user)].filter((u, i, a) => a.findIndex((x) => x.id === u.id) === i);
+  const [workspaceName, setWorkspaceName] = useState("your workspace");
+  useEffect(() => {
+    myWorkspaces().then(({ workspaces }) => { const w = workspaces.find((x) => x.id === d.design.workspaceId); if (w) setWorkspaceName(w.name); }, () => {});
+  }, [d.design.workspaceId]);
 
   // The linked kit; a kit that is gone or unreadable leaves the design unlinked.
   const [kitId, setKitId] = useState(d.design.kitId);
@@ -225,6 +252,8 @@ function Shell({ d }: { d: Ready }) {
           <button className="ed-mini" aria-label="Zoom in" title="Zoom in (Ctrl+=)" onClick={() => zoomTo(zoom * 1.2)}>+</button>
           <button className="ed-mini" title="Fit (Ctrl+0)" onClick={() => zoomTo(null)}>Fit</button>
         </div>
+        <Avatars people={people} />
+        <SharePopover workspace={workspaceName} />
         {role !== "viewer" && !editNode && <button className="btn" onClick={() => setPublishing(true)}>Publish</button>}
         {editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>}
       </header>
@@ -257,7 +286,7 @@ function Shell({ d }: { d: Ready }) {
         </div>
         <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} role={role} tool={tool} zoom={zoom} pan={pan}
           editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys} snapRef={snapRef}
-          kit={kit} fontsVersion={fontsVersion}
+          kit={kit} fontsVersion={fontsVersion} peers={peers} onCursor={onCursor}
           act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
           onAnchors={setAnchors} onEditPath={enterEdit} />
         {editNode

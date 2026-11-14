@@ -14,6 +14,7 @@ import TextEditor from "./TextEditor";
 import type { BrandKit, Role } from "../api";
 import { useAssetImage } from "./useAssetImage";
 import { canEditContent, canMove } from "./brandLock";
+import type { Peer } from "./presence";
 
 export type Tool = "select" | "text" | "pen" | "direct" | "add-anchor" | "convert-anchor" | BasicShape;
 type Pt = { x: number; y: number };
@@ -90,11 +91,12 @@ function NodeView({ n, unit, top, editing, inert, ...events }: {
 }
 
 export default function Canvas({
-  ydoc, page, selected, readOnly, role, tool, zoom, pan, editingPath, anchors, pathKeys, snapRef, kit, fontsVersion,
+  ydoc, page, selected, readOnly, role, tool, zoom, pan, editingPath, anchors, pathKeys, snapRef, kit, fontsVersion, peers, onCursor,
   act, onSelect, onTool, onPan, onZoom, onViewport, onAnchors, onEditPath,
 }: {
   ydoc: Y.Doc; page: Page; selected: string[]; readOnly: boolean; role: Role; tool: Tool; zoom: number; pan: Pt;
   editingPath: string | null; anchors: AnchorRef[]; pathKeys: PathKeys; snapRef: MutableRefObject<(() => string) | null>; kit: BrandKit | null; fontsVersion: number;
+  peers: Peer[]; onCursor(c: Pt | null): void;
   act(fn: () => void): void; onSelect(ids: string[]): void; onTool(t: Tool): void;
   onPan(p: Pt): void; onZoom(z: number): void; onViewport(v: { width: number; height: number }): void;
   onAnchors(a: AnchorRef[]): void; onEditPath(id: string): void;
@@ -195,6 +197,7 @@ export default function Canvas({
   const onMove = (e: KonvaEventObject<MouseEvent>) => {
     if (drag) setDrag({ ...drag, to: pointer() });
     if (pathMode) pathInput.current?.hover(e.evt);
+    onCursor(pointer());
   };
 
   const onUp = () => {
@@ -282,7 +285,7 @@ export default function Canvas({
     <main ref={box} className="ed-stage" aria-label={`${page.name} canvas`}
       style={{ cursor: tool === "select" || tool === "direct" || readOnly ? "default" : "crosshair" }}>
       <Stage ref={stageRef} width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove}
-        onMouseLeave={() => pathInput.current?.hover(null)} onWheel={onWheel}>
+        onMouseLeave={() => { pathInput.current?.hover(null); onCursor(null); }} onWheel={onWheel}>
         <Layer key={fontsVersion}>
           <Group ref={pageRef} x={origin.x} y={origin.y} scaleX={scale} scaleY={scale}>
             {page.bleed > 0 && (
@@ -323,6 +326,27 @@ export default function Canvas({
           )}
         </Layer>
       </Stage>
+      {/* Other people's selections and cursors: DOM, so they never take pointer events. */}
+      <div className="ed-peers" style={{ left: origin.x, top: origin.y }}>
+        {peers.filter((p) => p.pageId === page.id).map((p) => {
+          const nodes = p.selection.map((id) => top(id)).filter((n): n is CherryNode => !!n && !n.hidden);
+          const first = nodes[0];
+          return (
+            <div key={p.clientId}>
+              {nodes.map((n) => (
+                <div key={n.id} className="ed-peer-box" style={{ left: n.x * scale, top: n.y * scale, width: n.width * scale, height: n.height * scale, borderColor: p.user.color }} />
+              ))}
+              {first && <span className="ed-peer-label" style={{ left: first.x * scale, top: first.y * scale - 22, background: p.user.color }}>{p.user.name} is editing</span>}
+              {p.cursor && (
+                <span className="ed-peer-cursor" style={{ left: p.cursor.x * scale, top: p.cursor.y * scale, color: p.user.color }}>
+                  <svg width="14" height="20" viewBox="0 0 14 20"><path d="M0 0 L0 15 L4 11.5 L7 18 L9.5 17 L6.5 10.5 L12 10.5 Z" fill="currentColor" stroke="#fff" /></svg>
+                  {p.user.name.split(/\s+/)[0]}
+                </span>
+              )}
+            </div>
+          );
+        })}
+      </div>
       {editNode?.kind === "text" && (
         <TextEditor key={editNode.id} node={editNode} origin={origin} scale={scale} zoom={zoom}
           onCommit={(t) => commitText(editNode, t)} />

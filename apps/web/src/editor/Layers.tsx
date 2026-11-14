@@ -40,7 +40,8 @@ type Props = {
 export default function Layers({ ydoc, pageId, nodes, selected, readOnly, role, act, onSelect }: Props) {
   const set = (id: string, patch: Partial<CherryNode>) => act(() => updateNode(ydoc, pageId, id, patch));
   const one = selected.length === 1 ? selected[0]! : null;
-  const movable = !one || canMove(findIn(nodes, one) ?? nodes[0]!, role);
+  const target = one ? findIn(nodes, one) : undefined; // a selected id can be gone for one render after a remote delete
+  const movable = !target || canMove(target, role);
   const move = (to: "forward" | "backward") => one && act(() => reorderNode(ydoc, pageId, one, to));
   const click = (id: string, e: MouseEvent) => {
     if (!e.shiftKey) return onSelect([id]);
