@@ -43,7 +43,7 @@ const HashParams = z.object({ sha256: z.string() });
 const HashQuery = z.object({ workspaceId: z.string().uuid().optional() });
 
 // Everything an uploaded file is served with; the bytes are never trusted to be inert.
-const SECURITY_HEADERS = {
+export const SECURITY_HEADERS = {
   "x-content-type-options": "nosniff",
   "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
   "cache-control": "private, max-age=31536000, immutable",

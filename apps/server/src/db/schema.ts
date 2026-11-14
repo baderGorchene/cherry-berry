@@ -113,6 +113,23 @@ export const brandKits = pgTable("brand_kits", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("brand_kits_workspace").on(t.workspaceId)]);
 
+export const brandFonts = pgTable("brand_fonts", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  kitId: uuid("kit_id").notNull().references(() => brandKits.id, { onDelete: "cascade" }),
+  family: text("family").notNull(),
+  weight: integer("weight").notNull(),
+  style: text("style").notNull(),
+  format: text("format").notNull(),
+  sha256: text("sha256").notNull(),
+  bytes: integer("bytes").notNull(),
+  createdBy: text("created_by").notNull().references(() => user.id, { onDelete: "cascade" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index("brand_fonts_kit").on(t.kitId),
+  check("brand_fonts_style", sql`${t.style} in ('normal', 'italic')`),
+  check("brand_fonts_format", sql`${t.format} in ('woff2', 'woff', 'ttf', 'otf')`),
+]);
+
 export const shapes = pgTable("shapes", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdBy: text("created_by").notNull().references(() => user.id, { onDelete: "cascade" }),
