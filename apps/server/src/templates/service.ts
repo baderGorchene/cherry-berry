@@ -4,6 +4,7 @@ import * as Y from "yjs";
 import { type CherryNode, setTitle, yToDoc } from "@cherry/doc";
 import { usableInDesign } from "../assets/service";
 import { thumbnail } from "../assets/ingest";
+import type { Collab } from "../collab/server";
 import type { Db } from "../db/client";
 import { assetUses, assets, brandKits, designs, templates, user } from "../db/schema";
 import { summary, summaryColumns, loadWithRole, type DesignSummary } from "../designs/service";
@@ -79,7 +80,7 @@ async function reencodeThumb(bytes: Uint8Array): Promise<Uint8Array> {
 }
 
 export async function publishTemplate(
-  db: Db, storage: Storage, userId: string, designId: string, input: PublishInput,
+  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, input: PublishInput,
 ): Promise<Template> {
   const { design, role } = await loadWithRole(db, designId, userId);
   if (role === "viewer") throw new WorkspaceError("forbidden");
@@ -98,7 +99,8 @@ export async function publishTemplate(
     .where(and(eq(brandKits.workspaceId, design.workspaceId), sql`${brandKits.content}->'rules'->>'requireApproval' = 'true'`)).limit(1);
   const webp = await reencodeThumb(input.thumb);
 
-  const [{ state }] = (await db.select({ state: designs.state }).from(designs).where(eq(designs.id, designId))) as [{ state: Uint8Array }];
+  const state = collab.liveState(designId)
+    ?? ((await db.select({ state: designs.state }).from(designs).where(eq(designs.id, designId))) as [{ state: Uint8Array }])[0].state;
   const ydoc = new Y.Doc();
   Y.applyUpdate(ydoc, state);
   const parsed = yToDoc(ydoc);

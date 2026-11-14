@@ -1,0 +1,136 @@
+import { Hocuspocus } from "@hocuspocus/server";
+import { eq } from "drizzle-orm";
+import { fromNodeHeaders } from "better-auth/node";
+import type { FastifyRequest } from "fastify";
+import type { WebSocket } from "ws";
+import * as Y from "yjs";
+import type { Auth } from "../auth";
+import type { Db } from "../db/client";
+import { designs } from "../db/schema";
+import { checkUpdate, loadWithRole, persistState } from "../designs/service";
+import { HttpError } from "../errors";
+import type { Role } from "../workspaces/service";
+
+export type Collab = {
+  handle(socket: WebSocket, request: FastifyRequest): void;
+  /** The live document's state, or null when nobody has it open. */
+  liveState(id: string): Uint8Array | null;
+  /** Runs `fn` on the live document (loading it if needed); its changes are broadcast and stored. `by` is recorded as the author. */
+  withDocument<T>(id: string, fn: (doc: Y.Doc) => T | Promise<T>, by?: string): Promise<T>;
+  /** Called after each store with the last user who changed the document. */
+  onStored(cb: (id: string, doc: Y.Doc, by: string | null) => Promise<void>): void;
+  close(): Promise<void>;
+};
+type Context = { userId?: string; role?: Role };
+
+/**
+ * Hocuspocus turns a thrown `{ code, reason }` into a close message carrying `reason`: the provider's `onClose`
+ * gets `{ event: { code: 1000, reason } }` for a rejected update, and `onAuthenticationFailed` gets `{ reason }`
+ * for a refused connection.
+ */
+const reject = (e: unknown, fallback: string) => ({ code: 4000, reason: e instanceof HttpError ? e.code : fallback });
+
+/** One live Yjs document per design (the document name is the design id). Assumes a single server process. */
+export function createCollab(db: Db, auth: Auth): Collab {
+  const stored: Parameters<Collab["onStored"]>[0][] = [];
+  const lastBy = new Map<string, string>();
+  const dirty = new Set<string>();
+  const persisting = new Set<Promise<unknown>>();
+
+  const hp = new Hocuspocus<Context>({
+    debounce: 2000,
+    maxDebounce: 10000,
+    unloadImmediately: true,
+
+    async onAuthenticate({ requestHeaders, documentName, connectionConfig }) {
+      const session = await auth.api.getSession({ headers: requestHeaders });
+      if (!session) throw reject(null, "unauthorized");
+      let role: Role;
+      try {
+        ({ role } = await loadWithRole(db, documentName, session.user.id));
+      } catch (e) {
+        if (e instanceof HttpError) throw reject(e, "not_found");
+        throw e;
+      }
+      connectionConfig.readOnly = role === "viewer";
+      return { userId: session.user.id, role };
+    },
+
+    async onLoadDocument({ documentName }) {
+      const [row] = await db.select({ state: designs.state }).from(designs).where(eq(designs.id, documentName));
+      if (!row) throw new Error(`design ${documentName} not found`);
+      return row.state;
+    },
+
+    // Runs inside readSyncMessage before the update is applied; `payload` is the update of a sync step 2 (type 1)
+    // or update (type 2) message. Sync step 1 (type 0) carries a state vector, and awareness never reaches this hook.
+    // Read-only (viewer) connections are skipped: Hocuspocus drops their writes itself.
+    async beforeSync({ connection, context, document, type, payload }) {
+      if (type === 0 || connection.readOnly) return;
+      try {
+        checkUpdate(document, payload, context.role ?? "viewer");
+      } catch (e) {
+        throw reject(e, "invalid_document");
+      }
+    },
+
+    async onChange({ documentName, context }) {
+      dirty.add(documentName);
+      if (context?.userId) lastBy.set(documentName, context.userId);
+    },
+
+    async onStoreDocument({ documentName, document }) {
+      if (!dirty.delete(documentName)) return;
+      const run = (async () => {
+        try {
+          await persistState(db, documentName, document);
+        } catch (e) {
+          dirty.add(documentName);
+          throw e;
+        }
+        for (const cb of stored) await cb(documentName, document, lastBy.get(documentName) ?? null);
+      })();
+      persisting.add(run);
+      try { await run; } finally { persisting.delete(run); }
+    },
+
+    async afterUnloadDocument({ documentName }) {
+      lastBy.delete(documentName);
+    },
+  });
+
+  return {
+    handle(socket, request) {
+      const req = new Request(new URL(request.url, "http://localhost"), { headers: fromNodeHeaders(request.headers) });
+      const conn = hp.handleConnection(socket, req, {});
+      socket.on("message", (data: Buffer) => conn.handleMessage(new Uint8Array(data)));
+      socket.on("close", (code, reason) => conn.handleClose({ code, reason: reason.toString() }));
+      socket.on("pong", () => conn.touch());
+    },
+    liveState(id) {
+      const doc = hp.documents.get(id);
+      return doc && !doc.isLoading ? Y.encodeStateAsUpdate(doc) : null;
+    },
+    async withDocument<T>(id: string, fn: (doc: Y.Doc) => T | Promise<T>, by?: string) {
+      const context: Context = by ? { userId: by } : {};
+      const conn = await hp.openDirectConnection(id, context);
+      const doc = conn.document!;
+      try {
+        // The origin carries `by` to onChange; work an async `fn` does after its first await runs outside it.
+        let out!: T | Promise<T>;
+        doc.transact(() => { out = fn(doc); }, { source: "local", context });
+        return await out;
+      } finally {
+        await conn.disconnect();
+      }
+    },
+    onStored(cb) { stored.push(cb); },
+    async close() {
+      hp.closeConnections();
+      hp.flushPendingStores();
+      // A flushed store reaches onStoreDocument only after its mutex resolves.
+      await new Promise((r) => setImmediate(r));
+      await Promise.allSettled([...persisting]);
+    },
+  };
+}

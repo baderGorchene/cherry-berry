@@ -17,6 +17,8 @@
     "@electric-sql/pglite": "^0.5.16",
     "@fastify/multipart": "^10.1.8",
     "@fastify/rate-limit": "^11.2.2",
+    "@fastify/websocket": "^11.3.7",
+    "@hocuspocus/server": "^4.8.0",
     "@node-rs/argon2": "^2.2.2",
     "aws4fetch": "^1.0.20",
     "better-auth": "^1.7.19",
@@ -31,12 +33,15 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@hocuspocus/provider": "^4.8.0",
     "@types/jsdom": "^30.0.0",
     "@types/node": "^26.6.6",
     "@types/pg": "^8.23.1",
+    "@types/ws": "^8.18.2",
     "drizzle-kit": "^0.31.11",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "ws": "^8.23.0"
   }
 }

@@ -12,6 +12,16 @@ import { registerShapeRoutes } from "./shapes/routes";
 import { registerTemplateRoutes } from "./templates/routes";
 import { registerWorkspaceRoutes } from "./workspaces/routes";
 import rateLimit from "@fastify/rate-limit";
+import websocket from "@fastify/websocket";
+import { createCollab, type Collab } from "./collab/server";
+import { registerCollabRoutes } from "./collab/routes";
+
+declare module "fastify" {
+  interface FastifyInstance {
+    /** The live documents; other modules hook `collab.onStored` or read `collab.liveState`. */
+    collab: Collab;
+  }
+}
 
 export async function buildApp(config: Config, deps: { db: Db; storage: Storage }): Promise<FastifyInstance> {
   const options: FastifyServerOptions = {
@@ -22,6 +32,10 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage 
   const app = Fastify(options);
   const auth = createAuth(config, deps.db);
   const requireUser = createRequireUser(auth);
+  const collab = createCollab(deps.db, auth);
+  app.decorate("collab", collab);
+  // Stores every live document before the database closes.
+  app.addHook("onClose", () => collab.close());
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof HttpError) return reply.status(err.statusCode).send({ error: err.code });
@@ -61,12 +75,14 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage 
   });
 
   await app.register(rateLimit, { global: false });
+  await app.register(websocket);
+  registerCollabRoutes(app, collab);
   registerWorkspaceRoutes(app, deps.db, requireUser);
-  registerDesignRoutes(app, deps.db, requireUser);
+  registerDesignRoutes(app, deps.db, collab, requireUser);
   registerBrandRoutes(app, deps.db, deps.storage, requireUser);
   registerShapeRoutes(app, deps.db, requireUser);
   registerAssetRoutes(app, deps.db, deps.storage, requireUser);
   registerReportRoutes(app, deps.db, deps.storage, requireUser);
-  registerTemplateRoutes(app, deps.db, deps.storage, requireUser);
+  registerTemplateRoutes(app, deps.db, deps.storage, collab, requireUser);
   return app;
 }

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { SessionUser } from "../auth";
+import type { Collab } from "../collab/server";
 import type { Db } from "../db/client";
 import { parse } from "../http";
 import * as svc from "./service";
@@ -19,7 +20,7 @@ const KitBody = z.object({ kitId: z.string().nullable() });
 const IdParams = z.object({ id: z.string() });
 
 export function registerDesignRoutes(
-  app: FastifyInstance, db: Db, requireUser: (req: FastifyRequest) => Promise<SessionUser>,
+  app: FastifyInstance, db: Db, collab: Collab, requireUser: (req: FastifyRequest) => Promise<SessionUser>,
 ) {
   app.post("/api/workspaces/:id/designs", async (req, reply) => {
     const user = await requireUser(req);
@@ -34,7 +35,7 @@ export function registerDesignRoutes(
 
   app.get("/api/designs/:id", async (req) => {
     const user = await requireUser(req);
-    return svc.openDesign(db, user.id, parse(IdParams, req.params).id);
+    return svc.openDesign(db, collab, user.id, parse(IdParams, req.params).id);
   });
 
   app.patch("/api/designs/:id", async (req) => {
@@ -47,6 +48,6 @@ export function registerDesignRoutes(
     const user = await requireUser(req);
     const id = parse(IdParams, req.params).id;
     const state = Buffer.from(parse(StateBody, req.body).state, "base64");
-    return svc.saveDesignState(db, user.id, id, state);
+    return svc.saveDesignState(db, collab, user.id, id, state);
   });
 }

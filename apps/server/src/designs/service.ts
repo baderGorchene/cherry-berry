@@ -1,6 +1,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as Y from "yjs";
 import { brandLockViolation, createDocument, docToY, yToDoc } from "@cherry/doc";
+import type { Collab } from "../collab/server";
 import type { Db } from "../db/client";
 import { brandKits, designs } from "../db/schema";
 import { HttpError } from "../errors";
@@ -57,37 +58,55 @@ export async function listDesigns(db: Db, userId: string, workspaceId: string): 
   return rows.map(summary);
 }
 
-export async function openDesign(db: Db, userId: string, id: string) {
+export async function openDesign(db: Db, collab: Collab, userId: string, id: string) {
   const { design, role } = await loadWithRole(db, id, userId);
-  const [row] = await db.select({ state: designs.state }).from(designs).where(eq(designs.id, id));
+  const live = collab.liveState(id);
+  const [row] = live ? [{ state: live }] : await db.select({ state: designs.state }).from(designs).where(eq(designs.id, id));
   if (!row) throw new WorkspaceError("not_found");
   return { design: summary(design), role, state: b64(row.state) };
 }
 
-/** Merges the client's Yjs update into the stored state; rejects anything that is not a valid Cherry document. */
-export async function saveDesignState(db: Db, userId: string, id: string, incoming: Uint8Array) {
+/**
+ * Throws unless applying `update` to `current` leaves a valid Cherry document that `role` may produce:
+ * `invalid_document` for anything that fails to apply or parse, `brand_locked` for an editor touching a locked layer,
+ * `forbidden` for viewers. `current` itself is never changed.
+ */
+export function checkUpdate(current: Y.Doc, update: Uint8Array, role: Role): void {
+  if (role === "viewer") throw new WorkspaceError("forbidden");
+  // ponytail: clones the whole document per incoming update (O(document size)); check against a diff if large docs make this slow.
+  const next = new Y.Doc();
+  Y.applyUpdate(next, Y.encodeStateAsUpdate(current));
+  // Owners and admins are never checked, so only editors need the document before the update.
+  const before = role === "editor" ? yToDoc(next) : undefined;
+  try { Y.applyUpdate(next, update); } catch { throw new HttpError(400, "invalid_document"); }
+  const after = yToDoc(next);
+  if (!after.ok) throw new HttpError(400, "invalid_document");
+  if (before?.ok && brandLockViolation(before.doc, after.doc)) throw new WorkspaceError("brand_locked");
+}
+
+/** Writes the live document's state and the metadata derived from it (title, page size, unit, colour mode). */
+export async function persistState(db: Db, id: string, ydoc: Y.Doc): Promise<DesignSummary> {
+  const parsed = yToDoc(ydoc);
+  if (!parsed.ok) throw new HttpError(400, "invalid_document");
+  const page = parsed.doc.pages[0]!;
+  const title = parsed.doc.title.trim().slice(0, 120) || "Untitled design";
+  const [d] = await db.update(designs).set({
+    state: Y.encodeStateAsUpdate(ydoc), title, width: page.width, height: page.height,
+    unit: page.unit, colorMode: page.colorMode, updatedAt: sql`now()`,
+  }).where(eq(designs.id, id)).returning(summaryColumns);
+  if (!d) throw new WorkspaceError("not_found");
+  return summary(d);
+}
+
+/** Merges the client's Yjs update into the live document (so connected editors see it); rejects anything `checkUpdate` refuses. */
+export async function saveDesignState(db: Db, collab: Collab, userId: string, id: string, incoming: Uint8Array) {
   const { role } = await loadWithRole(db, id, userId);
   if (role === "viewer") throw new WorkspaceError("forbidden");
-  return db.transaction(async (tx) => {
-    const [row] = await tx.select().from(designs).where(eq(designs.id, id)).for("update");
-    if (!row) throw new WorkspaceError("not_found");
-    const ydoc = new Y.Doc();
-    Y.applyUpdate(ydoc, row.state);
-    // Owners and admins are never checked, so only editors need the stored document.
-    const stored = role === "editor" ? yToDoc(ydoc) : undefined;
-    try { Y.applyUpdate(ydoc, incoming); } catch { throw new HttpError(400, "invalid_document"); }
-    const parsed = yToDoc(ydoc);
-    if (!parsed.ok) throw new HttpError(400, "invalid_document");
-    if (stored?.ok && brandLockViolation(stored.doc, parsed.doc)) throw new WorkspaceError("brand_locked");
-    const state = Y.encodeStateAsUpdate(ydoc);
-    const page = parsed.doc.pages[0]!;
-    const title = parsed.doc.title.trim().slice(0, 120) || "Untitled design";
-    const [d] = await tx.update(designs).set({
-      state, title, width: page.width, height: page.height,
-      unit: page.unit, colorMode: page.colorMode, updatedAt: sql`now()`,
-    }).where(eq(designs.id, id)).returning(summaryColumns);
-    return { design: summary(d!), state: b64(state) };
-  });
+  // Leaving the direct connection stores the document immediately, so the row below is current.
+  await collab.withDocument(id, (doc) => { checkUpdate(doc, incoming, role); Y.applyUpdate(doc, incoming); }, userId);
+  const [row] = await db.select({ ...summaryColumns, state: designs.state }).from(designs).where(eq(designs.id, id));
+  if (!row) throw new WorkspaceError("not_found");
+  return { design: summary(row), state: b64(collab.liveState(id) ?? row.state) };
 }
 
 /** Links a design to a brand kit of its own workspace, or unlinks it with null. */

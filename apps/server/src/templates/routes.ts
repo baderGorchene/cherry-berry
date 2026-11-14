@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { SessionUser } from "../auth";
+import type { Collab } from "../collab/server";
 import type { Db } from "../db/client";
 import { SECURITY_HEADERS } from "../assets/routes";
 import { parse } from "../http";
@@ -29,13 +30,13 @@ const UseBody = z.object({ workspaceId: z.string() });
 const IdParams = z.object({ id: z.string() });
 
 export function registerTemplateRoutes(
-  app: FastifyInstance, db: Db, storage: Storage, requireUser: (req: FastifyRequest) => Promise<SessionUser>,
+  app: FastifyInstance, db: Db, storage: Storage, collab: Collab, requireUser: (req: FastifyRequest) => Promise<SessionUser>,
 ) {
   app.post("/api/designs/:id/template", { bodyLimit: 4 * 1024 * 1024 }, async (req, reply) => {
     const user = await requireUser(req);
     const id = parse(IdParams, req.params).id;
     const { thumb, ...rest } = parse(PublishBody, req.body);
-    const template = await svc.publishTemplate(db, storage, user.id, id, { ...rest, thumb: Buffer.from(thumb, "base64") });
+    const template = await svc.publishTemplate(db, storage, collab, user.id, id, { ...rest, thumb: Buffer.from(thumb, "base64") });
     return reply.status(201).send({ template });
   });
 
