@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import * as Y from "yjs";
 import { type BrandKitContent, type CherryNode, setTitle, yToDoc } from "@cherry/doc";
 import { thumbnail } from "../assets/ingest";
@@ -25,17 +25,16 @@ export type PublishInput = {
   name: string; category: Category; visibility: "workspace" | "public"; license: TemplateLicense;
   attribution: string; kitId?: string | null; thumb: Uint8Array;
 };
-type Row = typeof templates.$inferSelect;
+type Row = Omit<typeof templates.$inferSelect, "state">;
+const { state: _state, ...rowColumns } = getTableColumns(templates);
 
 const MAX_THUMB = 2 * 1024 * 1024;
 const PNG_MAGIC = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 const thumbKey = (id: string) => `template-thumbs/${id}.webp`;
 const isAdmin = (role: Role | undefined) => role === "owner" || role === "admin";
 
-const columns = () => ({
-  t: templates, authorName: user.name, kitName: brandKits.name,
-});
-const base = (db: Db) => db.select(columns()).from(templates)
+// The state bytea is big; only publish and use touch it.
+const base = (db: Db) => db.select({ t: rowColumns, authorName: user.name, kitName: brandKits.name }).from(templates)
   .innerJoin(user, eq(user.id, templates.createdBy)).leftJoin(brandKits, eq(brandKits.id, templates.kitId));
 const toTemplate = ({ t, authorName, kitName }: { t: Row; authorName: string; kitName: string | null }, userId: string): Template => ({
   id: t.id, workspaceId: t.workspaceId, visibility: t.visibility as Template["visibility"],
@@ -166,10 +165,11 @@ export async function useTemplate(db: Db, userId: string, id: string, workspaceI
   const role = UUID.test(workspaceId) ? await getRole(db, workspaceId, userId) : undefined;
   if (!found || !role || found.t.status !== "published") throw new WorkspaceError("not_found");
   const t = found.t;
+  const [{ state }] = (await db.select({ state: templates.state }).from(templates).where(eq(templates.id, id))) as [{ state: Uint8Array }];
   if (t.visibility === "workspace" && t.workspaceId !== workspaceId) throw new WorkspaceError("not_found");
   if (role === "viewer") throw new WorkspaceError("forbidden");
   const ydoc = new Y.Doc();
-  Y.applyUpdate(ydoc, t.state);
+  Y.applyUpdate(ydoc, state);
   const parsed = yToDoc(ydoc);
   if (!parsed.ok) throw new HttpError(400, "invalid_document");
   setTitle(ydoc, t.name);
