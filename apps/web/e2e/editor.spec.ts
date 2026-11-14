@@ -275,27 +275,35 @@ test("broken design id", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Back to home" })).toBeVisible();
 });
 
-test("a save rejected as invalid offers a reload to the latest version", async ({ page, context }) => {
+test("a save rejected as invalid offers a reload to the latest version", async ({ page, context, browser }) => {
   const row = (p: Page, name: string) => p.getByRole("listitem").filter({ hasText: name });
-  const saved = (p: Page) => p.waitForResponse((r) => r.url().endsWith("/state") && r.request().method() === "PUT");
   await newSocialPost(page);
-  await Promise.all([saved(page), page.getByRole("button", { name: "+ Add page" }).click()]);
-  const other = await context.newPage();
+  await page.getByRole("button", { name: "+ Add page" }).click();
+  await expect(status(page)).toHaveText("Saved");
+  // A second tab of the same user, in its own context so it can go offline alone.
+  const ctx2 = await browser.newContext({ storageState: await context.storageState() });
+  const other = await ctx2.newPage();
   await other.goto(page.url());
   await expect(row(other, "Page 2")).toBeVisible();
+  await expect(status(other)).toHaveText("Saved");
 
   // Each tab deletes a different page; merged, the design would have no pages.
   // Page actions only show on the current page, so switch to it first.
   await row(page, "Page 1").getByRole("button", { name: "1 · Page 1" }).click();
   await row(other, "Page 2").getByRole("button", { name: "2 · Page 2" }).click();
-  await Promise.all([saved(page), row(page, "Page 1").getByRole("button", { name: "Delete" }).click()]);
+  await ctx2.setOffline(true);
+  await expect(status(other)).toHaveText(/^Offline/, { timeout: 15_000 });
+  await row(page, "Page 1").getByRole("button", { name: "Delete" }).click();
+  await expect(status(page)).toHaveText("Saved");
   await row(other, "Page 2").getByRole("button", { name: "Delete" }).click();
+  await ctx2.setOffline(false);
   const reload = other.getByRole("button", { name: "Reload to get the latest version" });
-  await expect(reload).toBeVisible();
+  await expect(reload).toBeVisible({ timeout: 30_000 });
   await reload.click();
   await expect(row(other, "Page 2")).toBeVisible();
   await expect(row(other, "Page 1")).toHaveCount(0);
   await expect(status(other)).toHaveText("Saved");
+  await ctx2.close();
 });
 
 /** Places a rectangle `dx` px right of the canvas center and waits out Konva's double-click window. */

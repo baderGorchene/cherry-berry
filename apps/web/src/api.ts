@@ -232,6 +232,7 @@ const COPY: Record<string, string> = {
   invalid_font: "That file isn't a font we can use. Choose WOFF2, WOFF, TTF or OTF.",
   template_private_assets: "Every visual in a public template must be public. Make them public or publish to this workspace.",
   invalid_document: "This change couldn't be saved because the design became invalid.",
+  not_saved: "Couldn't save just now. Your changes are kept — try again.",
 };
 
 /** Human copy for an error thrown by `api`. */

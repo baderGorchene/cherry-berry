@@ -14,6 +14,7 @@
   "dependencies": {
     "@cherry/doc": "workspace:*",
     "@cherry/vector": "workspace:*",
+    "@hocuspocus/provider": "^4.8.0",
     "konva": "^10.9.1",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

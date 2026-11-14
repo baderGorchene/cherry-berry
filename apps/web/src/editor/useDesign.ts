@@ -1,15 +1,19 @@
 import { useEffect, useReducer, useState } from "react";
 import * as Y from "yjs";
-import { LOCAL, REMOTE, createUndoManager, yToDoc } from "@cherry/doc";
-import { ApiError, fromBase64, getDesign, saveDesign, toBase64, type Design, type Role } from "../api";
-import { Autosave, type SaveStatus } from "./autosave";
+import { HocuspocusProvider } from "@hocuspocus/provider";
+import { createUndoManager, yToDoc } from "@cherry/doc";
+import { ApiError, errorMessage, getDesign, type Design, type Role } from "../api";
+
+export type SaveStatus = "saved" | "unsaved" | "saving" | "offline" | "error";
 
 export type DesignState =
   | { state: "loading" }
   | { state: "failed"; message: string }
-  | { state: "ready"; ydoc: Y.Doc; design: Design; role: Role; readOnly: boolean; undo: Y.UndoManager; status: SaveStatus; statusMessage?: string; statusCode?: string; reload(): void };
+  | { state: "ready"; ydoc: Y.Doc; provider: HocuspocusProvider; design: Design; role: Role; readOnly: boolean; undo: Y.UndoManager; status: SaveStatus; statusMessage?: string; statusCode?: string; reload(): void };
 
 type Ready = Extract<DesignState, { state: "ready" }>;
+
+const REJECTIONS = ["brand_locked", "invalid_document"];
 
 export function useDesign(id: string): DesignState {
   const [s, setS] = useState<DesignState>({ state: "loading" });
@@ -17,49 +21,69 @@ export function useDesign(id: string): DesignState {
 
   useEffect(() => {
     let cancelled = false;
-    let cleanup = () => {};
     let discard = false;
+    let ready: Ready | null = null;
+    let connected = false;
+    let rejected: string | null = null;
+    let provider: HocuspocusProvider | null = null;
+    const pending = () => (provider?.unsyncedChanges ?? 0) > 0;
+    const onUnload = (e: BeforeUnloadEvent) => { if (pending()) { e.preventDefault(); e.returnValue = ""; } };
+    const push = () => {
+      if (!ready || cancelled) return;
+      const status: SaveStatus = rejected ? "error" : !connected ? "offline" : pending() ? "saving" : "saved";
+      setS({ ...ready, status, statusCode: rejected ?? undefined, statusMessage: rejected ? errorMessage(new ApiError(0, rejected)) : undefined });
+    };
+    const fail = (message: string) => !cancelled && setS({ state: "failed", message });
+    // The browser knows it is offline before the socket times out; drop and re-open it right away.
+    const goOffline = () => provider?.disconnect();
+    const goOnline = () => void provider?.connect();
     setS({ state: "loading" });
+    window.addEventListener("beforeunload", onUnload);
+    window.addEventListener("offline", goOffline);
+    window.addEventListener("online", goOnline);
+
     getDesign(id).then(
-      ({ design, role, state }) => {
+      ({ design, role }) => {
         if (cancelled) return;
         const ydoc = new Y.Doc();
-        Y.applyUpdate(ydoc, fromBase64(state), REMOTE);
-        if (!yToDoc(ydoc).ok) return setS({ state: "failed", message: "This design couldn't be opened." });
-        const undo = createUndoManager(ydoc); // after load, so loading isn't undoable
-        const readOnly = role === "viewer";
-        const base: Ready = {
-          state: "ready", ydoc, design, role, readOnly, undo, status: "saved",
-          reload: () => { discard = true; reload(); }, // drops the local doc for the server's
-        };
-        setS(base);
-        if (readOnly) return;
-        const autosave = new Autosave({
-          encode: () => Y.encodeStateAsUpdate(ydoc),
-          save: async (u) => fromBase64((await saveDesign(id, toBase64(u))).state),
-          onRemote: (u) => Y.applyUpdate(ydoc, u, REMOTE),
-          onStatus: (status, statusMessage, statusCode) => !cancelled && setS({ ...base, status, statusMessage, statusCode }),
+        const p = provider = new HocuspocusProvider({
+          url: `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/collab`,
+          name: id,
+          document: ydoc,
+          onSynced: () => {
+            connected = true;
+            if (cancelled) return;
+            if (ready) return push();
+            if (!yToDoc(ydoc).ok) return fail("This design couldn't be opened.");
+            ready = {
+              state: "ready", ydoc, provider: p, design, role, readOnly: role === "viewer",
+              undo: createUndoManager(ydoc), // after the first sync, so loading isn't undoable
+              status: "saved",
+              reload: () => { discard = true; reload(); }, // drops the local doc for the server's
+            };
+            push();
+          },
+          onStatus: ({ status }) => { connected = status === "connected"; push(); },
+          onUnsyncedChanges: push,
+          // A rejected update closes the document: the reason arrives as event.reason (code is always 1000).
+          onClose: ({ event }) => { if (REJECTIONS.includes(event.reason)) { rejected = event.reason; push(); } },
+          onAuthenticationFailed: () => { if (!ready) fail("This design doesn't exist or you don't have access."); },
         });
-        const onUpdate = (_: Uint8Array, origin: unknown) => { if (origin === LOCAL || origin === undo) autosave.markDirty(); };
-        const onUnload = (e: BeforeUnloadEvent) => { if (autosave.pending) { e.preventDefault(); e.returnValue = ""; } };
-        ydoc.on("update", onUpdate);
-        window.addEventListener("beforeunload", onUnload);
-        cleanup = () => {
-          ydoc.off("update", onUpdate);
-          const release = () => window.removeEventListener("beforeunload", onUnload);
-          if (discard) { autosave.dispose(); release(); return; }
-          // Pending edits keep saving (and guarding unload) after in-app navigation until they land or are rejected.
-          void autosave.close().then(release);
-        };
       },
-      (e) => !cancelled && setS({
-        state: "failed",
-        message: e instanceof ApiError && e.status === 404
-          ? "This design doesn't exist or you don't have access."
-          : "This design couldn't be opened.",
-      }),
+      (e) => fail(e instanceof ApiError && e.status === 404
+        ? "This design doesn't exist or you don't have access."
+        : "This design couldn't be opened."),
     );
-    return () => { cancelled = true; cleanup(); };
+    return () => {
+      cancelled = true;
+      const p = provider;
+      window.removeEventListener("offline", goOffline);
+      window.removeEventListener("online", goOnline);
+      const release = () => window.removeEventListener("beforeunload", onUnload);
+      if (!p || discard || rejected || !pending()) { p?.destroy(); release(); return; }
+      // Pending edits keep syncing (and guarding unload) after in-app navigation until they land.
+      p.on("unsyncedChanges", () => { if (!pending()) { p.destroy(); release(); } });
+    };
   }, [id, loads]);
 
   return s;
