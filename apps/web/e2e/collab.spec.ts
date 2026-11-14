@@ -56,3 +56,18 @@ test("a viewer watches changes but cannot edit", async ({ page: owner, browser }
   await expect(rects(viewer)).toBeVisible({ timeout: 5000 });
   await expect(viewer.getByRole("button", { name: "Rectangle (R)" })).toBeDisabled();
 });
+
+test("an idle lone user stays connected", async ({ page }) => {
+  test.setTimeout(120_000);
+  await newPost(page);
+  await expect(status(page)).toHaveText("Saved");
+  // Count status changes away from Saved for 45 s (the provider's watchdog fires after 30 s of silence).
+  await page.evaluate(() => {
+    const el = document.querySelector('[role="status"]')!;
+    (window as any).__flips = 0;
+    new MutationObserver(() => { if (el.textContent !== "Saved") (window as any).__flips++; }).observe(el, { childList: true, characterData: true, subtree: true });
+  });
+  await page.waitForTimeout(45_000);
+  expect(await page.evaluate(() => (window as any).__flips)).toBe(0);
+  await expect(status(page)).toHaveText("Saved");
+});

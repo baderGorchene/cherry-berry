@@ -33,7 +33,7 @@ export function useDesign(id: string): DesignState {
       const status: SaveStatus = rejected ? "error" : !connected ? "offline" : pending() ? "saving" : "saved";
       setS({ ...ready, status, statusCode: rejected ?? undefined, statusMessage: rejected ? errorMessage(new ApiError(0, rejected)) : undefined });
     };
-    const fail = (message: string) => !cancelled && setS({ state: "failed", message });
+    const fail = (message: string) => { provider?.destroy(); if (!cancelled) setS({ state: "failed", message }); };
     // The browser knows it is offline before the socket times out; drop and re-open it right away.
     const goOffline = () => provider?.disconnect();
     const goOnline = () => void provider?.connect();
@@ -77,12 +77,18 @@ export function useDesign(id: string): DesignState {
     return () => {
       cancelled = true;
       const p = provider;
-      window.removeEventListener("offline", goOffline);
-      window.removeEventListener("online", goOnline);
-      const release = () => window.removeEventListener("beforeunload", onUnload);
+      const release = () => {
+        window.removeEventListener("beforeunload", onUnload);
+        window.removeEventListener("offline", goOffline);
+        window.removeEventListener("online", goOnline);
+      };
       if (!p || discard || rejected || !pending()) { p?.destroy(); release(); return; }
-      // Pending edits keep syncing (and guarding unload) after in-app navigation until they land.
-      p.on("unsyncedChanges", () => { if (!pending()) { p.destroy(); release(); } });
+      // Pending edits keep syncing (and guarding unload) after in-app navigation until they land,
+      // are rejected, or the connection is refused. The online listener stays so they can still sync.
+      const done = () => { release(); p.destroy(); };
+      p.on("unsyncedChanges", () => { if (!pending()) done(); });
+      p.on("close", ({ event }: { event: { reason: string } }) => { if (REJECTIONS.includes(event.reason)) done(); });
+      p.on("authenticationFailed", done);
     };
   }, [id, loads]);
 
