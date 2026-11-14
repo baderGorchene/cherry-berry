@@ -47,7 +47,7 @@ const toTemplate = ({ t, authorName, kitName }: { t: Row; authorName: string; ki
 });
 
 /** Every image layer's asset id, groups included. */
-function imageAssetIds(nodes: CherryNode[], out = new Set<string>()): Set<string> {
+export function imageAssetIds(nodes: CherryNode[], out = new Set<string>()): Set<string> {
   for (const n of nodes) {
     if (n.kind === "image") out.add(n.assetId);
     else if (n.kind === "group") imageAssetIds(n.children, out);

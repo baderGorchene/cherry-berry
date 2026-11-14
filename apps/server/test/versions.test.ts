@@ -2,9 +2,9 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import * as Y from "yjs";
 import WebSocket from "ws";
 import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/provider";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { addNode, createShape, getPageIds, yToDoc, type CherryNode } from "@cherry/doc";
-import { designs } from "../src/db/schema";
+import { assetUses, assets, designs } from "../src/db/schema";
 import { setupTestApp, signUp } from "./helpers";
 
 type App = Awaited<ReturnType<typeof setupTestApp>>;
@@ -173,16 +173,57 @@ describe("versions", () => {
     const auto = await setupTestApp({}, { autoVersionMs: 0 });
     try {
       const { ada, id } = await team(auto);
+      const list = async () => (await callOn(auto, "GET", `/api/designs/${id}/versions`, ada.cookie)).json().versions as { kind: string; name: string | null; summary: string; createdBy: { id: string } | null }[];
       await draw(auto, id, rect({ name: "Berry cluster" }), ada.userId);
-      const list = (await callOn(auto, "GET", `/api/designs/${id}/versions`, ada.cookie)).json().versions;
-      expect(list).toHaveLength(1);
-      expect(list[0]).toMatchObject({ kind: "auto", name: null, summary: "Added Berry cluster", createdBy: { id: ada.userId } });
-      // Storing again with no content change adds nothing.
-      await auto.app.collab.withDocument(id, () => undefined, ada.userId);
-      expect((await callOn(auto, "GET", `/api/designs/${id}/versions`, ada.cookie)).json().versions).toHaveLength(1);
+      expect(await list()).toHaveLength(1);
+      expect((await list())[0]).toMatchObject({ kind: "auto", name: null, summary: "Added Berry cluster", createdBy: { id: ada.userId } });
+      // A real store that leaves the layers unchanged (the title) adds nothing.
+      await auto.app.collab.withDocument(id, (d) => d.getMap("meta").set("title", "Renamed"), ada.userId);
+      expect((await stored(auto, id)).title).toBe("Renamed");
+      expect(await list()).toHaveLength(1);
+      // A second layer after the interval adds a second version.
+      await draw(auto, id, rect({ name: "Leaf" }), ada.userId);
+      const after = await list();
+      expect(after).toHaveLength(2);
+      expect(after[0]).toMatchObject({ kind: "auto", summary: "Added Leaf" });
     } finally {
       await auto.close();
     }
+  });
+
+  it("no second auto version inside the default interval", async () => {
+    const { ada, id } = await team();
+    await draw(t, id, rect({ name: "One" }), ada.userId);
+    await draw(t, id, rect({ name: "Two" }), ada.userId);
+    const list = await versions(id, ada.cookie);
+    expect(list.map((v) => [v.kind, v.summary])).toEqual([["auto", "Added One"]]);
+  });
+
+  it("branch copies asset uses, and a failing marker leaves no orphan design", async () => {
+    const { ada, id, workspaceId } = await team();
+    const [asset] = await t.db.insert(assets).values({
+      createdBy: ada.userId, visibility: "public", title: "Pic", tags: [], license: "cc0", kind: "image", format: "png",
+      width: 1, height: 1, bytes: 1, sha256: "v" + Math.random(),
+    } as typeof assets.$inferInsert).returning();
+    const { fill: _f, cornerRadius: _c, ...img } = rect() as Record<string, unknown>;
+    await draw(t, id, { ...img, id: "img1", kind: "image", assetId: asset!.id } as unknown as CherryNode);
+    const v = await nameIt(ada.cookie, id, "Base");
+
+    const { design } = (await call("POST", `/api/versions/${v.id}/branch`, ada.cookie, { name: "Copy" })).json();
+    const uses = await t.db.select().from(assetUses).where(eq(assetUses.designId, design.id));
+    expect(uses.map((u) => u.assetId)).toEqual([asset!.id]);
+
+    const count = async () => (await t.db.select().from(designs).where(eq(designs.workspaceId, workspaceId))).length;
+    const before = await count();
+    await t.db.execute(sql`create function fail_branch() returns trigger language plpgsql as $$ begin raise exception 'no'; end $$`);
+    await t.db.execute(sql`create trigger fail_branch before insert on design_versions for each row when (new.kind = 'branch') execute function fail_branch()`);
+    try {
+      expect((await call("POST", `/api/versions/${v.id}/branch`, ada.cookie, { name: "Fails" })).statusCode).toBe(500);
+    } finally {
+      await t.db.execute(sql`drop trigger fail_branch on design_versions`);
+      await t.db.execute(sql`drop function fail_branch()`);
+    }
+    expect(await count()).toBe(before);
   });
 
   it("versions of another workspace's design are 404", async () => {
