@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, getTableColumns, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import * as Y from "yjs";
-import { type BrandKitContent, type CherryNode, setTitle, yToDoc } from "@cherry/doc";
+import { type CherryNode, setTitle, yToDoc } from "@cherry/doc";
+import { usableInDesign } from "../assets/service";
 import { thumbnail } from "../assets/ingest";
 import type { Db } from "../db/client";
 import { assetUses, assets, brandKits, designs, templates, user } from "../db/schema";
@@ -88,13 +89,13 @@ export async function publishTemplate(
   }
   const license: TemplateLicense = workspaceOnly ? "workspace-only" : input.license;
   const attribution = license === "cc-by" ? input.attribution : "";
-  let kitContent: BrandKitContent | undefined;
   if (input.kitId) {
     const [kit] = !workspaceOnly || !UUID.test(input.kitId) ? [] : await db.select().from(brandKits)
       .where(and(eq(brandKits.id, input.kitId), eq(brandKits.workspaceId, design.workspaceId)));
     if (!kit) throw new HttpError(400, "invalid_body");
-    kitContent = kit.content as BrandKitContent;
   }
+  const [needsApproval] = role !== "editor" ? [] : await db.select({ id: brandKits.id }).from(brandKits)
+    .where(and(eq(brandKits.workspaceId, design.workspaceId), sql`${brandKits.content}->'rules'->>'requireApproval' = 'true'`)).limit(1);
   const webp = await reencodeThumb(input.thumb);
 
   const [{ state }] = (await db.select({ state: designs.state }).from(designs).where(eq(designs.id, designId))) as [{ state: Uint8Array }];
@@ -117,7 +118,7 @@ export async function publishTemplate(
   try {
     await db.insert(templates).values({
       id, workspaceId: design.workspaceId, visibility: input.visibility, license, attribution,
-      status: kitContent?.rules.requireApproval && role === "editor" ? "pending" : "published",
+      status: needsApproval ? "pending" : "published",
       kitId: input.kitId ?? null, name: input.name, category: input.category,
       width: design.width, height: design.height, unit: design.unit, colorMode: design.colorMode,
       state, createdBy: userId,
@@ -180,8 +181,8 @@ export async function useTemplate(db: Db, userId: string, id: string, workspaceI
       state: Y.encodeStateAsUpdate(ydoc), kitId: t.workspaceId === workspaceId ? t.kitId : null, createdBy: userId,
     }).returning(summaryColumns);
     if (ids.length) {
-      // Assets deleted since publishing are skipped; the layer then shows as missing.
-      const live = await tx.select({ id: assets.id }).from(assets).where(and(inArray(assets.id, ids), isNull(assets.deletedAt)));
+      // Assets deleted or made private since publishing are skipped; the layer then shows as missing.
+      const live = await tx.select({ id: assets.id }).from(assets).where(and(inArray(assets.id, ids), usableInDesign(userId, workspaceId)));
       if (live.length) await tx.insert(assetUses).values(live.map((a) => ({ designId: d!.id, assetId: a.id }))).onConflictDoNothing();
     }
     return summary(d!);

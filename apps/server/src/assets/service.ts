@@ -1,4 +1,4 @@
-import { and, desc, eq, or, sql, type SQL } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "../db/client";
 import { assetUses, assets, designs, memberships, user, workspaces } from "../db/schema";
 import { escapeLike } from "../http";
@@ -64,6 +64,13 @@ export async function canReadAsset(db: Db, userId: string, asset: Access): Promi
     .where(eq(assetUses.assetId, asset.id)).limit(1);
   return !!hit;
 }
+
+/** Assets a design in `workspaceId` may use for `userId`: not deleted, and public, the user's own, or visible in that workspace. */
+export const usableInDesign = (userId: string, workspaceId: string): SQL | undefined => and(
+  isNull(assets.deletedAt),
+  or(eq(assets.visibility, "public"), eq(assets.createdBy, userId),
+    and(eq(assets.visibility, "workspace"), eq(assets.workspaceId, workspaceId))),
+);
 
 /** Serializes create, delete and recordUse for one set of bytes; released at commit. */
 const lockBytes = (tx: Pick<Db, "execute">, sha256: string) =>
@@ -197,12 +204,11 @@ export async function recordUse(db: Db, userId: string, designId: string, assetI
   const { design, role } = await loadWithRole(db, designId, userId);
   if (role === "viewer") throw new WorkspaceError("forbidden");
   const r = await loadRow(db, assetId);
-  // A workspace asset stays in its own workspace; private and public ones may travel.
-  if (!r || !(await canSeeAsset(db, userId, r.a))
-    || (r.a.visibility === "workspace" && r.a.workspaceId !== design.workspaceId)) throw new WorkspaceError("not_found");
+  if (!r) throw new WorkspaceError("not_found");
   await db.transaction(async (tx) => {
     await lockBytes(tx, r.a.sha256);
-    const [live] = await tx.select({ id: assets.id }).from(assets).where(and(eq(assets.id, assetId), sql`${assets.deletedAt} is null`));
+    const [live] = await tx.select({ id: assets.id }).from(assets)
+      .where(and(eq(assets.id, assetId), usableInDesign(userId, design.workspaceId)));
     if (!live) throw new WorkspaceError("not_found");
     await tx.insert(assetUses).values({ designId, assetId }).onConflictDoNothing();
   });

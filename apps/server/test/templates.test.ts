@@ -217,6 +217,31 @@ describe("templates", () => {
     expect((await call("GET", `/api/assets/${asset}`, dee.cookie)).statusCode).toBe(200);
   });
 
+  it("use skips a visual that became private after publishing", async () => {
+    const { ada, ws } = await setup();
+    const asset = await insertAsset(ada.userId);
+    const d = await newDesign(ada.cookie, ws);
+    await fill(ada.cookie, d.id, asset);
+    const tpl = (await publish(ada.cookie, d.id, { visibility: "public" })).json().template;
+    await t.db.update(assets).set({ visibility: "private" }).where(eq(assets.id, asset));
+    const dee = await signUp(t.app, "dee@example.com", "Dee");
+    const ws2 = (await call("POST", "/api/workspaces", dee.cookie, { name: "Far", accessMode: "invite" })).json().workspace.id;
+    const res = await call("POST", `/api/templates/${tpl.id}/use`, dee.cookie, { workspaceId: ws2 });
+    expect(res.statusCode).toBe(201);
+    expect(await t.db.select().from(assetUses).where(eq(assetUses.designId, res.json().design.id))).toEqual([]);
+    expect((await call("GET", `/api/assets/${asset}`, dee.cookie)).statusCode).toBe(404);
+  });
+
+  it("an editor's template is pending whenever the workspace has a kit requiring approval", async () => {
+    const { ada, bo, ws } = await setup("editor");
+    expect((await pubWs(bo.cookie, ws)).status).toBe("published");
+    await newKit(ada.cookie, ws, true);
+    expect((await pubWs(bo.cookie, ws)).status).toBe("pending");
+    expect((await pubPublic(bo.cookie, ws)).status).toBe("pending");
+    expect((await pubWs(ada.cookie, ws)).status).toBe("published");
+    expect((await pubPublic(ada.cookie, ws)).status).toBe("published");
+  });
+
   it("workspace template can't be used in another workspace", async () => {
     const { ada, ws } = await setup();
     const tpl = await pubWs(ada.cookie, ws);
