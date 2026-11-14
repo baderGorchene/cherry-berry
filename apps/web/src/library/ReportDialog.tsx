@@ -6,7 +6,7 @@ const REASONS: [ReportBody["reason"], string][] = [
 ];
 
 export default function ReportDialog({ target, onClose }: {
-  target: { type: "asset" | "shape"; id: string; title: string }; onClose(): void;
+  target: { type: "asset" | "shape" | "template"; id: string; title: string }; onClose(): void;
 }) {
   const [reason, setReason] = useState<ReportBody["reason"]>("copyright");
   const [note, setNote] = useState("");

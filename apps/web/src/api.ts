@@ -137,7 +137,7 @@ export const linkAssetToDesign = (designId: string, assetId: string) =>
   lib(api<void>(`/api/designs/${enc(designId)}/assets`, { body: { assetId } }));
 export const assetUrl = (id: string, kind: "file" | "thumb") => `/api/assets/${enc(id)}/${kind}`;
 
-export type ReportBody = { targetType: "asset" | "shape"; targetId: string; reason: "copyright" | "inappropriate" | "spam" | "other"; note?: string };
+export type ReportBody = { targetType: "asset" | "shape" | "template"; targetId: string; reason: "copyright" | "inappropriate" | "spam" | "other"; note?: string };
 export const reportItem = (body: ReportBody) => lib(api<{ report: { id: string } }>("/api/reports", { body }));
 
 export type Font = { id: string; kitId: string; family: string; weight: number; style: "normal" | "italic"; format: "woff2" | "woff" | "ttf" | "otf"; bytes: number };
@@ -177,6 +177,19 @@ export const listTemplates = (scope: "workspace" | "public", opts: { workspaceId
   return api<{ templates: Template[] }>(`/api/templates?${qs}`).then((r) => r.templates);
 };
 export const templateThumbUrl = (id: string) => `/api/templates/${enc(id)}/thumb`;
+export const TEMPLATE_CATEGORIES: [TemplateCategory, string][] = [
+  ["social", "Social"], ["print", "Print"], ["presentation", "Presentations"], ["cards", "Cards & invites"], ["other", "Other"],
+];
+export type PublishBody = {
+  name: string; category: TemplateCategory; visibility: "workspace" | "public"; license: Template["license"];
+  attribution: string; kitId?: string | null; thumb: string;
+};
+export const publishTemplate = (designId: string, body: PublishBody) =>
+  api<{ template: Template }>(`/api/designs/${enc(designId)}/template`, { body }).then((r) => r.template);
+export const startFromTemplate = (id: string, workspaceId: string) =>
+  api<{ design: Design }>(`/api/templates/${enc(id)}/use`, { body: { workspaceId } }).then((r) => r.design);
+export const approveTemplate = (id: string) => api<{ template: Template }>(`/api/templates/${enc(id)}/approve`, { method: "POST" }).then((r) => r.template);
+export const deleteTemplate = (id: string) => api<void>(`/api/templates/${enc(id)}`, { method: "DELETE" });
 
 export function toBase64(u8: Uint8Array): string {
   let s = "";
@@ -217,7 +230,7 @@ const COPY: Record<string, string> = {
   brand_locked: "This layer is locked by the brand template.",
   invalid_logo: "That logo isn't available to this workspace.",
   invalid_font: "That file isn't a font we can use. Choose WOFF2, WOFF, TTF or OTF.",
-  template_private_assets: "Every image in a template must be visible to everyone who can see the template.",
+  template_private_assets: "Every visual in a public template must be public. Make them public or publish to this workspace.",
   invalid_document: "This change couldn't be saved because the design became invalid.",
 };
 

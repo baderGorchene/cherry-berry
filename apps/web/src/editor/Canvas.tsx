@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import Konva from "konva";
 import { Ellipse, Group, Image as KImage, Layer, Path, Rect, Stage, Text, Transformer } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -90,11 +90,11 @@ function NodeView({ n, unit, top, editing, inert, ...events }: {
 }
 
 export default function Canvas({
-  ydoc, page, selected, readOnly, role, tool, zoom, pan, editingPath, anchors, pathKeys, kit, fontsVersion,
+  ydoc, page, selected, readOnly, role, tool, zoom, pan, editingPath, anchors, pathKeys, snapRef, kit, fontsVersion,
   act, onSelect, onTool, onPan, onZoom, onViewport, onAnchors, onEditPath,
 }: {
   ydoc: Y.Doc; page: Page; selected: string[]; readOnly: boolean; role: Role; tool: Tool; zoom: number; pan: Pt;
-  editingPath: string | null; anchors: AnchorRef[]; pathKeys: PathKeys; kit: BrandKit | null; fontsVersion: number;
+  editingPath: string | null; anchors: AnchorRef[]; pathKeys: PathKeys; snapRef: MutableRefObject<(() => string) | null>; kit: BrandKit | null; fontsVersion: number;
   act(fn: () => void): void; onSelect(ids: string[]): void; onTool(t: Tool): void;
   onPan(p: Pt): void; onZoom(z: number): void; onViewport(v: { width: number; height: number }): void;
   onAnchors(a: AnchorRef[]): void; onEditPath(id: string): void;
@@ -102,6 +102,8 @@ export default function Canvas({
   const box = useRef<HTMLElement>(null);
   const nodesRef = useRef<Konva.Group>(null);
   const trRef = useRef<Konva.Transformer>(null);
+  const stageRef = useRef<Konva.Stage>(null);
+  const pageRef = useRef<Konva.Group>(null);
   const [vp, setVp] = useState({ width: 0, height: 0 });
   const [drag, setDrag] = useState<Drag | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
@@ -134,6 +136,22 @@ export default function Canvas({
     if (!tr || !group) return;
     tr.nodes(pathMode ? [] : group.getChildren((k) => selected.includes(k.id()) && !!top(k.id()) && selectable(top(k.id())!) && k.id() !== editing));
   });
+
+  // A PNG of the page area only (no selection handles), longest side at most 600 px, whatever the zoom and pan.
+  snapRef.current = () => {
+    const stage = stageRef.current!, g = pageRef.current!, tr = trRef.current;
+    const u = toPx(1, page.unit), t = Math.min(1, 600 / (Math.max(page.width, page.height) * u));
+    const saved = { x: g.x(), y: g.y(), scaleX: g.scaleX(), scaleY: g.scaleY() };
+    g.setAttrs({ x: 0, y: 0, scaleX: u * t, scaleY: u * t });
+    tr?.visible(false);
+    try {
+      return stage.toDataURL({ x: 0, y: 0, width: page.width * u * t, height: page.height * u * t, pixelRatio: 1, mimeType: "image/png" });
+    } finally {
+      g.setAttrs(saved);
+      tr?.visible(true);
+      stage.batchDraw();
+    }
+  };
 
   const commitKonva = (ks: Konva.Node[]) => {
     const patches = ks.flatMap((k) => {
@@ -263,10 +281,10 @@ export default function Canvas({
   return (
     <main ref={box} className="ed-stage" aria-label={`${page.name} canvas`}
       style={{ cursor: tool === "select" || tool === "direct" || readOnly ? "default" : "crosshair" }}>
-      <Stage width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove}
+      <Stage ref={stageRef} width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove}
         onMouseLeave={() => pathInput.current?.hover(null)} onWheel={onWheel}>
         <Layer key={fontsVersion}>
-          <Group x={origin.x} y={origin.y} scaleX={scale} scaleY={scale}>
+          <Group ref={pageRef} x={origin.x} y={origin.y} scaleX={scale} scaleY={scale}>
             {page.bleed > 0 && (
               <Rect x={-page.bleed} y={-page.bleed} width={page.width + 2 * page.bleed} height={page.height + 2 * page.bleed}
                 stroke="#ED96D7" strokeWidth={1} strokeScaleEnabled={false} dash={[6, 4]} listening={false} />

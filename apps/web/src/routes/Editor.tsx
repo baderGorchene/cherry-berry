@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import * as Y from "yjs";
 import type { AnchorRef, BoolOp } from "@cherry/vector";
 import {
@@ -14,6 +14,7 @@ import { IconBack, IconRedo, IconUndo } from "../icons";
 import Canvas, { type Tool } from "../editor/Canvas";
 import { NUDGE, clampZoom, fitZoom } from "../editor/geometry";
 import Layers from "../editor/Layers";
+import PublishDialog from "../editor/PublishDialog";
 import Pages from "../editor/Pages";
 import type { PathKeys } from "../editor/PathEditor";
 import { combinable, combine, convertToPath, editModel } from "../editor/pathEdit";
@@ -94,6 +95,14 @@ function Shell({ d }: { d: Ready }) {
   const fontsVersion = useKitFonts(kit);
   const issues = useMemo(() => (kit ? brandIssues(page, kit.content) : []), [page, kit]);
   const issueCount = issues.length;
+
+  const [params, setParams] = useSearchParams();
+  const [publishing, setPublishing] = useState(role !== "viewer" && params.get("publish") === "1");
+  const snapRef = useRef<(() => string) | null>(null);
+  const closePublish = () => {
+    setPublishing(false);
+    if (params.has("publish")) setParams((p) => { p.delete("publish"); return p; }, { replace: true });
+  };
 
   const [message, setMessage] = useState("");
   useEffect(() => setMessage(""), [sel.selected.join()]);
@@ -215,6 +224,7 @@ function Shell({ d }: { d: Ready }) {
           <button className="ed-mini" aria-label="Zoom in" title="Zoom in (Ctrl+=)" onClick={() => zoomTo(zoom * 1.2)}>+</button>
           <button className="ed-mini" title="Fit (Ctrl+0)" onClick={() => zoomTo(null)}>Fit</button>
         </div>
+        {role !== "viewer" && !editNode && <button className="btn" onClick={() => setPublishing(true)}>Publish</button>}
         {editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>}
       </header>
       <div className="ed-body">
@@ -245,7 +255,7 @@ function Shell({ d }: { d: Ready }) {
           )}
         </div>
         <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} role={role} tool={tool} zoom={zoom} pan={pan}
-          editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys}
+          editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys} snapRef={snapRef}
           kit={kit} fontsVersion={fontsVersion}
           act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
           onAnchors={setAnchors} onEditPath={enterEdit} />
@@ -254,6 +264,10 @@ function Shell({ d }: { d: Ready }) {
           : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} kit={kit} onLinked={setKitId} nodes={selectedNodes} readOnly={readOnly} role={role} act={act}
             combinable={operands.length >= 2} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} />}
       </div>
+      {publishing && (
+        <PublishDialog designId={d.design.id} workspaceId={d.design.workspaceId} title={doc.title} kitId={kitId} saved={d.status === "saved"}
+          snapRef={snapRef} onClose={closePublish} />
+      )}
     </div>
   );
 }
