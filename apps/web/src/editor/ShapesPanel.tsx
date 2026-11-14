@@ -18,7 +18,7 @@ export function shapeNode(s: Shape, page: Page): CherryNode {
   return {
     id: crypto.randomUUID(), kind: "path", name: s.name,
     x: (page.width - width) / 2, y: (page.height - height) / 2, width, height, rotation: 0, opacity: 1,
-    locked: false, hidden: false, d: scalePath(s.d, f, f), fillRule: s.fillRule,
+    locked: false, hidden: false, brandLock: "none" as const, d: scalePath(s.d, f, f), fillRule: s.fillRule,
     ...(s.fill ? { fill: s.fill } : s.stroke ? {} : { fill: { type: "solid" as const, color: "#8E1EA2", opacity: 1 } }),
     ...(s.stroke ? { stroke: { ...s.stroke, width: s.stroke.width * f } } : {}),
   };
@@ -60,7 +60,7 @@ export function importNodes(paths: ReturnType<typeof svgToPaths>, page: Page): C
     const b = pathBounds(parsePath(placed));
     return {
       id: crypto.randomUUID(), kind: "path", name: `Imported ${i + 1}`,
-      x: b.x, y: b.y, width: b.width, height: b.height, rotation: 0, opacity: 1, locked: false, hidden: false,
+      x: b.x, y: b.y, width: b.width, height: b.height, rotation: 0, opacity: 1, locked: false, hidden: false, brandLock: "none" as const,
       d: transformPath(placed, [1, 0, 0, 1, -b.x, -b.y]), fillRule: p.fillRule,
       ...(p.fill ? { fill: p.fill } : {}),
       ...(p.stroke ? { stroke: { ...p.stroke, width: p.stroke.width * k } } : {}),

@@ -5,7 +5,7 @@ import type { CherryDocument, CherryNode } from "../src/schema";
 import { docToY, yToDoc, REMOTE } from "../src/y";
 import { addPage, createUndoManager, duplicateNodes, getPageIds, movePage, reorderNode, updateNode } from "../src/ops";
 
-const base = { rotation: 0, opacity: 1, locked: false, hidden: false };
+const base = { rotation: 0, opacity: 1, locked: false, hidden: false, brandLock: "none" as const };
 const rect = (id: string): CherryNode =>
   ({ ...base, id, name: id, kind: "rect", x: 0, y: 0, width: 10, height: 10, cornerRadius: 0 }) as CherryNode;
 

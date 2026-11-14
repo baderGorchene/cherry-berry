@@ -9,7 +9,7 @@ export function imageNode(asset: Pick<Asset, "id" | "title" | "width" | "height"
   const height = sized ? asset.height * f : width;
   return {
     id: crypto.randomUUID(), kind: "image", name: asset.title, assetId: asset.id,
-    x: (page.width - width) / 2, y: (page.height - height) / 2, width, height, rotation: 0, opacity: 1, locked: false, hidden: false,
+    x: (page.width - width) / 2, y: (page.height - height) / 2, width, height, rotation: 0, opacity: 1, locked: false, hidden: false, brandLock: "none" as const,
   };
 }
 

@@ -100,7 +100,7 @@ export default function PathEditor({ ydoc, page, node, tool, scale, anchors, act
     }
     const base = {
       id: crypto.randomUUID(), kind: "path", name: "Path", x: 0, y: 0, width: 0, height: 0, rotation: 0, opacity: 1,
-      locked: false, hidden: false, d: "", fillRule: "nonzero",
+      locked: false, hidden: false, brandLock: "none" as const, d: "", fillRule: "nonzero",
       ...(closed
         ? { fill: { type: "solid", color: "#8E1EA2", opacity: 1 } }
         : { stroke: { paint: { type: "solid", color: "#22142A", opacity: 1 }, width: fromPx(2, page.unit) } }),

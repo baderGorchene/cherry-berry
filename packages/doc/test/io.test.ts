@@ -43,7 +43,7 @@ describe(".cherry io", () => {
 
   it("keeps nested groups", () => {
     const d: CherryDocument = poster();
-    const base = { x: 0, y: 0, width: 10, height: 10, rotation: 0, opacity: 1, locked: false, hidden: false };
+    const base = { x: 0, y: 0, width: 10, height: 10, rotation: 0, opacity: 1, locked: false, hidden: false, brandLock: "none" as const };
     d.pages[0]!.nodes.push({
       ...base, kind: "group", id: "g1", name: "Outer",
       children: [{

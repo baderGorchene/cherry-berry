@@ -11,7 +11,7 @@ const poly = (pts: [number, number][]) =>
 function base(name: string, b: Box) {
   return {
     id: crypto.randomUUID(), name, x: b.x, y: b.y, width: b.width, height: b.height,
-    rotation: 0, opacity: 1, locked: false, hidden: false,
+    rotation: 0, opacity: 1, locked: false, hidden: false, brandLock: "none" as const,
   };
 }
 

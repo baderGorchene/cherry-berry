@@ -3,7 +3,7 @@ import * as Y from "yjs";
 import { docToY, yToDoc } from "../src/y";
 import type { CherryDocument } from "../src/schema";
 
-const base = { rotation: 0, opacity: 1, locked: false, hidden: false };
+const base = { rotation: 0, opacity: 1, locked: false, hidden: false, brandLock: "none" as const };
 const red = { type: "solid" as const, color: "#FF0000", opacity: 1 };
 const doc: CherryDocument = {
   format: "cherry", version: 1, id: "d1", title: "T", createdAt: "2026-01-01T00:00:00.000Z",

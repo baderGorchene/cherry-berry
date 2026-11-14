@@ -26,6 +26,7 @@ const base = {
   opacity: z.number().min(0).max(1).default(1),
   locked: z.boolean().default(false),
   hidden: z.boolean().default(false),
+  brandLock: z.enum(["none", "content", "fixed"]).default("none"),
 };
 
 const RectNode = z.object({
