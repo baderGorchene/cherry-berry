@@ -122,10 +122,18 @@ describe("brand fonts", () => {
     expect((await call("GET", `/api/fonts/${b.id}/file`, ada.cookie)).statusCode).toBe(404);
   });
 
-  it("deleting a kit deletes its font rows", async () => {
-    const { ada, kit } = await setup();
+  it("deleting a kit deletes its font rows and unshared objects", async () => {
+    const { ada, ws, kit } = await setup();
+    const kit2 = (await call("POST", `/api/workspaces/${ws}/brand-kits`, ada.cookie, { name: "Two" })).json().kit.id as string;
     const font = (await upload(ada.cookie, kit, woff2())).json().font;
+    await upload(ada.cookie, kit, woff2(8, 1), { weight: "700" });
+    await upload(ada.cookie, kit2, woff2()); // same bytes as the first font, other kit
+    expect(fontKeys()).toHaveLength(2);
     expect((await call("DELETE", `/api/brand-kits/${kit}`, ada.cookie)).statusCode).toBe(204);
     expect((await call("GET", `/api/fonts/${font.id}/file`, ada.cookie)).statusCode).toBe(404);
+    expect(fontKeys()).toHaveLength(1); // the shared object stays, the unshared one goes
+    expect((await call("GET", `/api/brand-kits/${kit2}`, ada.cookie)).json().kit.fonts).toHaveLength(1);
+    const f2 = (await call("GET", `/api/brand-kits/${kit2}`, ada.cookie)).json().kit.fonts[0];
+    expect((await call("GET", `/api/fonts/${f2.id}/file`, ada.cookie)).statusCode).toBe(200);
   });
 });

@@ -91,13 +91,25 @@ export async function updateKit(
   return toKit(updated!, (await kitFonts(db, [id])).get(id) ?? []);
 }
 
-export async function deleteKit(db: Db, userId: string, id: string): Promise<void> {
+export async function deleteKit(db: Db, storage: Storage, userId: string, id: string): Promise<void> {
   const { row, role } = await loadKit(db, id, userId);
   if (!canWrite(role)) throw new WorkspaceError("forbidden");
-  await db.delete(brandKits).where(eq(brandKits.id, row.id));
+  const shas = (await db.selectDistinct({ sha: brandFonts.sha256 }).from(brandFonts).where(eq(brandFonts.kitId, row.id))).map((r) => r.sha);
+  await db.delete(brandKits).where(eq(brandKits.id, row.id)); // font rows go with it (FK cascade)
+  // ponytail: font objects orphaned by workspace/user deletion cascades are swept in Phase 9
+  for (const sha of shas) await removeFontObjectIfUnused(db, storage, sha);
 }
 
 const FONT_LOCK = (sha256: string) => sql`select pg_advisory_xact_lock(hashtext(${"font:" + sha256}))`;
+
+/** Removes `fonts/<sha>` when no font row uses it; takes the lock addFont holds across its put and insert. */
+async function removeFontObjectIfUnused(db: Db, storage: Storage, sha256: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.execute(FONT_LOCK(sha256));
+    const [other] = await tx.select({ id: brandFonts.id }).from(brandFonts).where(eq(brandFonts.sha256, sha256)).limit(1);
+    if (!other) await storage.delete(`fonts/${sha256}`).catch((e) => console.error("font delete: could not remove object", e));
+  });
+}
 
 /** Owner/admin only. The caller has already size-limited the bytes; the format comes from the bytes, never the filename. */
 export async function addFont(
@@ -130,12 +142,8 @@ async function loadFont(db: Db, id: string, userId: string): Promise<{ font: Fon
 export async function deleteFont(db: Db, storage: Storage, userId: string, id: string): Promise<void> {
   const { font, role } = await loadFont(db, id, userId);
   if (!canWrite(role)) throw new WorkspaceError("forbidden");
-  await db.transaction(async (tx) => {
-    await tx.execute(FONT_LOCK(font.sha256));
-    await tx.delete(brandFonts).where(eq(brandFonts.id, id));
-    const [other] = await tx.select({ id: brandFonts.id }).from(brandFonts).where(eq(brandFonts.sha256, font.sha256)).limit(1);
-    if (!other) await storage.delete(`fonts/${font.sha256}`).catch((e) => console.error("font delete: could not remove object", e));
-  });
+  await db.delete(brandFonts).where(eq(brandFonts.id, id));
+  await removeFontObjectIfUnused(db, storage, font.sha256);
 }
 
 /** Any workspace member. */

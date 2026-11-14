@@ -47,7 +47,7 @@ export function registerBrandRoutes(
 
   app.delete("/api/brand-kits/:id", async (req, reply) => {
     const user = await requireUser(req);
-    await svc.deleteKit(db, user.id, parse(IdParams, req.params).id);
+    await svc.deleteKit(db, storage, user.id, parse(IdParams, req.params).id);
     return reply.status(204).send();
   });
 
