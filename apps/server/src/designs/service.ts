@@ -17,7 +17,7 @@ export const summaryColumns = {
   height: designs.height, unit: designs.unit, colorMode: designs.colorMode,
   updatedAt: designs.updatedAt, createdBy: designs.createdBy, kitId: designs.kitId,
 };
-type Row = Omit<typeof designs.$inferSelect, "state" | "createdAt">;
+type Row = Omit<typeof designs.$inferSelect, "state" | "createdAt" | "parentDesignId" | "parentVersionId">;
 export const summary = (d: Row): DesignSummary => ({
   id: d.id, workspaceId: d.workspaceId, title: d.title, width: d.width, height: d.height,
   unit: d.unit, colorMode: d.colorMode, updatedAt: d.updatedAt.toISOString(), createdBy: d.createdBy, kitId: d.kitId,

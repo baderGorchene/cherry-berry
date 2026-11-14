@@ -15,6 +15,8 @@ import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import { createCollab, type Collab } from "./collab/server";
 import { registerCollabRoutes } from "./collab/routes";
+import { registerVersionRoutes } from "./versions/routes";
+import { AUTO_VERSION_MS, registerAutoVersions } from "./versions/service";
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -23,7 +25,7 @@ declare module "fastify" {
   }
 }
 
-export async function buildApp(config: Config, deps: { db: Db; storage: Storage }): Promise<FastifyInstance> {
+export async function buildApp(config: Config, deps: { db: Db; storage: Storage; autoVersionMs?: number }): Promise<FastifyInstance> {
   const options: FastifyServerOptions = {
     logger: { level: config.logLevel },
     // Fastify accepts a hop count at runtime; its types omit number.
@@ -34,6 +36,7 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage 
   const requireUser = createRequireUser(auth);
   const collab = createCollab(deps.db, auth, config.publicUrl);
   app.decorate("collab", collab);
+  registerAutoVersions(deps.db, collab, deps.autoVersionMs ?? AUTO_VERSION_MS);
   // Stores every live document before the database closes.
   app.addHook("onClose", () => collab.close());
 
@@ -79,6 +82,7 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage 
   registerCollabRoutes(app, collab);
   registerWorkspaceRoutes(app, deps.db, requireUser);
   registerDesignRoutes(app, deps.db, collab, requireUser);
+  registerVersionRoutes(app, deps.db, collab, requireUser);
   registerBrandRoutes(app, deps.db, deps.storage, requireUser);
   registerShapeRoutes(app, deps.db, requireUser);
   registerAssetRoutes(app, deps.db, deps.storage, requireUser);

@@ -16,14 +16,14 @@ export function testConfig(): Config {
   });
 }
 
-export async function setupTestApp(overrides: Partial<Config> = {}): Promise<{
+export async function setupTestApp(overrides: Partial<Config> = {}, deps: { autoVersionMs?: number } = {}): Promise<{
   app: FastifyInstance; db: Db; storage: MemoryStorage; reset(): Promise<void>; close(): Promise<void>;
 }> {
   const config = { ...testConfig(), ...overrides };
   const { db, close } = createDb(config.databaseUrl);
   await runMigrations(db);
   const storage = memoryStorage();
-  const app = await buildApp(config, { db, storage });
+  const app = await buildApp(config, { db, storage, ...deps });
   await app.ready();
   return {
     app, db, storage,

@@ -98,10 +98,28 @@ export const designs = pgTable("designs", {
   colorMode: text("color_mode").notNull(),
   state: bytea("state").notNull(),
   kitId: uuid("kit_id").references((): AnyPgColumn => brandKits.id, { onDelete: "set null" }),
+  parentDesignId: uuid("parent_design_id").references((): AnyPgColumn => designs.id, { onDelete: "set null" }),
+  parentVersionId: uuid("parent_version_id").references((): AnyPgColumn => designVersions.id, { onDelete: "set null" }),
   createdBy: text("created_by").notNull().references(() => user.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index("designs_workspace_updated").on(t.workspaceId, t.updatedAt.desc())]);
+
+export const designVersions = pgTable("design_versions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  designId: uuid("design_id").notNull().references(() => designs.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  name: text("name"),
+  summary: text("summary").notNull(),
+  state: bytea("state").notNull(),
+  createdBy: text("created_by").references(() => user.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  branchDesignId: uuid("branch_design_id").references((): AnyPgColumn => designs.id, { onDelete: "set null" }),
+}, (t) => [
+  check("design_versions_kind", sql`${t.kind} in ('auto','named','restore','branch')`),
+  check("design_versions_name", sql`char_length(${t.name}) <= 80`),
+  index("design_versions_design_created").on(t.designId, t.createdAt.desc()),
+]);
 
 export const brandKits = pgTable("brand_kits", {
   id: uuid("id").primaryKey().defaultRandom(),
