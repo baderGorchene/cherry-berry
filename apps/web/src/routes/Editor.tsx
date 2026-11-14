@@ -194,8 +194,9 @@ function Shell({ d }: { d: Ready }) {
   const act = (fn: () => void) => { undo.stopCapturing(); fn(); undo.stopCapturing(); };
   const selectedNodes = sel.selected.map((s) => findNode(page.nodes, s)).filter((n): n is CherryNode => !!n);
   const operands = page.nodes.filter((n) => sel.selected.includes(n.id) && combinable(n));
+  const canCombine = operands.length >= 2 && operands.every((n) => canMove(n, role));
   const runCombine = (op: BoolOp) => {
-    if (operands.length >= 2) setMessage(combine(ydoc, page.id, op, operands, act, select) ?? "");
+    if (canCombine) setMessage(combine(ydoc, page.id, op, operands, act, select) ?? "");
   };
   const runConvert = (n: CherryNode) => setMessage(convertToPath(ydoc, page.id, n, act) ?? "");
   const left: Panel = editNode ? "layers" : panel; // path edit mode always shows Layers
@@ -240,7 +241,7 @@ function Shell({ d }: { d: Ready }) {
           {left === "layers" && (
             <aside aria-label="Layers" className="ed-pane">
               <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} role={role} act={act} onSelect={select} />
-              <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
+              <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} role={role} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
             </aside>
           )}
           {left === "shapes" && (
@@ -262,7 +263,7 @@ function Shell({ d }: { d: Ready }) {
         {editNode
           ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
           : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} kit={kit} onLinked={setKitId} nodes={selectedNodes} readOnly={readOnly} role={role} act={act}
-            combinable={operands.length >= 2} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} />}
+            combinable={canCombine} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} />}
       </div>
       {publishing && (
         <PublishDialog designId={d.design.id} workspaceId={d.design.workspaceId} title={doc.title} kitId={kitId} saved={d.status === "saved"}

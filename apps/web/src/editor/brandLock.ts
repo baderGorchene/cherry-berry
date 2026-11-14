@@ -14,3 +14,7 @@ export function imageSlot(nodes: CherryNode[], selected: string[], role: Role): 
   const one = selected.length === 1 ? flat(nodes).find((n) => n.id === selected[0]) : undefined;
   return one?.kind === "image" && one.brandLock === "content" && role === "editor" ? one : undefined;
 }
+
+/** True when any node, at any depth, carries a brand lock. */
+export const hasBrandLock = (nodes: CherryNode[]): boolean =>
+  nodes.some((n) => n.brandLock !== "none" || (n.kind === "group" && hasBrandLock(n.children)));

@@ -51,6 +51,10 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await setLock(page, "Rectangle", "Fixed");
   await setLock(page, "Hello", "Content editable");
   await setLock(page, "Dot", "Content editable");
+  // A second page, so deleting the first isn't blocked just for being the only one.
+  await page.getByRole("button", { name: "+ Add page" }).click();
+  await page.getByRole("button", { name: /Page 1$/ }).click();
+  await expect(page.getByRole("status")).toHaveText("Saved");
   const url = page.url();
 
   const editor = await openAsEditor(browser, page);
@@ -60,6 +64,11 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await expect(layers(editor).getByRole("button", { name: "Lock Rectangle" })).toBeDisabled();
   await expect(layers(editor).getByRole("button", { name: "Lock Rectangle" })).toHaveAttribute("title", "Locked by the brand template");
   await expect(layers(editor).getByText("Brand", { exact: true })).toHaveCount(3);
+
+  // The page holding locked layers can't be deleted by an editor.
+  const del = editor.locator(".ed-pagerow").getByRole("button", { name: "Delete" });
+  await expect(del).toBeDisabled();
+  await expect(del).toHaveAttribute("title", "Contains brand-locked layers");
 
   // Fixed: a click on the rectangle doesn't select it.
   const box = (await canvas(editor).boundingBox())!;
