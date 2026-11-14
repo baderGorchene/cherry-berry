@@ -191,6 +191,22 @@ export const startFromTemplate = (id: string, workspaceId: string) =>
 export const approveTemplate = (id: string) => api<{ template: Template }>(`/api/templates/${enc(id)}/approve`, { method: "POST" }).then((r) => r.template);
 export const deleteTemplate = (id: string) => api<void>(`/api/templates/${enc(id)}`, { method: "DELETE" });
 
+export type VersionSummary = {
+  id: string; kind: "auto" | "named" | "restore" | "branch"; name: string | null; summary: string; createdAt: string;
+  createdBy: { id: string; name: string } | null; branchDesignId: string | null;
+};
+export const listVersions = (designId: string) =>
+  api<{ versions: VersionSummary[] }>(`/api/designs/${enc(designId)}/versions`).then((r) => r.versions);
+export const nameVersion = (designId: string, name: string) =>
+  api<{ version: VersionSummary }>(`/api/designs/${enc(designId)}/versions`, { body: { name } }).then((r) => r.version);
+/** `null` un-names a named version, which turns it back into an auto version. */
+export const renameVersion = (id: string, name: string | null) =>
+  api<{ version: VersionSummary }>(`/api/versions/${enc(id)}`, { method: "PATCH", body: { name } }).then((r) => r.version);
+export const versionState = (id: string) => api<{ state: string }>(`/api/versions/${enc(id)}/state`).then((r) => r.state);
+export const restoreVersion = (id: string) => api<{ design: Design }>(`/api/versions/${enc(id)}/restore`, { method: "POST" }).then((r) => r.design);
+export const branchVersion = (id: string, name: string) =>
+  api<{ design: Design }>(`/api/versions/${enc(id)}/branch`, { body: { name } }).then((r) => r.design);
+
 export function toBase64(u8: Uint8Array): string {
   let s = "";
   for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));

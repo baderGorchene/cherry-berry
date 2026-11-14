@@ -253,6 +253,7 @@ function Shell({ d }: { d: Ready }) {
           <button className="ed-mini" title="Fit (Ctrl+0)" onClick={() => zoomTo(null)}>Fit</button>
         </div>
         <Avatars people={people} />
+        <Link className="btn" to={`/d/${d.design.id}/history`}>History</Link>
         <SharePopover workspace={workspaceName} />
         {role !== "viewer" && !editNode && <button className="btn" onClick={() => setPublishing(true)}>Publish</button>}
         {editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>}

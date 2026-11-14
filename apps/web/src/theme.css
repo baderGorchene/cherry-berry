@@ -252,3 +252,31 @@ button.slot:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px
 .tpl-use { all: unset; display: block; cursor: pointer; border-radius: 12px; }
 .tpl-use:disabled { cursor: default; opacity: .7; }
 .tpl-use:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px; }
+
+/* Version history */
+.hist-h { margin: 0 12px; font: 600 16px "Space Grotesk", sans-serif; }
+.hist-seg { display: flex; gap: 6px; }
+.hist-body { flex: 1; min-height: 0; display: flex; }
+.hist-list { flex: 0 0 320px; overflow: auto; padding: 14px; background: #fff; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 12px; }
+.hist-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.hist-item { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.hist-on { border-color: var(--berry); background: var(--tint); }
+.hist-cur { display: flex; align-items: center; justify-content: space-between; }
+.hist-pick { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; padding: 0; border: 0; background: none; color: var(--ink); font: 14px Inter, sans-serif; text-align: left; cursor: pointer; }
+.hist-pick:focus-visible { outline: 3px solid var(--blush); outline-offset: 4px; }
+.hist-time { font-weight: 600; }
+.hist-tag { padding: 2px 8px; border-radius: 999px; background: var(--tint); border: 1px solid var(--line); color: var(--berry); font: 600 12px Inter, sans-serif; }
+.hist-branch { background: var(--petal); border-color: var(--petal); color: var(--deep); }
+.hist-who { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.hist-av { width: 22px; height: 22px; font-size: 10px; border-width: 1px; }
+.hist-actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+.hist-main { flex: 1; min-width: 0; overflow: auto; padding: 20px; display: flex; flex-direction: column; gap: 12px; align-items: flex-start; }
+.hist-pair { display: flex; gap: 24px; flex-wrap: wrap; }
+.hist-pair figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
+.hist-pair figcaption { font-weight: 600; }
+.hist-canvas { background: #F3ECF5; border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; justify-content: center; }
+.hist-nopage { display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.hist-scrim { position: fixed; inset: 0; background: rgba(34,20,42,.45); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+.hist-dlg { width: min(420px, 100%); display: flex; flex-direction: column; gap: 12px; }
+.hist-dlg h2 { margin: 0; }
+@media (max-width: 800px) { .hist-body { flex-direction: column; } .hist-list { flex: none; max-height: 40vh; border-right: 0; } }

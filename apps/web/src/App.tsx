@@ -4,6 +4,7 @@ import { getSession, type User, type Workspace } from "./api";
 import Brand from "./routes/Brand";
 import StyleGuide from "./routes/StyleGuide";
 import Editor from "./routes/Editor";
+import History from "./routes/History";
 import Home from "./routes/Home";
 import Library from "./routes/Library";
 import NewDesign from "./routes/NewDesign";
@@ -48,6 +49,7 @@ export default function App() {
         <Route path="/templates" element={<RequireUser><Templates /></RequireUser>} />
         <Route path="/new" element={<RequireUser><NewDesign /></RequireUser>} />
         <Route path="/d/:id" element={<RequireUser><Editor /></RequireUser>} />
+        <Route path="/d/:id/history" element={<RequireUser><History /></RequireUser>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Session.Provider>

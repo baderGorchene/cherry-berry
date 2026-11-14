@@ -38,7 +38,7 @@ export function withTextHeight(n: CherryNode, patch: Partial<CherryNode>, unit: 
   return { ...patch, height };
 }
 
-const paint = (p?: { color: string; opacity: number }) => p && (p.opacity < 1 ? hexA(p.color, p.opacity) : p.color);
+export const paint = (p?: { color: string; opacity: number }) => p && (p.opacity < 1 ? hexA(p.color, p.opacity) : p.color);
 const hexA = (hex: string, a: number) =>
   `rgba(${parseInt(hex.slice(1, 3), 16)},${parseInt(hex.slice(3, 5), 16)},${parseInt(hex.slice(5, 7), 16)},${a})`;
 
@@ -59,7 +59,7 @@ function ImageView({ n, common }: { n: Extract<CherryNode, { kind: "image" }>; c
 }
 
 /** Plain render of one node; Konva ids are only set on top-level (selectable) nodes. */
-function NodeView({ n, unit, top, editing, inert, ...events }: {
+export function NodeView({ n, unit, top, editing, inert, ...events }: {
   n: CherryNode; unit: Unit; top: boolean; editing: string | null; inert?: boolean;
   draggable?: boolean; onDragEnd?(e: KonvaEventObject<DragEvent>): void; onDblClick?(): void;
 }) {
