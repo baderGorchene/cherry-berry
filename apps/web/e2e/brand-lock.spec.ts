@@ -70,6 +70,12 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await expect(del).toBeDisabled();
   await expect(del).toHaveAttribute("title", "Contains brand-locked layers");
 
+  // Duplicating the page copies the layers without their locks, and the save is accepted.
+  await editor.locator(".ed-pagerow").getByRole("button", { name: "Duplicate" }).click();
+  await expect(editor.getByRole("status")).toHaveText("Saved");
+  await expect(editor.getByText("Not saved")).toHaveCount(0);
+  await editor.getByRole("button", { name: /Page 1$/ }).click();
+
   // Fixed: a click on the rectangle doesn't select it.
   const box = (await canvas(editor).boundingBox())!;
   await editor.mouse.click(box.x + box.width / 2 - 200, box.y + box.height / 2);

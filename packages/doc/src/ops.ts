@@ -61,11 +61,12 @@ function withPage<T>(ydoc: Y.Doc, pageId: string, fn: (page: YMap) => T): T | un
   return out;
 }
 
-/** Deep copy with fresh ids; plain objects (fill, stroke…) are cloned so copies share nothing. */
-function cloneFresh(node: CherryNode): CherryNode {
+/** Deep copy with fresh ids (and, unless `keepLocks`, no brand locks: only owners and admins may set them); plain objects (fill, stroke…) are cloned so copies share nothing. */
+function cloneFresh(node: CherryNode, keepLocks: boolean): CherryNode {
   const copy = structuredClone(node) as CherryNode;
   const renew = (n: CherryNode) => {
     n.id = crypto.randomUUID();
+    if (!keepLocks) n.brandLock = "none";
     if (n.kind === "group") n.children.forEach(renew);
   };
   renew(copy);
@@ -118,13 +119,13 @@ export function reorderNode(
   });
 }
 
-export function duplicateNodes(ydoc: Y.Doc, pageId: string, nodeIds: string[], offset: number): string[] {
+export function duplicateNodes(ydoc: Y.Doc, pageId: string, nodeIds: string[], offset: number, keepLocks = false): string[] {
   return withPage(ydoc, pageId, (page) => {
     const out: string[] = [];
     for (const id of nodeIds) {
       const hit = locate(nodesOf(page), id);
       if (!hit) continue;
-      const copy = cloneFresh(fromYNode(hit.node) as CherryNode);
+      const copy = cloneFresh(fromYNode(hit.node) as CherryNode, keepLocks);
       copy.name += " copy";
       copy.x += offset;
       copy.y += offset;
@@ -135,7 +136,7 @@ export function duplicateNodes(ydoc: Y.Doc, pageId: string, nodeIds: string[], o
   }) ?? [];
 }
 
-export function addPage(ydoc: Y.Doc, opts: { after?: string; copyOf?: string } = {}): string {
+export function addPage(ydoc: Y.Doc, opts: { after?: string; copyOf?: string; keepLocks?: boolean } = {}): string {
   const id = crypto.randomUUID();
   ydoc.transact(() => {
     const pages = pagesOf(ydoc);
@@ -147,7 +148,7 @@ export function addPage(ydoc: Y.Doc, opts: { after?: string; copyOf?: string } =
     for (const k of ["width", "height", "unit", "colorMode", "bleed"]) page.set(k, src?.get(k));
     page.set("background", structuredClone(src?.get("background")) ?? { type: "solid", color: "#FFFFFF", opacity: 1 });
     const nodes = opts.copyOf && src
-      ? ordered(nodesOf(src)).map((n) => cloneFresh(fromYNode(n) as CherryNode))
+      ? ordered(nodesOf(src)).map((n) => cloneFresh(fromYNode(n) as CherryNode, !!opts.keepLocks))
       : [];
     page.set("nodes", toYList(nodes, toYNode));
     const afterIdx = opts.after ? sorted.findIndex((p) => p.get("id") === opts.after) : -1;

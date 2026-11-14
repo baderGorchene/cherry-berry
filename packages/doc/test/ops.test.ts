@@ -113,4 +113,18 @@ describe("ops", () => {
     um.undo();
     expect(ids(doc().pages[0]!.nodes)).toEqual(["B"]);
   });
+
+  it("copies drop brand locks unless keepLocks is set", () => {
+    const locked = () => ({ ...group("g", [{ ...rect("c"), brandLock: "fixed" } as CherryNode]), brandLock: "content" }) as CherryNode;
+    const lockOf = (n: CherryNode | undefined) => [n?.brandLock, n?.kind === "group" ? n.children[0]?.brandLock : undefined];
+    for (const keep of [false, true]) {
+      const want = keep ? ["content", "fixed"] : ["none", "none"];
+      const a = setup([locked()]);
+      const [copyId] = duplicateNodes(a.y, a.pid, ["g"], 0, keep);
+      expect(lockOf(a.doc().pages[0]!.nodes.find((n) => n.id === copyId))).toEqual(want);
+      const b = setup([locked()]);
+      const pid2 = addPage(b.y, { copyOf: b.pid, keepLocks: keep });
+      expect(lockOf(b.doc().pages.find((p) => p.id === pid2)!.nodes[0])).toEqual(want);
+    }
+  });
 });

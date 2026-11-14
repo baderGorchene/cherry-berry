@@ -28,3 +28,11 @@ describe("hasBrandLock", () => {
     expect(hasBrandLock([node("fixed")])).toBe(true);
   });
 });
+
+describe("canDelete on groups", () => {
+  const g = { kind: "group", brandLock: "none", children: [node("fixed")] } as CherryNode;
+  it("blocks editors when a descendant is locked", () => {
+    expect(canDelete(g, "editor")).toBe(false);
+    expect(canDelete(g, "admin")).toBe(true);
+  });
+});

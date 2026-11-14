@@ -155,7 +155,7 @@ function Shell({ d }: { d: Ready }) {
       stop();
       let copies: string[] = [];
       const dup = ids.filter((id) => canMove(findNode(page.nodes, id)!, role));
-      if (dup.length) { act(() => { copies = duplicateNodes(ydoc, page.id, dup, fromPx(10, page.unit)); }); select(copies); }
+      if (dup.length) { act(() => { copies = duplicateNodes(ydoc, page.id, dup, fromPx(10, page.unit), role !== "editor"); }); select(copies); }
     }
     else if (mod && (e.key === "]" || e.key === "[")) {
       stop();

@@ -11,7 +11,7 @@ type Props = {
 };
 
 export default function Pages({ ydoc, pages, pageId, readOnly, role, act, onSwitch }: Props) {
-  const add = (opts: { after: string; copyOf?: string }) => {
+  const add = (opts: { after: string; copyOf?: string; keepLocks?: boolean }) => {
     let id = "";
     act(() => { id = addPage(ydoc, opts); });
     onSwitch(id);
@@ -27,7 +27,7 @@ export default function Pages({ ydoc, pages, pageId, readOnly, role, act, onSwit
               className={`ed-lay${p.id === pageId ? " ed-lay-on" : ""}`}
               onClick={() => onSwitch(p.id)} onRename={(name) => act(() => renamePage(ydoc, p.id, name))} />
             {p.id === pageId && <>
-              <button className="ed-icon" aria-label="Duplicate" title="Duplicate" disabled={readOnly} onClick={() => add({ after: p.id, copyOf: p.id })}><IconCopy /></button>
+              <button className="ed-icon" aria-label="Duplicate" title="Duplicate" disabled={readOnly} onClick={() => add({ after: p.id, copyOf: p.id, keepLocks: role !== "editor" })}><IconCopy /></button>
               <button className="ed-icon" aria-label="Delete" title={locked(p) ? "Contains brand-locked layers" : "Delete"} disabled={readOnly || pages.length === 1 || locked(p)} onClick={() => act(() => removePage(ydoc, p.id))}><IconTrash /></button>
               <button className="ed-icon" aria-label="Move up" title="Move up" disabled={readOnly || i === 0} onClick={() => act(() => movePage(ydoc, p.id, i - 1))}><IconUp /></button>
               <button className="ed-icon" aria-label="Move down" title="Move down" disabled={readOnly || i === pages.length - 1} onClick={() => act(() => movePage(ydoc, p.id, i + 1))}><IconDown /></button>
