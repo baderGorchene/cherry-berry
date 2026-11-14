@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { addNode, createShape, getPageIds, setTitle, updateNode, yToDoc, type CherryNode } from "@cherry/doc";
 import { designs } from "../src/db/schema";
 import { setupTestApp, signUp } from "./helpers";
+import type { AddressInfo } from "node:net";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
 let url: string;
@@ -50,14 +51,15 @@ async function team() {
   return { ada, bo, cy, eve, id: design.id };
 }
 
-function connect(cookie: string | undefined, name: string) {
-  const doc = new Y.Doc();
+/** Opens `name` with its own `doc` (pass one with local edits to send them as sync step 2) over a new or shared socket. */
+function connect(cookie: string | undefined, name: string, opts: { doc?: Y.Doc; socket?: HocuspocusProviderWebsocket; url?: string } = {}) {
+  const doc = opts.doc ?? new Y.Doc();
   class CookieSocket extends WebSocket {
     constructor(address: string) { super(address, cookie ? { headers: { cookie } } : {}); }
   }
   const closes: string[] = [];
   let denied: string | null = null;
-  const socket = new HocuspocusProviderWebsocket({ url, WebSocketPolyfill: CookieSocket });
+  const socket = opts.socket ?? new HocuspocusProviderWebsocket({ url: opts.url ?? url, WebSocketPolyfill: CookieSocket });
   const provider = new HocuspocusProvider({
     websocketProvider: socket, name, document: doc,
     onClose: ({ event }) => { closes.push(event.reason); },
@@ -65,7 +67,7 @@ function connect(cookie: string | undefined, name: string) {
   });
   provider.attach();
   open.push(provider, socket);
-  return { provider, doc, closes, denied: () => denied };
+  return { provider, doc, socket, closes, denied: () => denied };
 }
 async function synced(...cs: ReturnType<typeof connect>[]) {
   await vi.waitFor(() => { for (const c of cs) expect(c.provider.synced).toBe(true); }, { timeout: 3000 });
@@ -194,5 +196,102 @@ describe("live collaboration", () => {
     expect(res.json()).toEqual({ design: expect.objectContaining({ id }), state: expect.any(String) });
     await vi.waitFor(() => expect(node(a.doc, r.id)).toBeDefined(), { timeout: 2000 });
     expect(node(fromState((await stored(id)).state), r.id)).toBeDefined();
+  });
+
+  it("PUT state keeps the change live and answers 503 when the store fails", async () => {
+    const { ada, id } = await team();
+    const d = fromState(Buffer.from((await call("GET", `/api/designs/${id}`, ada.cookie)).json().state, "base64"));
+    const r = rect();
+    addNode(d, getPageIds(d)[0]!, r);
+    const body = { state: b64(Y.encodeStateAsUpdate(d)) };
+    const write = vi.spyOn(t.db, "update").mockImplementationOnce(() => { throw new Error("db down"); });
+    const res = await call("PUT", `/api/designs/${id}/state`, ada.cookie, body);
+    write.mockRestore();
+    expect(res.statusCode).toBe(503);
+    expect(res.json()).toEqual({ error: "not_saved" });
+    expect(t.app.collab.liveState(id)).not.toBeNull();
+    expect(node(live(id), r.id)).toBeDefined();
+    expect(node(fromState((await stored(id)).state), r.id)).toBeUndefined();
+    // The next store writes the change that is still waiting.
+    expect((await call("PUT", `/api/designs/${id}/state`, ada.cookie, body)).statusCode).toBe(200);
+    expect(node(fromState((await stored(id)).state), r.id)).toBeDefined();
+  });
+
+  it("a cross-site websocket is refused", async () => {
+    const { ada } = await team();
+    const ws = new WebSocket(url, { headers: { cookie: ada.cookie, origin: "https://evil.example" } });
+    const code = await new Promise<number>((res) => ws.on("close", (c) => res(c)));
+    expect(code).toBe(1008);
+  });
+
+  it("an upper-case alias of the design id is refused", async () => {
+    const { ada, id } = await team();
+    const c = connect(ada.cookie, id.toUpperCase());
+    await vi.waitFor(() => expect(c.denied()).toBe("not_found"), { timeout: 3000 });
+  });
+
+  it("changes sent as sync step 2 are checked too", async () => {
+    const { ada, bo, id } = await team();
+    const d = fromState(Buffer.from((await call("GET", `/api/designs/${id}`, ada.cookie)).json().state, "base64"));
+    const page = getPageIds(d)[0]!;
+    const r = rect({ brandLock: "fixed" } as never);
+    addNode(d, page, r);
+    expect((await call("PUT", `/api/designs/${id}/state`, ada.cookie, { state: b64(Y.encodeStateAsUpdate(d)) })).statusCode).toBe(200);
+
+    // Bo moves the locked layer before connecting, so the move travels in his sync step 2.
+    const moved = fromState(Y.encodeStateAsUpdate(d));
+    updateNode(moved, page, r.id, { x: 5 } as never);
+    const b = connect(bo.cookie, id, { doc: moved });
+    await vi.waitFor(() => expect(b.closes).toContain("brand_locked"), { timeout: 3000 });
+
+    // An owner's offline junk value travels the same way.
+    const junk = fromState(Y.encodeStateAsUpdate(d));
+    ((junk.getMap("pages").get(page) as Y.Map<unknown>).get("nodes") as Y.Map<Y.Map<unknown>>).get(r.id)!.set("x", "junk");
+    const a = connect(ada.cookie, id, { doc: junk });
+    await vi.waitFor(() => expect(a.closes).toContain("invalid_document"), { timeout: 3000 });
+
+    await disconnectAll();
+    expect(node(fromState((await stored(id)).state), r.id)!.x).toBe(0);
+  });
+
+  it("a socket open on one design cannot attach a design of another workspace", async () => {
+    const { ada, eve, id } = await team();
+    const { workspace } = (await call("POST", "/api/workspaces", eve.cookie, { name: "Elsewhere", accessMode: "invite" })).json();
+    const other = (await call("POST", `/api/workspaces/${workspace.id}/designs`, eve.cookie,
+      { title: "Secret", width: 100, height: 100, unit: "px", colorMode: "rgb" })).json().design.id as string;
+    const a = connect(ada.cookie, id);
+    await synced(a);
+    const b = connect(ada.cookie, other, { socket: a.socket });
+    await vi.waitFor(() => expect(b.denied()).toBe("not_found"), { timeout: 3000 });
+    expect(b.provider.synced).toBe(false);
+    expect(t.app.collab.liveState(other)).toBeNull();
+  });
+
+  it("closing the app stores a document whose last store failed", async () => {
+    const t2 = await setupTestApp();
+    try {
+      await t2.app.listen({ port: 0, host: "127.0.0.1" });
+      const ada = await signUp(t2.app, "ada@example.com");
+      const inject = (method: Method, path: string, payload?: object) =>
+        t2.app.inject({ method, url: path, headers: { cookie: ada.cookie }, ...(payload ? { payload } : {}) });
+      const { workspace } = (await inject("POST", "/api/workspaces", { name: "North", accessMode: "invite" })).json();
+      const id = (await inject("POST", `/api/workspaces/${workspace.id}/designs`,
+        { title: "Poster", width: 100, height: 100, unit: "px", colorMode: "rgb" })).json().design.id as string;
+      const a = connect(ada.cookie, id, { url: `ws://127.0.0.1:${(t2.app.server.address() as AddressInfo).port}/api/collab` });
+      const page = await synced(a);
+      const r = rect();
+      addNode(a.doc, page, r);
+      await flushed(a);
+      const write = vi.spyOn(t2.db, "update").mockImplementationOnce(() => { throw new Error("db down"); });
+      a.provider.destroy();
+      await vi.waitFor(() => expect(write).toHaveBeenCalled(), { timeout: 3000 });
+      write.mockRestore();
+      expect(t2.app.collab.liveState(id)).not.toBeNull();
+      await t2.app.close();
+      const [row] = await t2.db.select().from(designs).where(eq(designs.id, id));
+      expect(node(fromState(row!.state), r.id)).toBeDefined();
+    } finally {
+      await t2.close();
+    }
   });
 });

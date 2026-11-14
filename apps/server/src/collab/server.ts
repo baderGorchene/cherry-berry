@@ -31,10 +31,14 @@ type Context = { userId?: string; role?: Role };
 const reject = (e: unknown, fallback: string) => ({ code: 4000, reason: e instanceof HttpError ? e.code : fallback });
 
 /** One live Yjs document per design (the document name is the design id). Assumes a single server process. */
-export function createCollab(db: Db, auth: Auth): Collab {
+export function createCollab(db: Db, auth: Auth, publicUrl: string): Collab {
+  const origin = new URL(publicUrl).origin;
   const stored: Parameters<Collab["onStored"]>[0][] = [];
   const lastBy = new Map<string, string>();
+  /** Documents with changes not yet in the database; they are never unloaded. */
   const dirty = new Set<string>();
+  /** Documents whose last store failed. */
+  const failed = new Set<string>();
   const persisting = new Set<Promise<unknown>>();
 
   const hp = new Hocuspocus<Context>({
@@ -45,6 +49,8 @@ export function createCollab(db: Db, auth: Auth): Collab {
     async onAuthenticate({ requestHeaders, documentName, connectionConfig }) {
       const session = await auth.api.getSession({ headers: requestHeaders });
       if (!session) throw reject(null, "unauthorized");
+      // Postgres compares uuids case-insensitively; an upper-case alias would load a second live document for the row.
+      if (documentName !== documentName.toLowerCase()) throw reject(null, "not_found");
       let role: Role;
       try {
         ({ role } = await loadWithRole(db, documentName, session.user.id));
@@ -84,14 +90,21 @@ export function createCollab(db: Db, auth: Auth): Collab {
       const run = (async () => {
         try {
           await persistState(db, documentName, document);
+          failed.delete(documentName);
         } catch (e) {
           dirty.add(documentName);
+          failed.add(documentName);
           throw e;
         }
         for (const cb of stored) await cb(documentName, document, lastBy.get(documentName) ?? null);
       })();
       persisting.add(run);
       try { await run; } finally { persisting.delete(run); }
+    },
+
+    // ponytail: a document whose store failed stays loaded until its next change, direct connection or close() stores it; add a retry timer if outages outlast sessions.
+    async beforeUnloadDocument({ documentName }) {
+      if (dirty.has(documentName)) throw new Error(`keeping ${documentName} loaded: changes not stored`);
     },
 
     async afterUnloadDocument({ documentName }) {
@@ -101,6 +114,11 @@ export function createCollab(db: Db, auth: Auth): Collab {
 
   return {
     handle(socket, request) {
+      // The session cookie rides along on any site's websocket, so only our own pages may open one.
+      if (request.headers.origin !== undefined && request.headers.origin !== origin) {
+        socket.close(1008, "forbidden_origin");
+        return;
+      }
       const req = new Request(new URL(request.url, "http://localhost"), { headers: fromNodeHeaders(request.headers) });
       const conn = hp.handleConnection(socket, req, {});
       socket.on("message", (data: Buffer) => conn.handleMessage(new Uint8Array(data)));
@@ -115,22 +133,32 @@ export function createCollab(db: Db, auth: Auth): Collab {
       const context: Context = by ? { userId: by } : {};
       const conn = await hp.openDirectConnection(id, context);
       const doc = conn.document!;
+      let out!: T | Promise<T>;
       try {
         // The origin carries `by` to onChange; work an async `fn` does after its first await runs outside it.
-        let out!: T | Promise<T>;
         doc.transact(() => { out = fn(doc); }, { source: "local", context });
-        return await out;
+        out = await out;
       } finally {
         await conn.disconnect();
       }
+      // Leaving stores immediately; Hocuspocus only logs a failed store, and the document stays live (beforeUnloadDocument).
+      if (failed.has(id)) throw new HttpError(503, "not_saved");
+      return out;
     },
     onStored(cb) { stored.push(cb); },
     async close() {
       hp.closeConnections();
       hp.flushPendingStores();
-      // A flushed store reaches onStoreDocument only after its mutex resolves.
-      await new Promise((r) => setImmediate(r));
-      await Promise.allSettled([...persisting]);
+      // A flushed store reaches onStoreDocument only after its save mutex is free, so wait until none is running.
+      do {
+        await new Promise((r) => setImmediate(r));
+        await Promise.allSettled([...persisting]);
+      } while (persisting.size || [...hp.documents.values()].some((d) => d.saveMutex.isLocked()));
+      // A failed store leaves its document dirty, and flushPendingStores skips it: write it one last time.
+      for (const [id, doc] of hp.documents) {
+        if (!dirty.delete(id)) continue;
+        await persistState(db, id, doc).catch((e) => console.error(`collab: could not store ${id} on close`, e));
+      }
     },
   };
 }

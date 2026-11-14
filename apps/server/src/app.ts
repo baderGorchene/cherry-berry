@@ -32,7 +32,7 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage 
   const app = Fastify(options);
   const auth = createAuth(config, deps.db);
   const requireUser = createRequireUser(auth);
-  const collab = createCollab(deps.db, auth);
+  const collab = createCollab(deps.db, auth, config.publicUrl);
   app.decorate("collab", collab);
   // Stores every live document before the database closes.
   app.addHook("onClose", () => collab.close());
