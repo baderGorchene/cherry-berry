@@ -113,3 +113,22 @@ test("editor sees the kit read-only", async ({ page, browser }) => {
   await expect(editor.getByRole("button", { name: "Upload font" })).toHaveCount(0);
   for (const n of ["Only allow kit colors", "Lock logos", "Require approval"]) await expect(editor.getByRole("switch", { name: n })).toBeDisabled();
 });
+
+test("style guide shows the kit and prints", async ({ page }) => {
+  await page.addInitScript(() => { (window as any).printed = 0; window.print = () => { (window as any).printed++; }; });
+  await startKit(page);
+  await addColor(page, "Berry", "#8E1EA2");
+  await page.getByRole("link", { name: "Style guide" }).click();
+  await expect(page.getByRole("heading", { name: "North Studio brand · Style guide" })).toBeVisible();
+  await expect(page.getByText("Brand Studio", { exact: true })).toBeVisible();
+  await expect(page.getByText("#8E1EA2", { exact: true })).toBeVisible();
+  await expect(page.getByText("7.3:1")).toBeVisible();
+  await expect(page.getByText("No logos yet.")).toBeVisible();
+  await expect(page.getByText("Lock logos against stretching and recoloring.")).toBeVisible();
+  await page.getByRole("button", { name: "Print or save as PDF" }).click();
+  expect(await page.evaluate(() => (window as any).printed)).toBe(1);
+
+  await page.goto("/brand/00000000-0000-0000-0000-000000000000/guide");
+  await expect(page.getByText("This brand kit isn't available.")).toBeVisible();
+  await expect(page.getByRole("link", { name: "Home" })).toBeVisible();
+});

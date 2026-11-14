@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { Navigate, Route, Routes } from "react-router";
 import { getSession, type User, type Workspace } from "./api";
 import Brand from "./routes/Brand";
+import StyleGuide from "./routes/StyleGuide";
 import Editor from "./routes/Editor";
 import Home from "./routes/Home";
 import Library from "./routes/Library";
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="/library" element={<RequireUser><Library /></RequireUser>} />
         <Route path="/shapes" element={<RequireUser><Shapes /></RequireUser>} />
         <Route path="/brand" element={<RequireUser><Brand /></RequireUser>} />
+        <Route path="/brand/:id/guide" element={<RequireUser><StyleGuide /></RequireUser>} />
         <Route path="/templates" element={<RequireUser><Templates /></RequireUser>} />
         <Route path="/new" element={<RequireUser><NewDesign /></RequireUser>} />
         <Route path="/d/:id" element={<RequireUser><Editor /></RequireUser>} />

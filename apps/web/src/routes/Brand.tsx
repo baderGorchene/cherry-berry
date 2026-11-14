@@ -18,20 +18,20 @@ type Rules = BrandKitContent["rules"];
 type Style = "heading" | "subheading" | "body";
 
 const HEX = /^#[0-9A-Fa-f]{6}$/;
-const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 const WEIGHTS = [100, 200, 300, 400, 500, 600, 700, 800, 900];
 const MAX_FONT = 5 * 1024 * 1024;
-const BADGE = { "AAA text": "aa-good", "AA text": "aa-good", "Large text only": "aa-warn", "Background only": "aa-bg" } as const;
+export const BADGE = { "AAA text": "aa-good", "AA text": "aa-good", "Large text only": "aa-warn", "Background only": "aa-bg" } as const;
 const STYLES: [Style, string, string][] = [
   ["heading", "Heading", "Fresh picks, every week"],
   ["subheading", "Subheading", "Small batch, big flavor"],
   ["body", "Body", "Use body text for anything longer than one line. Keep it on white or Petal backgrounds."],
 ];
-const SLOTS: [keyof Logos, string, string][] = [
+export const SLOTS: [keyof Logos, string, string][] = [
   ["primary", "Primary", "SVG or PNG"], ["onDark", "On dark", "SVG or PNG"],
   ["mark", "Icon / mark", "Square, 512 px+"], ["wordmark", "Wordmark", "SVG preferred"],
 ];
-const RULES: [keyof Rules, string, string][] = [
+export const RULES: [keyof Rules, string, string][] = [
   ["kitColorsOnly", "Only allow kit colors in brand templates", "Only allow kit colors"],
   ["warnOffBrandFonts", "Warn when off-brand fonts are used", "Warn on off-brand fonts"],
   ["lockLogos", "Lock logos against stretching and recoloring", "Lock logos"],
