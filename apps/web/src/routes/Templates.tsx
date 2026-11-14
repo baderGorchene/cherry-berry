@@ -18,7 +18,7 @@ type CardProps = { ws: Workspace; onUse(t: Template): void; onDone(): void; onRe
 
 function Card({ t, ws, onUse, onDone, onReport, onError }: { t: Template } & CardProps) {
   const viewer = ws.role === "viewer";
-  const admin = isAdmin(ws);
+  const admin = isAdmin(ws) && t.workspaceId === ws.id; // roles only count in the template's own workspace
   const run = async (fn: () => Promise<unknown>) => {
     try { await fn(); onDone(); } catch (e) { onError(errorMessage(e)); }
   };
@@ -37,8 +37,7 @@ function Card({ t, ws, onUse, onDone, onReport, onError }: { t: Template } & Car
   return (
     <li className="card" style={{ padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
       {t.status === "pending" ? <div>{body}</div> : (
-        <button type="button" aria-label={`Use ${t.name}`} disabled={viewer} onClick={() => onUse(t)}
-          style={{ all: "unset", cursor: viewer ? "default" : "pointer", display: "block", opacity: viewer ? 0.7 : 1 }}>{body}</button>
+        <button type="button" className="tpl-use" aria-label={`Use ${t.name}`} disabled={viewer} onClick={() => onUse(t)}>{body}</button>
       )}
       {viewer && t.status !== "pending" && <span className="muted" style={{ fontSize: 13 }}>Viewers can't create designs</span>}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

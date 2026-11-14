@@ -155,7 +155,9 @@ test("community template from another workspace", async ({ page, browser }) => {
   await other.goto("/templates");
   const card = other.getByRole("region", { name: "Community" }).getByRole("button", { name: "Use Launch post" });
   await expect(card).toBeVisible();
-  await expect(other.getByRole("button", { name: "Report" })).toBeVisible();
+  const community = other.getByRole("region", { name: "Community" }).getByRole("listitem").filter({ has: other.getByRole("button", { name: "Use Launch post" }) }).first();
+  await expect(community.getByRole("button", { name: "Report" })).toBeVisible();
+  await expect(community.getByRole("button", { name: "Delete" })).toHaveCount(0);
   await card.click();
   await expect(other).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await expect(layers(other).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();

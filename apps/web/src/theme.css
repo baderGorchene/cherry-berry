@@ -249,3 +249,6 @@ button.slot:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px
   .no-print { display: none !important; }
   .card, .sw, .tt-row, .slot { break-inside: avoid; }
 }
+.tpl-use { all: unset; display: block; cursor: pointer; border-radius: 12px; }
+.tpl-use:disabled { cursor: default; opacity: .7; }
+.tpl-use:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px; }
