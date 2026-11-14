@@ -1,6 +1,6 @@
 import * as Y from "yjs";
-import type { CherryNode } from "./schema";
-import { LOCAL, fromYNode, ordered, toYList, toYNode } from "./y";
+import type { CherryDocument, CherryNode } from "./schema";
+import { LOCAL, docToY, fromYNode, ordered, toYList, toYNode } from "./y";
 
 type YMap = Y.Map<unknown>;
 type List = Y.Map<YMap>;
@@ -181,4 +181,12 @@ export function createUndoManager(ydoc: Y.Doc): Y.UndoManager {
     trackedOrigins: new Set([LOCAL]),
     captureTimeout: 400,
   });
+}
+
+/** Replaces meta and all pages with `doc` in one transaction, keeping the same Y.Doc so providers and observers stay attached. */
+export function replaceDocument(ydoc: Y.Doc, doc: CherryDocument, origin: unknown = LOCAL): void {
+  ydoc.transact(() => {
+    for (const m of [ydoc.getMap("meta"), pagesOf(ydoc)]) for (const k of [...m.keys()]) m.delete(k);
+    docToY(doc, ydoc); // nested transact joins this one, so origin is ours
+  }, origin);
 }

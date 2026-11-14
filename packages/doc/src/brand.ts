@@ -91,7 +91,7 @@ export function brandIssues(page: Page, kit: BrandKitContent): BrandIssue[] {
   return out;
 }
 
-function eq(a: unknown, b: unknown): boolean {
+export function eq(a: unknown, b: unknown): boolean {
   if (a === b) return true;
   if (typeof a !== "object" || typeof b !== "object" || !a || !b) return false;
   if (Array.isArray(a) !== Array.isArray(b)) return false;
@@ -99,7 +99,7 @@ function eq(a: unknown, b: unknown): boolean {
   return ka.length === kb.length && ka.every((k) => k in b && eq((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
 }
 
-type Placed = { node: CherryNode; pageId: string; ancestors: CherryNode[] };
+export type Placed = { node: CherryNode; pageId: string; ancestors: CherryNode[] };
 function flatten(nodes: CherryNode[], pageId: string, ancestors: CherryNode[], into: Map<string, Placed>) {
   for (const n of nodes) {
     into.set(n.id, { node: n, pageId, ancestors });
@@ -107,8 +107,8 @@ function flatten(nodes: CherryNode[], pageId: string, ancestors: CherryNode[], i
   }
   return into;
 }
-const all = (d: CherryDocument) => d.pages.reduce((m, p) => flatten(p.nodes, p.id, [], m), new Map<string, Placed>());
-const noChildren = (n: CherryNode) => { const { children: _c, ...rest } = n as CherryNode & { children?: unknown }; return rest; };
+export const all = (d: CherryDocument) => d.pages.reduce((m, p) => flatten(p.nodes, p.id, [], m), new Map<string, Placed>());
+export const noChildren = (n: CherryNode) => { const { children: _c, ...rest } = n as CherryNode & { children?: unknown }; return rest; };
 
 /** True when an editor's save breaks a lock, or adds one (only owners and admins may set locks). */
 export function brandLockViolation(before: CherryDocument, after: CherryDocument): boolean {

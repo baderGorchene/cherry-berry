@@ -6,3 +6,4 @@ export * from "./ops";
 export * from "./shapes";
 export * from "./units";
 export * from "./brand";
+export * from "./diff";

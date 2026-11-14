@@ -5,7 +5,7 @@ import type { CherryNode } from "../src/schema";
 import { docToY, yToDoc, REMOTE } from "../src/y";
 import {
   addNode, addPage, createUndoManager, duplicateNodes, getPageIds, movePage, nodeInfo,
-  removeNodes, removePage, reorderNode, updateNode,
+  removeNodes, removePage, replaceDocument, reorderNode, updateNode,
 } from "../src/ops";
 
 const base = { rotation: 0, opacity: 1, locked: false, hidden: false, brandLock: "none" as const };
@@ -126,5 +126,17 @@ describe("ops", () => {
       const pid2 = addPage(b.y, { copyOf: b.pid, keepLocks: keep });
       expect(lockOf(b.doc().pages.find((p) => p.id === pid2)!.nodes[0])).toEqual(want);
     }
+  });
+
+  it("replaceDocument swaps content in one transaction and keeps the Y.Doc", () => {
+    const { y, doc } = setup([rect("a"), group("g", [rect("c")])]);
+    const target = createDocument({ title: "Other", width: 300, height: 400, unit: "px", colorMode: "rgb" });
+    target.pages[0]!.nodes = [rect("z", 7)];
+    target.pages.push({ ...structuredClone(target.pages[0]!), id: "p2", nodes: [group("h", [rect("k")])] });
+    let updates = 0;
+    y.on("update", () => updates++);
+    replaceDocument(y, target);
+    expect(updates).toBe(1);
+    expect(doc()).toEqual(target);
   });
 });
