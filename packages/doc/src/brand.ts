@@ -99,18 +99,31 @@ function eq(a: unknown, b: unknown): boolean {
   return ka.length === kb.length && ka.every((k) => k in b && eq((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
 }
 
-function flatten(nodes: CherryNode[], into: Map<string, CherryNode>) {
-  for (const n of nodes) { into.set(n.id, n); if (n.kind === "group") flatten(n.children, into); }
+type Placed = { node: CherryNode; pageId: string; ancestors: CherryNode[] };
+function flatten(nodes: CherryNode[], pageId: string, ancestors: CherryNode[], into: Map<string, Placed>) {
+  for (const n of nodes) {
+    into.set(n.id, { node: n, pageId, ancestors });
+    if (n.kind === "group") flatten(n.children, pageId, [...ancestors, n], into);
+  }
   return into;
 }
-const all = (d: CherryDocument) => d.pages.reduce((m, p) => flatten(p.nodes, m), new Map<string, CherryNode>());
+const all = (d: CherryDocument) => d.pages.reduce((m, p) => flatten(p.nodes, p.id, [], m), new Map<string, Placed>());
+const noChildren = (n: CherryNode) => { const { children: _c, ...rest } = n as CherryNode & { children?: unknown }; return rest; };
 
+/** True when an editor's save breaks a lock, or adds one (only owners and admins may set locks). */
 export function brandLockViolation(before: CherryDocument, after: CherryDocument): boolean {
+  const prev = all(before);
   const next = all(after);
-  for (const old of all(before).values()) {
+  for (const [id, { node: n }] of next) {
+    if (n.brandLock !== "none" && (prev.get(id)?.node.brandLock ?? "none") === "none") return true;
+  }
+  for (const { node: old, pageId, ancestors } of prev.values()) {
     if (old.brandLock === "none") continue;
-    const now = next.get(old.id);
-    if (!now || now.brandLock !== old.brandLock) return true;
+    const cur = next.get(old.id);
+    if (!cur || cur.pageId !== pageId || cur.ancestors.length !== ancestors.length) return true;
+    if (!ancestors.every((a, i) => cur.ancestors[i]!.id === a.id && eq(noChildren(a), noChildren(cur.ancestors[i]!)))) return true;
+    const now = cur.node;
+    if (now.brandLock !== old.brandLock) return true;
     if (old.brandLock === "fixed") { if (!eq(old, now)) return true; continue; }
     const strip = (n: CherryNode) => {
       const { name: _n, ...rest } = n as CherryNode & Record<string, unknown>;

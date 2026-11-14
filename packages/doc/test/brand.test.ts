@@ -19,6 +19,7 @@ const group = (id: string, children: CherryNode[], o: object = {}) =>
   ({ ...common, id, name: id, kind: "group", x: 0, y: 0, width: 10, height: 10, children, ...o }) as CherryNode;
 const docOf = (...nodes: CherryNode[]): CherryDocument => {
   const d = createDocument({ title: "T", width: 100, height: 100, unit: "px", colorMode: "rgb" });
+  d.pages[0]!.id = "p1";
   d.pages[0]!.nodes = nodes;
   return d;
 };
@@ -87,6 +88,28 @@ describe("brand", () => {
     expect(brandLockViolation(before, docOf(group("g", [rect("c", { brandLock: "fixed" })])))).toBe(true);
     expect(brandLockViolation(before, docOf({ ...fixed, brandLock: "none" as const } as CherryNode, group("g", [rect("c", { brandLock: "fixed" })])))).toBe(true);
     expect(brandLockViolation(before, docOf(fixed, group("g", [rect("c", { brandLock: "fixed", x: 3 })])))).toBe(true);
+  });
+
+  it("blocks structural bypasses and new locks", () => {
+    const f = rect("f", { brandLock: "fixed" });
+    const before = docOf(f, group("g", [rect("c", { brandLock: "fixed" })]));
+    const twoPages = (p1: CherryNode[], p2: CherryNode[]) => {
+      const d = docOf(...p1);
+      d.pages.push({ ...structuredClone(d.pages[0]!), id: "p2", nodes: p2 });
+      return d;
+    };
+    const cases: [string, CherryDocument, CherryDocument][] = [
+      ["wrap in a moved group", before, docOf(group("w", [f], { x: 40 }), group("g", [rect("c", { brandLock: "fixed" })]))],
+      ["wrap in a hidden group", before, docOf(group("w", [f], { hidden: true }), group("g", [rect("c", { brandLock: "fixed" })]))],
+      ["cross-page move", before, (() => { const d = twoPages([f], []); d.pages[0]!.nodes = [group("g", [rect("c", { brandLock: "fixed" })])]; d.pages[1]!.nodes = [f]; return d; })()],
+      ["ancestor group moved", before, docOf(f, group("g", [rect("c", { brandLock: "fixed" })], { x: 7 }))],
+      ["lock raised none to fixed", docOf(rect("u")), docOf(rect("u", { brandLock: "fixed" }))],
+      ["lock raised to content", docOf(text("t", "#000000")), docOf(text("t", "#000000", { brandLock: "content" }))],
+      ["new node created locked", docOf(rect("u")), docOf(rect("u"), rect("n", { brandLock: "fixed" }))],
+    ];
+    for (const [name, b, a] of cases) expect(brandLockViolation(b, a), name).toBe(true);
+    // Moving an unlocked sibling and adding unlocked nodes stay fine.
+    expect(brandLockViolation(before, docOf(f, group("g", [rect("c", { brandLock: "fixed" }), rect("n")]), rect("m")))).toBe(false);
   });
 
   it("ignores unlocked nodes and z-order", () => {
