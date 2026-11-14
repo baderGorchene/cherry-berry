@@ -102,3 +102,18 @@ test("kit deleted while linked", async ({ page }) => {
   await expect(panel(page).getByLabel("Link a brand kit")).toHaveValue("");
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+test("a locked text layer is left alone by text styles and colors", async ({ page }) => {
+  await start(page, COLORS);
+  await link(page);
+  await panel(page).getByRole("button", { name: "Heading", exact: true }).click();
+  await page.getByRole("tab", { name: "Layers", exact: true }).click();
+  await layers(page).getByRole("button", { name: "Lock Heading" }).click();
+  await brandTab(page).click();
+  await panel(page).getByRole("button", { name: "Heading", exact: true }).click();
+  await expect(panel(page).getByText("Selected layers are locked")).toBeVisible();
+  await panel(page).getByRole("button", { name: "Berry" }).click();
+  await expect(panel(page).getByText("Selected layers are locked")).toBeVisible();
+  await page.getByRole("tab", { name: "Layers", exact: true }).click();
+  await expect(layers(page).getByRole("button", { name: "Heading", exact: true })).toHaveCount(1);
+});

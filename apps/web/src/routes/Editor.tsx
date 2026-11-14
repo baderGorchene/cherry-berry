@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import * as Y from "yjs";
 import type { AnchorRef, BoolOp } from "@cherry/vector";
@@ -81,15 +81,18 @@ function Shell({ d }: { d: Ready }) {
 
   // The linked kit; a kit that is gone or unreadable leaves the design unlinked.
   const [kitId, setKitId] = useState(d.design.kitId);
-  const [kit, setKit] = useState<BrandKit | null>(null);
+  const [loaded, setLoaded] = useState<{ id: string; kit: BrandKit | null } | null>(null);
   useEffect(() => {
-    if (!kitId) return setKit(null);
+    if (!kitId) return;
     let stale = false;
-    getKit(kitId).then((k) => !stale && setKit(k), () => !stale && setKit(null));
+    getKit(kitId).then((k) => !stale && setLoaded({ id: kitId, kit: k }), () => !stale && setLoaded({ id: kitId, kit: null }));
     return () => { stale = true; };
   }, [kitId]);
+  const kit = kitId && loaded?.id === kitId ? loaded.kit : null;
+  const kitLoading = !!kitId && loaded?.id !== kitId;
   const fontsVersion = useKitFonts(kit);
-  const issueCount = kit ? brandIssues(page, kit.content).length : 0;
+  const issues = useMemo(() => (kit ? brandIssues(page, kit.content) : []), [page, kit]);
+  const issueCount = issues.length;
 
   const [message, setMessage] = useState("");
   useEffect(() => setMessage(""), [sel.selected.join()]);
@@ -231,7 +234,7 @@ function Shell({ d }: { d: Ready }) {
             <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onSelect={select} />
           )}
           {left === "brand" && (
-            <BrandPanel ydoc={ydoc} page={page} kit={kit} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly}
+            <BrandPanel ydoc={ydoc} page={page} kit={kit} loading={kitLoading} issues={issues} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly}
               act={act} selected={sel.selected} onSelect={select} onLinked={setKitId} />
           )}
         </div>

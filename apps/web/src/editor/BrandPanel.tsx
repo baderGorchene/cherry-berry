@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import * as Y from "yjs";
-import { addNode, brandIssues, createText, updateNode, type CherryNode, type Page } from "@cherry/doc";
+import { addNode, createText, updateNode, type BrandIssue, type CherryNode, type Page } from "@cherry/doc";
 import { assetUrl, errorMessage, getAsset, listKits, setDesignKit, type Asset, type BrandKit } from "../api";
 import { withTextHeight } from "./Canvas";
 import { placeAsset } from "./VisualsPanel";
@@ -61,13 +61,14 @@ function Logo({ slot, assetId, readOnly, onPlace }: { slot: string; assetId: str
   );
 }
 
-export default function BrandPanel({ ydoc, page, kit, designId, workspaceId, readOnly, act, selected, onSelect, onLinked }: {
-  ydoc: Y.Doc; page: Page; kit: BrandKit | null; designId: string; workspaceId: string; readOnly: boolean;
+export default function BrandPanel({ ydoc, page, kit, loading, issues, designId, workspaceId, readOnly, act, selected, onSelect, onLinked }: {
+  ydoc: Y.Doc; page: Page; kit: BrandKit | null; loading: boolean; issues: BrandIssue[]; designId: string; workspaceId: string; readOnly: boolean;
   act(fn: () => void): void; selected: string[]; onSelect(ids: string[]): void; onLinked(kitId: string | null): void;
 }) {
   const [note, setNote] = useState("");
   useEffect(() => setNote(""), [selected.join()]);
 
+  if (!kit && loading) return <aside aria-label="Brand panel" className="ed-shapes"><p className="muted" style={{ fontSize: 13 }}>Loading…</p></aside>;
   if (!kit) return (
     <aside aria-label="Brand panel" className="ed-shapes">
       <p style={{ fontSize: 13 }}>This design isn't linked to a brand kit.</p>
@@ -76,12 +77,13 @@ export default function BrandPanel({ ydoc, page, kit, designId, workspaceId, rea
   );
 
   const { colors, typography, logos } = kit.content;
-  const chosen = flat(page.nodes).filter((n) => selected.includes(n.id) && !n.locked);
-  const issues = brandIssues(page, kit.content);
+  const picked = flat(page.nodes).filter((n) => selected.includes(n.id));
+  const chosen = picked.filter((n) => !n.locked);
 
   const paintWith = (hex: string) => {
     if (!selected.length) return setNote("Select a layer first");
     const targets = chosen.filter((n) => n.kind === "rect" || n.kind === "ellipse" || n.kind === "path" || n.kind === "text");
+    if (!targets.length) return setNote(picked.some((n) => n.locked) ? "Selected layers are locked" : "Select a layer with a fill");
     act(() => targets.forEach((n) => updateNode(ydoc, page.id, n.id, {
       fill: { type: "solid", color: hex, opacity: "fill" in n ? n.fill?.opacity ?? 1 : 1 },
     } as Partial<CherryNode>)));
@@ -91,6 +93,7 @@ export default function BrandPanel({ ydoc, page, kit, designId, workspaceId, rea
     const s = typography[role];
     const style = { fontFamily: s.fontFamily, fontWeight: s.fontWeight, fontSize: s.fontSize, lineHeight: s.lineHeight };
     const texts = chosen.filter((n): n is TextNode => n.kind === "text");
+    if (picked.some((n) => n.kind === "text") && !texts.length) return setNote("Selected layers are locked");
     if (texts.length) return act(() => texts.forEach((n) => updateNode(ydoc, page.id, n.id, withTextHeight(n, style, page.unit))));
     const width = page.width * 0.6;
     const t = createText({ x: (page.width - width) / 2, y: 0 }, width) as TextNode;
