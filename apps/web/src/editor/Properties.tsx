@@ -4,7 +4,8 @@ import { LOCAL, removeNodes, updateNode, type CherryNode, type Page } from "@che
 import { scalePath, type BoolOp } from "@cherry/vector";
 import ReuseShape from "./SaveShapeDialog";
 import { withTextHeight } from "./Canvas";
-import { getAsset, type Asset, type BrandKit } from "../api";
+import { getAsset, type Asset, type BrandKit, type Role } from "../api";
+import { canDelete, canMove } from "./brandLock";
 import { BUILT_IN_FONTS, kitFamilies } from "../brand/fonts";
 import { KitSelect } from "./BrandPanel";
 import { LICENSES } from "../library/assets";
@@ -95,8 +96,8 @@ function VisualInfo({ assetId }: { assetId: string }) {
   );
 }
 
-export default function Properties({ ydoc, page, workspaceId, designId, kit, onLinked, nodes, readOnly, act, combinable, canConvert, message, onCombine, onConvert }: {
-  ydoc: Y.Doc; page: Page; workspaceId: string; designId: string; kit: BrandKit | null; onLinked(kitId: string | null): void; nodes: CherryNode[]; readOnly: boolean; act(fn: () => void): void;
+export default function Properties({ ydoc, page, workspaceId, designId, kit, onLinked, nodes, readOnly, role, act, combinable, canConvert, message, onCombine, onConvert }: {
+  ydoc: Y.Doc; page: Page; workspaceId: string; designId: string; kit: BrandKit | null; onLinked(kitId: string | null): void; nodes: CherryNode[]; readOnly: boolean; role: Role; act(fn: () => void): void;
   combinable: boolean; canConvert: boolean; message: string; onCombine(op: BoolOp): void; onConvert(n: CherryNode): void;
 }) {
   const { id: pageId, unit } = page;
@@ -113,7 +114,7 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
       </p>
     </aside>
   );
-  const remove = !readOnly && (
+  const remove = !readOnly && nodes.every((n) => canDelete(n, role)) && (
     <section className="ed-sec">
       <button className="ed-mini ed-del" onClick={() => act(() => removeNodes(ydoc, pageId, nodes.map((n) => n.id)))}>Delete</button>
     </section>
@@ -121,10 +122,23 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
   const update = (n: CherryNode, patch: Patch) =>
     updateNode(ydoc, pageId, n.id, withTextHeight(n, patch as Partial<CherryNode>, unit));
   const set = (n: CherryNode, patch: Patch) => act(() => update(n, patch));
+  const LOCKS = [["none", "Off"], ["content", "Content editable"], ["fixed", "Fixed"]] as const;
+  const lock = nodes.every((n) => n.brandLock === nodes[0]!.brandLock) ? nodes[0]!.brandLock : "";
+  const brandLock = (role === "owner" || role === "admin") && (
+    <section className="ed-sec">
+      <label className="ed-f"><b>Brand lock</b>
+        <select value={lock} disabled={readOnly} onChange={(e) => act(() => nodes.forEach((n) => update(n, { brandLock: e.target.value })))}>
+          {lock === "" && <option value="" disabled>Mixed</option>}
+          {LOCKS.map(([v, text]) => <option key={v} value={v}>{text}</option>)}
+        </select>
+      </label>
+    </section>
+  );
 
   if (nodes.length > 1) {
     const minX = Math.min(...nodes.map((n) => n.x));
     const minY = Math.min(...nodes.map((n) => n.y));
+    const frozen = readOnly || nodes.some((n) => !canMove(n, role));
     const move = (dx: number, dy: number) =>
       act(() => ydoc.transact(() => nodes.forEach((n) => update(n, { x: n.x + dx, y: n.y + dy })), LOCAL));
     return (
@@ -132,11 +146,11 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
         <section className="ed-sec">
           <h2 className="ed-ph">Layout · {nodes.length} layers</h2>
           <div className="ed-grid">
-            <Num label="X" unit={unit} value={minX} disabled={readOnly} onCommit={(v) => move(v - minX, 0)} />
-            <Num label="Y" unit={unit} value={minY} disabled={readOnly} onCommit={(v) => move(0, v - minY)} />
+            <Num label="X" unit={unit} value={minX} disabled={frozen} onCommit={(v) => move(v - minX, 0)} />
+            <Num label="Y" unit={unit} value={minY} disabled={frozen} onCommit={(v) => move(0, v - minY)} />
           </div>
         </section>
-        {combinable && !readOnly && (
+        {combinable && !frozen && (
           <section className="ed-sec">
             <h2 className="ed-ph">Combine</h2>
             <div className="ed-ops">
@@ -149,12 +163,14 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
             {message && <p role="status" className="muted" style={{ fontSize: 13 }}>{message}</p>}
           </section>
         )}
+        {brandLock}
         {remove}
       </aside>
     );
   }
 
   const n = nodes[0]!;
+  const ro = readOnly || !canMove(n, role);
   const resize = (w: number, h: number) => {
     w = Math.max(0, w); h = Math.max(0, h);
     const patch: Patch = { width: w, height: h };
@@ -172,12 +188,12 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
       <div className="chips">
         {kit.content.colors.map((c) => (
           <button key={c.id} type="button" className="ed-swatch" aria-label={c.name} title={`${c.name} ${c.hex}`}
-            disabled={readOnly} style={{ background: c.hex }} onClick={() => onCommit(c.hex.toUpperCase())} />
+            disabled={ro} style={{ background: c.hex }} onClick={() => onCommit(c.hex.toUpperCase())} />
         ))}
       </div>
       <p className="muted" style={{ fontSize: 13 }}>{color || "None"}</p>
     </div>
-  ) : <ColorField label={label} color={color} disabled={readOnly} onCommit={onCommit} />;
+  ) : <ColorField label={label} color={color} disabled={ro} onCommit={onCommit} />;
   const paint = (color: string, prev?: Paint): Paint => ({ type: "solid", color, opacity: prev?.opacity ?? 1 });
 
   return (
@@ -185,15 +201,15 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
       <section className="ed-sec">
         <h2 className="ed-ph">Layout</h2>
         <div className="ed-grid">
-          <Num label="X" unit={unit} value={n.x} disabled={readOnly} onCommit={(x) => set(n, { x })} />
-          <Num label="Y" unit={unit} value={n.y} disabled={readOnly} onCommit={(y) => set(n, { y })} />
-          <Num label="W" unit={unit} value={n.width} disabled={readOnly} onCommit={(w) => resize(w, n.height)} />
-          <Num label="H" unit={unit} value={n.height} disabled={readOnly} onCommit={(h) => resize(n.width, h)} />
-          <Num label="Rotation" unit="°" value={n.rotation} disabled={readOnly} onCommit={(rotation) => set(n, { rotation })} />
-          <Num label="Opacity" unit="%" value={n.opacity * 100} disabled={readOnly}
+          <Num label="X" unit={unit} value={n.x} disabled={ro} onCommit={(x) => set(n, { x })} />
+          <Num label="Y" unit={unit} value={n.y} disabled={ro} onCommit={(y) => set(n, { y })} />
+          <Num label="W" unit={unit} value={n.width} disabled={ro} onCommit={(w) => resize(w, n.height)} />
+          <Num label="H" unit={unit} value={n.height} disabled={ro} onCommit={(h) => resize(n.width, h)} />
+          <Num label="Rotation" unit="°" value={n.rotation} disabled={ro} onCommit={(rotation) => set(n, { rotation })} />
+          <Num label="Opacity" unit="%" value={n.opacity * 100} disabled={ro}
             onCommit={(o) => set(n, { opacity: Math.min(100, Math.max(0, o)) / 100 })} />
           {n.kind === "rect" && (
-            <Num label="Corner radius" unit={unit} value={n.cornerRadius} disabled={readOnly}
+            <Num label="Corner radius" unit={unit} value={n.cornerRadius} disabled={ro}
               onCommit={(r) => set(n, { cornerRadius: Math.max(0, r) })} />
           )}
         </div>
@@ -204,23 +220,23 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
         <section className="ed-sec">
           <h2 className="ed-ph">Text</h2>
           <label className="ed-f"><b>Font</b>
-            <select value={n.fontFamily} disabled={readOnly} onChange={(e) => set(n, { fontFamily: e.target.value })}>
+            <select value={n.fontFamily} disabled={ro} onChange={(e) => set(n, { fontFamily: e.target.value })}>
               {(fonts.includes(n.fontFamily) ? fonts : [n.fontFamily, ...fonts]).map((f) => <option key={f}>{f}</option>)}
             </select>
           </label>
           <div className="ed-grid">
-            <Num label="Size" unit="pt" value={n.fontSize} disabled={readOnly}
+            <Num label="Size" unit="pt" value={n.fontSize} disabled={ro}
               onCommit={(fontSize) => fontSize > 0 && set(n, { fontSize })} />
             <label className="ed-f"><b>Weight</b>
-              <select value={n.fontWeight} disabled={readOnly} onChange={(e) => set(n, { fontWeight: Number(e.target.value) })}>
+              <select value={n.fontWeight} disabled={ro} onChange={(e) => set(n, { fontWeight: Number(e.target.value) })}>
                 {[400, 500, 600, 700].map((w) => <option key={w}>{w}</option>)}
               </select>
             </label>
-            <Num label="Line height" value={n.lineHeight} disabled={readOnly} onCommit={(lineHeight) => lineHeight > 0 && set(n, { lineHeight })} />
-            <Num label="Letter spacing" value={n.letterSpacing} disabled={readOnly} onCommit={(letterSpacing) => set(n, { letterSpacing })} />
+            <Num label="Line height" value={n.lineHeight} disabled={ro} onCommit={(lineHeight) => lineHeight > 0 && set(n, { lineHeight })} />
+            <Num label="Letter spacing" value={n.letterSpacing} disabled={ro} onCommit={(letterSpacing) => set(n, { letterSpacing })} />
           </div>
           <label className="ed-f"><b>Align</b>
-            <select value={n.align} disabled={readOnly} onChange={(e) => set(n, { align: e.target.value })}>
+            <select value={n.align} disabled={ro} onChange={(e) => set(n, { align: e.target.value })}>
               <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
             </select>
           </label>
@@ -238,12 +254,12 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
         <section className="ed-sec">
           <h2 className="ed-ph">Stroke</h2>
           {colorInput("Stroke", stroke?.paint.color ?? "", (c) => set(n, { stroke: c ? { paint: paint(c, stroke?.paint), width: stroke?.width ?? 1 } : undefined }))}
-          <Num label="Stroke width" unit={unit} value={stroke?.width ?? 0} disabled={readOnly}
+          <Num label="Stroke width" unit={unit} value={stroke?.width ?? 0} disabled={ro}
             onCommit={(w) => set(n, { stroke: { paint: stroke?.paint ?? paint("#22142A"), width: Math.max(0, w) } })} />
         </section>
       )}
 
-      {canConvert && (n.kind === "rect" || n.kind === "ellipse") && !readOnly && (
+      {canConvert && (n.kind === "rect" || n.kind === "ellipse") && !ro && (
         <section className="ed-sec">
           <button className="ed-mini" onClick={() => onConvert(n)}>Convert to path</button>
           {message && <p role="status" className="muted" style={{ fontSize: 13 }}>{message}</p>}
@@ -252,6 +268,7 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
       {(n.kind === "rect" || n.kind === "ellipse" || n.kind === "path") && (
         <ReuseShape key={n.id} node={n} workspaceId={workspaceId} viewer={readOnly} />
       )}
+      {brandLock}
       {remove}
     </aside>
   );

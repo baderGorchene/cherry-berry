@@ -1,7 +1,8 @@
 import { useState } from "react";
 import * as Y from "yjs";
-import { addNode, type Page } from "@cherry/doc";
-import { assetUrl, linkAssetToDesign, type Asset, type AssetKind } from "../api";
+import { addNode, updateNode, type CherryNode, type Page } from "@cherry/doc";
+import { assetUrl, linkAssetToDesign, type Asset, type AssetKind, type Role } from "../api";
+import { imageSlot } from "./brandLock";
 import { useAssetList, type AssetScope } from "../library/assets";
 import UploadDialog from "../library/UploadDialog";
 import { imageNode, usableIn } from "./visuals";
@@ -19,9 +20,13 @@ function Chips<T>({ label, options, value, onPick }: { label: string; options: [
   );
 }
 
-/** Links the asset to the design, then places it centred on the page and selects it. Returns an error message, or null. */
+/**
+ * Links the asset to the design, then places it centred on the page and selects it, or swaps the picture of `slot`
+ * (a content-locked image) keeping its box. Returns an error message, or null.
+ */
 export async function placeAsset(
   ydoc: Y.Doc, page: Page, designId: string, a: Asset, act: (fn: () => void) => void, onSelect: (ids: string[]) => void,
+  slot?: CherryNode,
 ): Promise<string | null> {
   try {
     await linkAssetToDesign(designId, a.id);
@@ -29,14 +34,18 @@ export async function placeAsset(
     return "Couldn't link this visual to the design. Try again.";
   }
   // Placed even if the panel closed meanwhile: the person asked for it and the link now exists.
+  if (slot) {
+    act(() => updateNode(ydoc, page.id, slot.id, { assetId: a.id } as Partial<CherryNode>));
+    return null;
+  }
   const n = imageNode(a, page);
   act(() => addNode(ydoc, page.id, n));
   onSelect([n.id]);
   return null;
 }
 
-export default function VisualsPanel({ ydoc, page, designId, workspaceId, readOnly, act, onSelect }: {
-  ydoc: Y.Doc; page: Page; designId: string; workspaceId: string; readOnly: boolean;
+export default function VisualsPanel({ ydoc, page, designId, workspaceId, readOnly, role, selected, act, onSelect }: {
+  ydoc: Y.Doc; page: Page; designId: string; workspaceId: string; readOnly: boolean; role: Role; selected: string[];
   act(fn: () => void): void; onSelect(ids: string[]): void;
 }) {
   const [scope, setScope] = useState<AssetScope>("workspace");
@@ -50,7 +59,7 @@ export default function VisualsPanel({ ydoc, page, designId, workspaceId, readOn
 
   const insert = async (a: Asset) => {
     setError("");
-    const err = await placeAsset(ydoc, page, designId, a, act, onSelect);
+    const err = await placeAsset(ydoc, page, designId, a, act, onSelect, imageSlot(page.nodes, selected, role));
     if (err) setError(err);
   };
 

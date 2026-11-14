@@ -11,8 +11,9 @@ import {
 import { fromKonvaTransform, toKonvaAttrs } from "./geometry";
 import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
 import TextEditor from "./TextEditor";
-import type { BrandKit } from "../api";
+import type { BrandKit, Role } from "../api";
 import { useAssetImage } from "./useAssetImage";
+import { canEditContent, canMove } from "./brandLock";
 
 export type Tool = "select" | "text" | "pen" | "direct" | "add-anchor" | "convert-anchor" | BasicShape;
 type Pt = { x: number; y: number };
@@ -57,13 +58,13 @@ function ImageView({ n, common }: { n: Extract<CherryNode, { kind: "image" }>; c
 }
 
 /** Plain render of one node; Konva ids are only set on top-level (selectable) nodes. */
-function NodeView({ n, unit, top, editing, ...events }: {
-  n: CherryNode; unit: Unit; top: boolean; editing: string | null;
+function NodeView({ n, unit, top, editing, inert, ...events }: {
+  n: CherryNode; unit: Unit; top: boolean; editing: string | null; inert?: boolean;
   draggable?: boolean; onDragEnd?(e: KonvaEventObject<DragEvent>): void; onDblClick?(): void;
 }) {
   if (n.hidden) return null;
   const common = {
-    ...toKonvaAttrs(n), ...(top ? { id: n.id, ...events } : {}), opacity: n.opacity, listening: !n.locked,
+    ...toKonvaAttrs(n), ...(top ? { id: n.id, ...events } : {}), opacity: n.opacity, listening: !n.locked && !inert,
   };
   const strokeOf = (s?: { paint: { color: string; opacity: number }; width: number }) =>
     s ? { stroke: paint(s.paint), strokeWidth: s.width } : {};
@@ -89,10 +90,10 @@ function NodeView({ n, unit, top, editing, ...events }: {
 }
 
 export default function Canvas({
-  ydoc, page, selected, readOnly, tool, zoom, pan, editingPath, anchors, pathKeys, kit, fontsVersion,
+  ydoc, page, selected, readOnly, role, tool, zoom, pan, editingPath, anchors, pathKeys, kit, fontsVersion,
   act, onSelect, onTool, onPan, onZoom, onViewport, onAnchors, onEditPath,
 }: {
-  ydoc: Y.Doc; page: Page; selected: string[]; readOnly: boolean; tool: Tool; zoom: number; pan: Pt;
+  ydoc: Y.Doc; page: Page; selected: string[]; readOnly: boolean; role: Role; tool: Tool; zoom: number; pan: Pt;
   editingPath: string | null; anchors: AnchorRef[]; pathKeys: PathKeys; kit: BrandKit | null; fontsVersion: number;
   act(fn: () => void): void; onSelect(ids: string[]): void; onTool(t: Tool): void;
   onPan(p: Pt): void; onZoom(z: number): void; onViewport(v: { width: number; height: number }): void;
@@ -125,7 +126,7 @@ export default function Canvas({
   const pathNode = editingPath ? top(editingPath) : undefined;
   const pathMode = !readOnly && (tool === "pen" || !!pathNode);
   const pathInput: PathInput = useRef<{ down(e: MouseEvent): void; hover(e: MouseEvent | null): void }>(null);
-  const selectable = (n: CherryNode) => !n.hidden && !n.locked;
+  const selectable = (n: CherryNode) => !n.hidden && !n.locked && canEditContent(n, role);
 
   // Attach the transformer to the selected Konva nodes after each render.
   useEffect(() => {
@@ -137,7 +138,7 @@ export default function Canvas({
   const commitKonva = (ks: Konva.Node[]) => {
     const patches = ks.flatMap((k) => {
       const n = top(k.id());
-      if (!n) return [];
+      if (!n || !canMove(n, role)) return [];
       const t = { x: k.x(), y: k.y(), rotation: k.rotation(), scaleX: k.scaleX(), scaleY: k.scaleY() };
       // A multi-node resize can leave skew on rotated nodes; the document has no skew, so drop it.
       k.scale({ x: 1, y: 1 });
@@ -235,11 +236,13 @@ export default function Canvas({
     setDraft(null);
     const isNew = n === draft;
     if (!text.trim()) {
-      if (!isNew) act(() => removeNodes(ydoc, page.id, [n.id]));
+      if (!isNew && canMove(n, role)) act(() => removeNodes(ydoc, page.id, [n.id]));
       return onSelect(selected.filter((s) => s !== n.id));
     }
     const rename = n.name === "Text" || n.name === n.text;
-    const patch = withTextHeight(n, { text, ...(rename ? { name: text.slice(0, 40) } : {}) }, page.unit);
+    const next = { text, ...(rename ? { name: text.slice(0, 40) } : {}) };
+    // A content-locked text may change only its words (the server rejects a new height), so its box stays as set.
+    const patch = canMove(n, role) ? withTextHeight(n, next, page.unit) : next;
     if (isNew) {
       act(() => addNode(ydoc, page.id, { ...n, ...patch } as CherryNode));
       onSelect([n.id]);
@@ -249,6 +252,7 @@ export default function Canvas({
   // A selected logo keeps its proportions when the kit locks logos.
   const logoIds = kit?.content.rules.lockLogos ? Object.values(kit.content.logos) : [];
   const keepRatio = selected.some((s) => { const n = top(s); return n?.kind === "image" && logoIds.includes(n.assetId); });
+  const frozen = selected.some((s) => { const n = top(s); return !!n && !canMove(n, role); });
   const narrow = selected.some((s) => { const n = top(s); return !!n && (n.kind === "text" || isLine(n)); });
   const editNode = draft ?? (editing ? top(editing) : undefined);
   const preview = drag && {
@@ -272,7 +276,8 @@ export default function Canvas({
             <Group ref={nodesRef}>
               {page.nodes.map((n) => (
                 <NodeView key={n.id} n={edited?.id === n.id ? edited : n} unit={page.unit} top editing={editing}
-                  draggable={!readOnly && tool === "select" && !n.locked}
+                  inert={!canEditContent(n, role)}
+                  draggable={!readOnly && tool === "select" && !n.locked && canMove(n, role)}
                   onDragEnd={(e) => commitKonva([...new Set([e.target, ...(trRef.current?.nodes() ?? [])])])}
                   onDblClick={() => {
                     if (readOnly || pathMode) return;
@@ -293,7 +298,7 @@ export default function Canvas({
             )}
           </Group>
           {!readOnly && (
-            <Transformer ref={trRef} flipEnabled={false} rotateEnabled keepRatio={keepRatio}
+            <Transformer ref={trRef} flipEnabled={false} rotateEnabled={!frozen} resizeEnabled={!frozen} keepRatio={keepRatio}
               borderStroke="#8E1EA2" anchorStroke="#8E1EA2" anchorFill="#fff" anchorSize={10} anchorCornerRadius={2}
               enabledAnchors={narrow ? ["middle-left", "middle-right"] : undefined}
               onTransformEnd={() => commitKonva(trRef.current!.nodes())} />

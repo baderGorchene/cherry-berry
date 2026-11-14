@@ -6,6 +6,7 @@ import {
   brandIssues, duplicateNodes, fromPx, removeNodes, reorderNode, setTitle, updateNode, yToDoc, type CherryDocument, type CherryNode,
 } from "@cherry/doc";
 import { getKit, type BrandKit } from "../api";
+import { canDelete, canEditContent, canMove } from "../editor/brandLock";
 import { useKitFonts } from "../brand/fonts";
 import "../editor/editor.css";
 import BrandPanel from "../editor/BrandPanel";
@@ -63,7 +64,7 @@ export default function Editor() {
 }
 
 function Shell({ d }: { d: Ready }) {
-  const { ydoc, undo, readOnly } = d;
+  const { ydoc, undo, readOnly, role } = d;
   const last = useRef<CherryDocument | null>(null);
   const doc = useYValue(ydoc, () => {
     const r = yToDoc(ydoc);
@@ -111,7 +112,7 @@ function Shell({ d }: { d: Ready }) {
   const pathKeys: PathKeys = useRef<(e: KeyboardEvent) => boolean>(null);
   const enterEdit = (id: string) => {
     const n = page.nodes.find((x) => x.id === id);
-    if (readOnly || !n || n.locked || n.hidden || !editModel(n)) return;
+    if (readOnly || !n || n.locked || n.hidden || !canMove(n, role) || !editModel(n)) return;
     select([id]);
     setEditingPath(id);
     setAnchors([]);
@@ -132,7 +133,7 @@ function Shell({ d }: { d: Ready }) {
     if (mod && (key === "=" || key === "+")) { stop(); zoomTo(zoom * 1.2); }
     else if (mod && key === "-") { stop(); zoomTo(zoom / 1.2); }
     else if (mod && key === "0") { stop(); zoomTo(null); }
-    else if (mod && key === "a") { stop(); select(page.nodes.filter((n) => !n.hidden && !n.locked).map((n) => n.id)); }
+    else if (mod && key === "a") { stop(); select(page.nodes.filter((n) => !n.hidden && !n.locked && canEditContent(n, role)).map((n) => n.id)); }
     else if (mod && e.altKey && key in BOOL_KEYS) { stop(); if (!readOnly && !editingPath) runCombine(BOOL_KEYS[key]!); }
     else if (key === "escape") { if (editingPath) exitEdit(); else { select([]); setTool("select"); } }
     else if (readOnly) return;
@@ -144,23 +145,28 @@ function Shell({ d }: { d: Ready }) {
     else if (mod && key === "d") {
       stop();
       let copies: string[] = [];
-      if (ids.length) { act(() => { copies = duplicateNodes(ydoc, page.id, ids, fromPx(10, page.unit)); }); select(copies); }
+      const dup = ids.filter((id) => canMove(findNode(page.nodes, id)!, role));
+      if (dup.length) { act(() => { copies = duplicateNodes(ydoc, page.id, dup, fromPx(10, page.unit)); }); select(copies); }
     }
     else if (mod && (e.key === "]" || e.key === "[")) {
       stop();
       // Move the topmost first when going forward (bottom-most first going back) so neighbours don't swap back.
-      const order = page.nodes.map((n) => n.id).filter((id) => ids.includes(id));
+      const order = page.nodes.filter((n) => ids.includes(n.id) && canMove(n, role)).map((n) => n.id);
       const to = e.key === "]" ? "forward" : "backward";
       if (order.length) act(() => (to === "forward" ? order.reverse() : order).forEach((id) => reorderNode(ydoc, page.id, id, to)));
     }
     else if (e.key in NUDGE) {
-      const movable = selectedNodes.filter((n) => !n.locked);
+      const movable = selectedNodes.filter((n) => !n.locked && canMove(n, role));
       if (!movable.length) return;
       stop();
       const [dx, dy] = NUDGE[e.key]!.map((v) => v * (e.shiftKey ? 10 : 1));
       act(() => movable.forEach((n) => updateNode(ydoc, page.id, n.id, { x: n.x + dx!, y: n.y + dy! })));
     }
-    else if ((e.key === "Delete" || e.key === "Backspace") && ids.length) { stop(); act(() => removeNodes(ydoc, page.id, ids)); }
+    else if ((e.key === "Delete" || e.key === "Backspace") && ids.length) {
+      stop();
+      const del = selectedNodes.filter((n) => canDelete(n, role)).map((n) => n.id);
+      if (del.length) act(() => removeNodes(ydoc, page.id, del));
+    }
     else if (mod || e.altKey) return;
     else if (editingPath) {
       if (key === "c" && e.shiftKey) setTool("convert-anchor");
@@ -196,7 +202,7 @@ function Shell({ d }: { d: Ready }) {
             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
           <span className="muted ell">
             {page.width} × {page.height} {page.unit} · {page.colorMode.toUpperCase()} · {readOnly ? <span>View only</span> : <span role="status">{status}</span>}
-            {d.statusCode === "invalid_document" && <> <button className="ed-mini" onClick={d.reload}>Reload to get the latest version</button></>}
+            {(d.statusCode === "invalid_document" || d.statusCode === "brand_locked") && <> <button className="ed-mini" onClick={d.reload}>Reload to get the latest version</button></>}
           </span>
         </div>
         <button className="ed-ib" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={readOnly} onClick={() => undo.undo()}><IconUndo /></button>
@@ -223,7 +229,7 @@ function Shell({ d }: { d: Ready }) {
           </div>
           {left === "layers" && (
             <aside aria-label="Layers" className="ed-pane">
-              <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} act={act} onSelect={select} />
+              <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} role={role} act={act} onSelect={select} />
               <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
             </aside>
           )}
@@ -231,21 +237,21 @@ function Shell({ d }: { d: Ready }) {
             <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onTool={setTool} onSelect={select} />
           )}
           {left === "visuals" && (
-            <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onSelect={select} />
+            <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role} selected={sel.selected} act={act} onSelect={select} />
           )}
           {left === "brand" && (
-            <BrandPanel ydoc={ydoc} page={page} kit={kit} loading={kitLoading} issues={issues} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly}
+            <BrandPanel ydoc={ydoc} page={page} kit={kit} loading={kitLoading} issues={issues} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role}
               act={act} selected={sel.selected} onSelect={select} onLinked={setKitId} />
           )}
         </div>
-        <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} tool={tool} zoom={zoom} pan={pan}
+        <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} role={role} tool={tool} zoom={zoom} pan={pan}
           editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys}
           kit={kit} fontsVersion={fontsVersion}
           act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
           onAnchors={setAnchors} onEditPath={enterEdit} />
         {editNode
           ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
-          : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} kit={kit} onLinked={setKitId} nodes={selectedNodes} readOnly={readOnly} act={act}
+          : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} kit={kit} onLinked={setKitId} nodes={selectedNodes} readOnly={readOnly} role={role} act={act}
             combinable={operands.length >= 2} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} />}
       </div>
     </div>

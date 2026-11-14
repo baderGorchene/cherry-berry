@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import * as Y from "yjs";
 import { addNode, createText, updateNode, type BrandIssue, type CherryNode, type Page } from "@cherry/doc";
-import { assetUrl, errorMessage, getAsset, listKits, setDesignKit, type Asset, type BrandKit } from "../api";
+import { assetUrl, errorMessage, getAsset, listKits, setDesignKit, type Asset, type BrandKit, type Role as UserRole } from "../api";
+import { canMove, imageSlot } from "./brandLock";
 import { withTextHeight } from "./Canvas";
 import { placeAsset } from "./VisualsPanel";
 
@@ -61,8 +62,8 @@ function Logo({ slot, assetId, readOnly, onPlace }: { slot: string; assetId: str
   );
 }
 
-export default function BrandPanel({ ydoc, page, kit, loading, issues, designId, workspaceId, readOnly, act, selected, onSelect, onLinked }: {
-  ydoc: Y.Doc; page: Page; kit: BrandKit | null; loading: boolean; issues: BrandIssue[]; designId: string; workspaceId: string; readOnly: boolean;
+export default function BrandPanel({ ydoc, page, kit, loading, issues, designId, workspaceId, readOnly, role, act, selected, onSelect, onLinked }: {
+  ydoc: Y.Doc; page: Page; kit: BrandKit | null; loading: boolean; issues: BrandIssue[]; designId: string; workspaceId: string; readOnly: boolean; role: UserRole;
   act(fn: () => void): void; selected: string[]; onSelect(ids: string[]): void; onLinked(kitId: string | null): void;
 }) {
   const [note, setNote] = useState("");
@@ -78,12 +79,13 @@ export default function BrandPanel({ ydoc, page, kit, loading, issues, designId,
 
   const { colors, typography, logos } = kit.content;
   const picked = flat(page.nodes).filter((n) => selected.includes(n.id));
-  const chosen = picked.filter((n) => !n.locked);
+  const locked = (n: CherryNode) => n.locked || !canMove(n, role);
+  const chosen = picked.filter((n) => !locked(n));
 
   const paintWith = (hex: string) => {
     if (!selected.length) return setNote("Select a layer first");
     const targets = chosen.filter((n) => n.kind === "rect" || n.kind === "ellipse" || n.kind === "path" || n.kind === "text");
-    if (!targets.length) return setNote(picked.some((n) => n.locked) ? "Selected layers are locked" : "Select a layer with a fill");
+    if (!targets.length) return setNote(picked.some(locked) ? "Selected layers are locked" : "Select a layer with a fill");
     act(() => targets.forEach((n) => updateNode(ydoc, page.id, n.id, {
       fill: { type: "solid", color: hex, opacity: "fill" in n ? n.fill?.opacity ?? 1 : 1 },
     } as Partial<CherryNode>)));
@@ -105,7 +107,7 @@ export default function BrandPanel({ ydoc, page, kit, loading, issues, designId,
     onSelect([node.id]);
   };
 
-  const place = async (a: Asset) => setNote((await placeAsset(ydoc, page, designId, a, act, onSelect)) ?? "");
+  const place = async (a: Asset) => setNote((await placeAsset(ydoc, page, designId, a, act, onSelect, imageSlot(page.nodes, selected, role))) ?? "");
 
   return (
     <aside aria-label="Brand panel" className="ed-shapes">

@@ -214,7 +214,7 @@ const COPY: Record<string, string> = {
   rights_not_confirmed: "Confirm you have the right to share this file.",
   too_large: "This design is too large to save.",
   forbidden: "You have view-only access to this design.",
-  brand_locked: "A brand kit locks that part of the design.",
+  brand_locked: "This layer is locked by the brand template.",
   invalid_logo: "That logo isn't available to this workspace.",
   invalid_font: "That file isn't a font we can use. Choose WOFF2, WOFF, TTF or OTF.",
   template_private_assets: "Every image in a template must be visible to everyone who can see the template.",
