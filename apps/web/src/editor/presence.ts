@@ -26,13 +26,23 @@ export type AwarenessLike = {
   off(event: "change", cb: () => void): void;
 };
 
-const read = (a: AwarenessLike): Peer[] =>
+const isStr = (v: unknown): v is string => typeof v === "string";
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/** Awareness comes from other clients: peers with malformed state are skipped. */
+export const read = (a: AwarenessLike): Peer[] =>
   [...a.getStates()]
-    .filter(([id, s]) => id !== a.clientID && s.user)
-    .map(([clientId, s]) => ({
-      clientId, user: s.user as PresenceUser, pageId: (s.pageId as string | null) ?? null,
-      selection: (s.selection as string[] | undefined) ?? [], cursor: (s.cursor as Peer["cursor"]) ?? null,
-    }))
+    .flatMap(([clientId, s]): Peer[] => {
+      const u = s.user as Record<string, unknown> | undefined, c = s.cursor as Record<string, unknown> | null | undefined;
+      if (clientId === a.clientID || !u || !isStr(u.id) || !isStr(u.name) || !isStr(u.color)) return [];
+      if (s.selection != null && !(Array.isArray(s.selection) && s.selection.every(isStr))) return [];
+      if (s.pageId != null && !isStr(s.pageId)) return [];
+      if (c != null && !(isNum(c.x) && isNum(c.y))) return [];
+      return [{
+        clientId, user: { id: u.id, name: u.name, color: u.color }, pageId: (s.pageId as string | null | undefined) ?? null,
+        selection: (s.selection as string[] | undefined) ?? [], cursor: c ? { x: c.x as number, y: c.y as number } : null,
+      }];
+    })
     .sort((x, y) => x.user.name.localeCompare(y.user.name) || x.clientId - y.clientId);
 
 /** Everyone connected except me, sorted by name. */

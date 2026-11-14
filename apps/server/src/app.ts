@@ -78,7 +78,7 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage;
   });
 
   await app.register(rateLimit, { global: false });
-  await app.register(websocket);
+  await app.register(websocket, { options: { maxPayload: 10 * 1024 * 1024 } });
   registerCollabRoutes(app, collab);
   registerWorkspaceRoutes(app, deps.db, requireUser);
   registerDesignRoutes(app, deps.db, collab, requireUser);

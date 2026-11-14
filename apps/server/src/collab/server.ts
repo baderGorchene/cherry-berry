@@ -21,7 +21,7 @@ export type Collab = {
   onStored(cb: (id: string, doc: Y.Doc, by: string | null) => Promise<void>): void;
   close(): Promise<void>;
 };
-type Context = { userId?: string; role?: Role };
+type Context = { userId?: string; userName?: string; role?: Role };
 
 /**
  * Hocuspocus turns a thrown `{ code, reason }` into a close message carrying `reason`: the provider's `onClose`
@@ -59,7 +59,7 @@ export function createCollab(db: Db, auth: Auth, publicUrl: string): Collab {
         throw e;
       }
       connectionConfig.readOnly = role === "viewer";
-      return { userId: session.user.id, role };
+      return { userId: session.user.id, userName: session.user.name, role };
     },
 
     async onLoadDocument({ documentName }) {
@@ -77,6 +77,20 @@ export function createCollab(db: Db, auth: Auth, publicUrl: string): Collab {
         checkUpdate(document, payload, context.role ?? "viewer");
       } catch (e) {
         throw reject(e, "invalid_document");
+      }
+    },
+
+    // Awareness is client-supplied: stamp the signed-in identity and keep only well-typed fields.
+    async beforeHandleAwareness({ states, context }) {
+      for (const [clientId, s] of states) {
+        if (!context?.userId) { states.delete(clientId); continue; }
+        const color = typeof s.user?.color === "string" ? s.user.color : undefined;
+        s.user = { id: context.userId, name: context.userName ?? "", color };
+        if (!Array.isArray(s.selection) || !s.selection.every((x: unknown) => typeof x === "string")) delete s.selection;
+        if (typeof s.pageId !== "string") delete s.pageId;
+        const c = s.cursor;
+        if (!c || !Number.isFinite(c.x) || !Number.isFinite(c.y)) delete s.cursor;
+        else s.cursor = { x: c.x, y: c.y };
       }
     },
 
@@ -126,11 +140,12 @@ export function createCollab(db: Db, auth: Auth, publicUrl: string): Collab {
       socket.on("pong", () => conn.touch());
     },
     liveState(id) {
-      const doc = hp.documents.get(id);
+      const doc = hp.documents.get(id.toLowerCase());
       return doc && !doc.isLoading ? Y.encodeStateAsUpdate(doc) : null;
     },
     async withDocument<T>(id: string, fn: (doc: Y.Doc) => T | Promise<T>, by?: string) {
       const context: Context = by ? { userId: by } : {};
+      id = id.toLowerCase(); // Postgres compares uuids case-insensitively; one live document per row
       const conn = await hp.openDirectConnection(id, context);
       const doc = conn.document!;
       let out!: T | Promise<T>;

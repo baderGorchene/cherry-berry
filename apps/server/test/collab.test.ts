@@ -198,6 +198,31 @@ describe("live collaboration", () => {
     expect(node(fromState((await stored(id)).state), r.id)).toBeDefined();
   });
 
+  it("awareness is stamped with the signed-in identity and malformed fields are dropped", async () => {
+    const { ada, bo, id } = await team();
+    const a = connect(ada.cookie, id), b = connect(bo.cookie, id);
+    await synced(a, b);
+    a.provider.awareness!.setLocalState({ user: { id: "x", name: 1, color: "#fff" }, selection: "a", cursor: { x: "1", y: 2 }, pageId: 5 });
+    await vi.waitFor(() => expect(b.provider.awareness!.getStates().get(a.provider.awareness!.clientID)).toBeDefined(), { timeout: 3000 });
+    const s = b.provider.awareness!.getStates().get(a.provider.awareness!.clientID)!;
+    expect(s.user).toMatchObject({ id: ada.userId, name: "ada" });
+    expect(s.selection).toBeUndefined();
+    expect(s.cursor).toBeUndefined();
+    expect(s.pageId).toBeUndefined();
+  });
+
+  it("PUT state with an upper-case design id updates the live document", async () => {
+    const { ada, bo, id } = await team();
+    const a = connect(ada.cookie, id);
+    await synced(a);
+    const d = fromState(Buffer.from((await call("GET", `/api/designs/${id}`, bo.cookie)).json().state, "base64"));
+    const r = rect();
+    addNode(d, getPageIds(d)[0]!, r);
+    const res = await call("PUT", `/api/designs/${id.toUpperCase()}/state`, bo.cookie, { state: b64(Y.encodeStateAsUpdate(d)) });
+    expect(res.statusCode).toBe(200);
+    await vi.waitFor(() => expect(node(a.doc, r.id)).toBeDefined(), { timeout: 2000 });
+  });
+
   it("PUT state keeps the change live and answers 503 when the store fails", async () => {
     const { ada, id } = await team();
     const d = fromState(Buffer.from((await call("GET", `/api/designs/${id}`, ada.cookie)).json().state, "base64"));
