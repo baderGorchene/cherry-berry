@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import * as Y from "yjs";
 import { diffDocs, yToDoc, type CherryDocument, type CherryNode } from "@cherry/doc";
@@ -13,6 +13,7 @@ import { colorFor, initials, usePeers } from "../editor/presence";
 import { useDesign, type DesignState } from "../editor/useDesign";
 import { useYValue } from "../editor/useYValue";
 import { IconBack } from "../icons";
+import Modal from "../Modal";
 
 type Ready = Extract<DesignState, { state: "ready" }>;
 type Mode = "single" | "side" | "overlay";
@@ -35,37 +36,6 @@ function when(iso: string, now = Date.now()): string {
 }
 
 const plural = (n: number) => `${n} ${n === 1 ? "change" : "changes"} outlined`;
-
-function Modal({ title, onClose, children }: { title: string; onClose(): void; children: ReactNode }) {
-  const box = useRef<HTMLDivElement>(null);
-  const opener = useRef(document.activeElement); // read during the first render, before any autofocus
-  const focusables = () => [...box.current!.querySelectorAll<HTMLElement>("button:not(:disabled), input, select, a[href]")];
-  useEffect(() => {
-    const el = opener.current;
-    if (!box.current!.contains(document.activeElement)) (box.current!.querySelector<HTMLElement>("[data-autofocus]") ?? focusables()[0])?.focus();
-    return () => { if (el instanceof HTMLElement && el.isConnected) el.focus(); };
-  }, []);
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    addEventListener("keydown", onKey);
-    return () => removeEventListener("keydown", onKey);
-  }, [onClose]);
-  const trap = (e: React.KeyboardEvent) => {
-    if (e.key !== "Tab") return;
-    const f = focusables(), first = f[0], end = f[f.length - 1];
-    if (!first || !end) return;
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); end.focus(); }
-    else if (!e.shiftKey && document.activeElement === end) { e.preventDefault(); first.focus(); }
-  };
-  return (
-    <div className="hist-scrim">
-      <div ref={box} role="dialog" aria-modal="true" aria-labelledby="hist-dlg" className="card hist-dlg" onKeyDown={trap}>
-        <h2 id="hist-dlg" style={{ fontSize: 18 }}>{title}</h2>
-        {children}
-      </div>
-    </div>
-  );
-}
 
 function NameDialog({ title, action, initial, onSubmit, onClose }: {
   title: string; action: string; initial: string; onSubmit(name: string): Promise<void>; onClose(): void;

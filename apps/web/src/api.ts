@@ -1,4 +1,4 @@
-import type { BrandKitContent, Paint, Stroke } from "@cherry/doc";
+import type { BrandKitContent, ExportAsset, ExportBody, Paint, Stroke } from "@cherry/doc";
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string) { super(code); }
@@ -207,6 +207,24 @@ export const restoreVersion = (id: string) => api<{ design: Design }>(`/api/vers
 export const branchVersion = (id: string, name: string) =>
   api<{ design: Design }>(`/api/versions/${enc(id)}/branch`, { body: { name } }).then((r) => r.design);
 
+export const exportInfo = (designId: string) => api<{ fonts: string[]; assets: ExportAsset[] }>(`/api/designs/${enc(designId)}/export/info`);
+/** The rendered file; the name comes from `Content-Disposition`, preferring its UTF-8 `filename*`. */
+export async function exportFile(designId: string, body: ExportBody): Promise<{ blob: Blob; filename: string }> {
+  const res = await fetch(`/api/designs/${enc(designId)}/export`, {
+    method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let code: unknown;
+    try { code = (await res.json()).error; } catch { /* non-JSON body */ }
+    throw new ApiError(res.status, typeof code === "string" ? code : `http_${res.status}`);
+  }
+  const cd = res.headers.get("content-disposition") ?? "";
+  const exact = /filename\*=UTF-8''([^;]+)/i.exec(cd)?.[1];
+  let filename = /filename="([^"]*)"/i.exec(cd)?.[1] ?? "design";
+  try { if (exact) filename = decodeURIComponent(exact); } catch { /* keep the ASCII name */ }
+  return { blob: await res.blob(), filename };
+}
+
 export function toBase64(u8: Uint8Array): string {
   let s = "";
   for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
@@ -249,6 +267,7 @@ const COPY: Record<string, string> = {
   template_private_assets: "Every visual in a public template must be public. Make them public or publish to this workspace.",
   invalid_document: "This change couldn't be saved because the design became invalid.",
   not_saved: "Couldn't save just now. Your changes are kept, try again.",
+  export_too_large: "This export is too large. Try a smaller scale or fewer pages.",
 };
 
 /** Human copy for an error thrown by `api`. */

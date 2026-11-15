@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import * as Y from "yjs";
 import type { AnchorRef, BoolOp } from "@cherry/vector";
@@ -14,6 +14,7 @@ import BrandPanel from "../editor/BrandPanel";
 import { IconBack, IconRedo, IconUndo } from "../icons";
 import Canvas, { type Tool } from "../editor/Canvas";
 import { NUDGE, allIds, clampZoom, fitZoom } from "../editor/geometry";
+import ExportDialog from "../editor/ExportDialog";
 import Layers from "../editor/Layers";
 import PublishDialog from "../editor/PublishDialog";
 import Pages from "../editor/Pages";
@@ -131,6 +132,7 @@ function Shell({ d }: { d: Ready }) {
     if (params.has("publish")) setParams((p) => { p.delete("publish"); return p; }, { replace: true });
   };
 
+  const [exporting, setExporting] = useState(false);
   const [message, setMessage] = useState("");
   useEffect(() => setMessage(""), [sel.selected.join()]);
   const [tool, setTool] = useState<Tool>("select");
@@ -160,7 +162,7 @@ function Shell({ d }: { d: Ready }) {
 
   const onKey = useRef<(e: KeyboardEvent) => void>(null);
   onKey.current = (e) => {
-    if (typing(e.target)) return;
+    if (exporting || typing(e.target)) return; // the export dialog is modal
     if (pathKeys.current?.(e)) return e.preventDefault(); // pen finish, anchor delete/nudge
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
@@ -216,6 +218,7 @@ function Shell({ d }: { d: Ready }) {
     return () => window.removeEventListener("keydown", h);
   }, []);
 
+  const closeExport = useCallback(() => setExporting(false), []);
   const select = (selected: string[]) => setSel({ pageId: page.id, selected });
   /** One committed action = one undo step, even within captureTimeout of the last. */
   const act = (fn: () => void) => { undo.stopCapturing(); fn(); undo.stopCapturing(); };
@@ -254,6 +257,7 @@ function Shell({ d }: { d: Ready }) {
         </div>
         <Avatars people={people} />
         <Link className="btn" to={`/d/${d.design.id}/history`}>History</Link>
+        <button className="btn" onClick={() => setExporting(true)}>Export</button>
         <SharePopover workspace={workspaceName} />
         {role !== "viewer" && !editNode && <button className="btn" onClick={() => setPublishing(true)}>Publish</button>}
         {editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>}
@@ -298,6 +302,14 @@ function Shell({ d }: { d: Ready }) {
       {publishing && (
         <PublishDialog designId={d.design.id} workspaceId={d.design.workspaceId} title={doc.title} kitId={kitId} saved={d.status === "saved"}
           snapRef={snapRef} onClose={closePublish} />
+      )}
+      {exporting && (
+        <ExportDialog designId={d.design.id} doc={doc} pageId={page.id} status={d.status} onClose={closeExport}
+          onShow={(nodes) => {
+            const pageId = nodes[0]!.pageId;
+            setSel({ pageId, selected: nodes.filter((n) => n.pageId === pageId).map((n) => n.nodeId) });
+            setExporting(false);
+          }} />
       )}
     </div>
   );
