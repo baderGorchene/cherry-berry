@@ -1,0 +1,22 @@
+{
+  "name": "@cherry/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "sync": "pnpm --filter @cherry/launcher build && cap sync",
+    "cap": "cap"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.2",
+    "@capacitor/core": "^8.6.2",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/ios": "^8.6.2",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.6.2",
+    "typescript": "^7.0.2"
+  }
+}

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, exportFile } from "./api";
+import { api, ApiError, exportFile, saveFile } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -35,5 +35,25 @@ describe("exportFile", () => {
   it("maps errors to ApiError", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error: "export_too_large" }), { status: 400 })));
     expect(await exportFile("d", body).catch((e) => e)).toMatchObject({ status: 400, code: "export_too_large" });
+  });
+});
+
+describe("saveFile", () => {
+  it("save uses share on capacitor", async () => {
+    const writeFile = vi.fn(async (_: { path: string; data: string; directory: string }) => ({ uri: "file:///cache/a b.png" }));
+    const share = vi.fn(async (_: { files: string[]; title: string }) => ({}));
+    vi.stubGlobal("window", { Capacitor: { isNativePlatform: () => true, Plugins: { Filesystem: { writeFile }, Share: { share } } } });
+    await saveFile(new Blob(["hi"]), "a b.png");
+    expect(writeFile).toHaveBeenCalledWith({ path: "a b.png", data: btoa("hi"), directory: "CACHE" });
+    expect(share).toHaveBeenCalledWith({ files: ["file:///cache/a b.png"], title: "a b.png" });
+  });
+  it("falls back to an anchor download", async () => {
+    const a = { href: "", download: "", click: vi.fn() };
+    vi.stubGlobal("window", {});
+    vi.stubGlobal("document", { createElement: () => a });
+    await saveFile(new Blob(["hi"]), "a.png");
+    expect(a.download).toBe("a.png");
+    expect(a.href).toMatch(/^blob:/);
+    expect(a.click).toHaveBeenCalled();
   });
 });

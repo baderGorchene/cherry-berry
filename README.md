@@ -37,11 +37,22 @@ pnpm --filter @cherry/desktop build --debug --no-bundle     # just the executabl
 pnpm --filter @cherry/desktop test:rust                     # Rust unit tests
 ```
 
+## Mobile app
+
+`apps/mobile` (`@cherry/mobile`) is a Capacitor 8 shell for Android and iOS. Like the desktop app it ships only the launcher and then loads the chosen server's web app; `http://` servers on your network are allowed. On iOS, exports open the share sheet; on Android they do not reach the user yet, because Capacitor only injects its plugin bridge into the launcher page, not the server's. Icons and splash are plain colors (`apps/mobile/assets`); there is no logo. `pnpm --filter @cherry/mobile sync` builds the launcher and copies it, with the native plugins, into both projects; run it after a fresh clone.
+
+```bash
+pnpm --filter @cherry/mobile sync android          # or ios
+cd apps/mobile/android && ./gradlew assembleDebug  # APK in app/build/outputs/apk/debug (needs JDK 21 and the Android SDK)
+pnpm --filter @cherry/mobile cap open ios          # macOS with Xcode only
+```
+
 ## Workspace structure
 
 - `apps/server` (`@cherry/server`) — Fastify 5 API, Better Auth, Drizzle ORM (PostgreSQL / PGlite), and S3-compatible asset storage
 - `apps/web` (`@cherry/web`) — React 19 + Vite 8 + Konva (`react-konva`) web editor
 - `apps/desktop` (`@cherry/desktop`) — Tauri 2 desktop shell around the launcher and the server's web app
+- `apps/mobile` (`@cherry/mobile`) — Capacitor 8 Android and iOS shell around the launcher and the server's web app
 - `packages/doc` (`@cherry/doc`) — `.cherry` document Zod schemas, Yjs sync, units, and I/O
 - `packages/vector` (`@cherry/vector`) — Paper.js boolean operations, SVG import/export, and path editing
 

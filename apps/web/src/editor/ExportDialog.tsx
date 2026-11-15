@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   creditsText, preflight, serializeCherry, usedAssetIds, type CherryDocument, type ExportAsset, type ExportFormat, type PreflightCheck,
 } from "@cherry/doc";
-import { errorMessage, exportFile, exportInfo } from "../api";
+import { errorMessage, exportFile, exportInfo, saveFile } from "../api";
 import Modal from "../Modal";
 import { FORMATS, downloadName, parsePageRange } from "./exportOptions";
 import type { DesignState } from "./useDesign";
@@ -10,14 +10,6 @@ import type { DesignState } from "./useDesign";
 type Status = Extract<DesignState, { state: "ready" }>["status"];
 type Pages = "all" | "current" | "custom";
 const PRINT_NOTE = "CMYK, PDF/X and spot colors come with the print service.";
-
-function save(blob: Blob, filename: string) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = filename;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
-}
 
 export default function ExportDialog({ designId, doc, pageId, status, onShow, onClose }: {
   designId: string; doc: CherryDocument; pageId: string; status: Status;
@@ -69,7 +61,7 @@ export default function ExportDialog({ designId, doc, pageId, status, onShow, on
   const run = async () => {
     setBusy(true); setError("");
     try {
-      if (cherry) save(new Blob([serializeCherry(doc)], { type: "application/json" }), downloadName(doc.title, "cherry"));
+      if (cherry) await saveFile(new Blob([serializeCherry(doc)], { type: "application/json" }), downloadName(doc.title, "cherry"));
       else {
         const { blob, filename } = await exportFile(designId, {
           format, pageIds,
@@ -78,7 +70,7 @@ export default function ExportDialog({ designId, doc, pageId, status, onShow, on
           ...(format === "pdf-print" ? { cropMarks } : {}),
           ...(format === "gif" ? { secondsPerPage: seconds } : {}),
         });
-        save(blob, filename);
+        await saveFile(blob, filename);
       }
       onClose();
     } catch (e) {

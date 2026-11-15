@@ -225,6 +225,37 @@ export async function exportFile(designId: string, body: ExportBody): Promise<{ 
   return { blob: await res.blob(), filename };
 }
 
+/** The bits of Capacitor's injected bridge we use; the web app never imports `@capacitor/*` (Decision 6). */
+type CapacitorBridge = {
+  isNativePlatform?(): boolean;
+  Plugins?: {
+    Filesystem?: { writeFile(o: { path: string; data: string; directory: "CACHE" }): Promise<{ uri: string }> };
+    Share?: { share(o: { files: string[]; title: string }): Promise<unknown> };
+  };
+};
+
+/** Hands a file to the user: the share sheet inside the mobile app (WebViews ignore `blob:` downloads), else a download. */
+export async function saveFile(blob: Blob, filename: string): Promise<void> {
+  const cap = (window as { Capacitor?: CapacitorBridge }).Capacitor;
+  const fs = cap?.Plugins?.Filesystem, share = cap?.Plugins?.Share;
+  if (cap?.isNativePlatform?.() && fs && share) {
+    const data = toBase64(new Uint8Array(await blob.arrayBuffer()));
+    // The name comes from the server; keep it inside the cache directory.
+    const { uri } = await fs.writeFile({ path: filename.replace(/[\\/]/g, "_"), data, directory: "CACHE" });
+    try {
+      await share.share({ files: [uri], title: filename });
+    } catch (e) {
+      if (!/cancel/i.test(String((e as Error)?.message))) throw e; // closing the share sheet is not an error
+    }
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60_000);
+}
+
 export function toBase64(u8: Uint8Array): string {
   let s = "";
   for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode(...u8.subarray(i, i + 0x8000));
