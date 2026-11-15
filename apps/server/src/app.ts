@@ -16,7 +16,7 @@ import { registerWorkspaceRoutes } from "./workspaces/routes";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
 import fastifyStatic from "@fastify/static";
-import { resolve } from "node:path";
+import { relative, resolve } from "node:path";
 import { createCollab, type Collab } from "./collab/server";
 import { registerCollabRoutes } from "./collab/routes";
 import { registerVersionRoutes } from "./versions/routes";
@@ -103,7 +103,7 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage;
     await app.register(fastifyStatic, {
       root,
       setHeaders: (res, path) => {
-        const hashed = /[\\/]assets[\\/]/.test(path);
+        const hashed = /^assets[\\/]/.test(relative(root, path));
         res.header("cache-control", hashed ? "public, max-age=31536000, immutable" : "no-cache");
       },
     });

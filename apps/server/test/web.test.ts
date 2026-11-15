@@ -4,18 +4,25 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { setupTestApp } from "./helpers";
 
-const dist = mkdtempSync(join(tmpdir(), "cherry-web-"));
+const outer = mkdtempSync(join(tmpdir(), "cherry-web-"));
+const dist = join(outer, "web");
+mkdirSync(dist);
+writeFileSync(join(outer, "secret.txt"), "TOPSECRET");
 mkdirSync(join(dist, "assets"));
+mkdirSync(join(outer, "assets", "web"), { recursive: true });
+writeFileSync(join(outer, "assets", "web", "index.html"), "<title>n</title>");
 writeFileSync(join(dist, "index.html"), "<!doctype html><title>cherry</title>");
 writeFileSync(join(dist, "assets", "a.js"), "console.log(1)");
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
+let nested: Awaited<ReturnType<typeof setupTestApp>>;
 let bare: Awaited<ReturnType<typeof setupTestApp>>;
 beforeAll(async () => {
   t = await setupTestApp({ webDist: dist });
   bare = await setupTestApp();
+  nested = await setupTestApp({ webDist: join(outer, "assets", "web") });
 });
-afterAll(async () => { await t.close(); await bare.close(); rmSync(dist, { recursive: true, force: true }); });
+afterAll(async () => { await t.close(); await bare.close(); await nested.close(); rmSync(outer, { recursive: true, force: true }); });
 
 describe("web", () => {
   it("health is public and identifies the app", async () => {
@@ -45,5 +52,19 @@ describe("web", () => {
 
   it("no web dist, no static routes", async () => {
     expect((await bare.app.inject({ method: "GET", url: "/" })).statusCode).toBe(404);
+  });
+
+  it("an assets directory above the web root does not make everything immutable", async () => {
+    for (const url of ["/", "/d/1"]) {
+      expect((await nested.app.inject({ method: "GET", url })).headers["cache-control"]).toBe("no-cache");
+    }
+  });
+
+  it("does not serve files outside the web root", async () => {
+    for (const url of ["/..%2fsecret.txt", "/%2e%2e/secret.txt", "/..%2f..%2fetc%2fpasswd"]) {
+      const res = await t.app.inject({ method: "GET", url });
+      expect(res.body).not.toContain("TOPSECRET");
+      expect(res.body).not.toContain("root:");
+    }
   });
 });
