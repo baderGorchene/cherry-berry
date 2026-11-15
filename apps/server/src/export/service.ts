@@ -59,8 +59,13 @@ export async function exportInfo(db: Db, _storage: Storage, collab: Collab, user
   return { fonts, assets: assets.map((a) => a.info) };
 }
 
-/** Title trimmed, characters unsafe in file names replaced by "-", "design" when empty. */
-export const fileBase = (title: string) => title.trim().replace(/[/\\:*?"<>|\u0000-\u001f\u007f]/g, "-").slice(0, 100) || "design";
+/**
+ * Title trimmed, characters unsafe in file names (and lone surrogates) replaced by "-", at most 100 code points
+ * (never splitting a surrogate pair), "design" when empty.
+ */
+export const fileBase = (title: string) => [...title.trim()
+  .replace(/[/\\:*?"<>|\u0000-\u001f\u007f]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "-")]
+  .slice(0, 100).join("") || "design";
 
 export async function exportDesign(
   db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody,
@@ -76,10 +81,10 @@ export async function exportDesign(
     throw new HttpError(400, "export_too_large");
   }
 
-  // A kit font that can't be fetched is skipped; its text falls back to a substitute.
-  await Promise.all((await kitFonts(db, userId, design.kitId)).map((f) =>
-    useKitFonts([{ id: f.id, family: f.family, format: f.format, bytes: async () => (await getFontFile(db, storage, userId, f.id)).bytes }])
-      .catch((e) => console.warn(`export: kit font ${f.id} (${f.family}) skipped`, e))));
+  // This design's kit families map to private font families, for this export only; a font that can't be read is skipped.
+  const fonts = await useKitFonts((await kitFonts(db, userId, design.kitId)).map((f) => ({
+    id: f.id, kitId: f.kitId, family: f.family, format: f.format, bytes: async () => (await getFontFile(db, storage, userId, f.id)).bytes,
+  })));
 
   const assets = await resolveAssets(db, userId, usedAssetIds(pages));
   const byId = new Map(assets.map((a) => [a.info.id, a]));
@@ -92,13 +97,13 @@ export async function exportDesign(
   const base = fileBase(doc.title);
   let out: Out;
   switch (body.format) {
-    case "pdf": out = await writePdf(pages, images, false, false); break;
-    case "pdf-print": out = await writePdf(pages, images, true, body.cropMarks ?? true); break;
-    case "png": case "jpg": out = await writeRaster(pages, images, body.format, scale, body.transparent ?? false, base); break;
-    case "svg": out = await writeSvg(pages, images, base); break;
-    case "gif": out = await writeGif(pages, images, scale, body.secondsPerPage ?? 2); break;
+    case "pdf": out = await writePdf(pages, images, false, false, fonts); break;
+    case "pdf-print": out = await writePdf(pages, images, true, body.cropMarks ?? true, fonts); break;
+    case "png": case "jpg": out = await writeRaster(pages, images, body.format, scale, body.transparent ?? false, base, fonts); break;
+    case "svg": out = await writeSvg(pages, images, base, fonts); break;
+    case "gif": out = await writeGif(pages, images, scale, body.secondsPerPage ?? 2, fonts); break;
     case "pptx": out = await writePptx(pages, images,
-      pages.map((p) => creditsText(usedAssetIds([p]).map((id) => byId.get(id)!.info)))); break;
+      pages.map((p) => creditsText(usedAssetIds([p]).map((id) => byId.get(id)!.info))), fonts); break;
   }
   return { ...out, filename: `${base}.${out.ext}` };
 }

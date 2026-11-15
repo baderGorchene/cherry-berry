@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -15,16 +16,32 @@ export function registerBuiltInFonts(): void {
   const require = createRequire(import.meta.url);
   for (const [family, pkg] of Object.entries(BUILT_IN)) {
     const dir = join(dirname(require.resolve(pkg)), "files"), slug = pkg.split("/")[1]!;
-    FontLibrary.use(family, ["latin", "latin-ext"].flatMap((sub) =>
+    // For a weight held by two files skia uses the one registered last, and the latin-ext subset has no ASCII glyphs:
+    // latin must come last or basic text falls back to a substitute. ponytail: latin-ext-only glyphs (ő, ł…) then
+    // fall back too; merge the subsets into one file per weight if that matters.
+    FontLibrary.use(family, ["latin-ext", "latin"].flatMap((sub) =>
       [400, 500, 600, 700].map((w) => join(dir, `${slug}-${sub}-${w}-normal.woff2`))));
   }
 }
 
-const kit = new Map<string, Promise<void>>();
+const kit = new Map<string, Promise<boolean>>();
 
-/** Registers brand-kit fonts, cached under os.tmpdir()/cherry-fonts/<id>.<format>; each id once per process. */
-export async function useKitFonts(fonts: { id: string; family: string; format: string; bytes: () => Promise<Uint8Array> }[]): Promise<void> {
-  await Promise.all(fonts.map((f) => {
+/** The private FontLibrary family of one kit family: unique per kit, so no tenant's font reaches another's design. */
+export const kitFamily = (kitId: string, family: string) =>
+  `cb-kit-${createHash("sha256").update(`${kitId}/${family}`).digest("hex").slice(0, 24)}`;
+
+/** Family name → private family, passed to the renderer for one design; built-in and other kits' fonts stay untouched. */
+export type FontMap = Map<string, string>;
+
+/**
+ * Registers brand-kit fonts under their private family, cached under os.tmpdir()/cherry-fonts/<id>.<format>; each id
+ * once per process. Returns the mapping for the families that registered. A font whose bytes can't be read, or that
+ * skia rejects, is skipped with a warning: its text falls back to a substitute (preflight names it).
+ */
+export async function useKitFonts(
+  fonts: { id: string; kitId: string; family: string; format: string; bytes: () => Promise<Uint8Array> }[],
+): Promise<FontMap> {
+  const ok = await Promise.all(fonts.map((f) => {
     let p = kit.get(f.id);
     if (!p) {
       p = (async () => {
@@ -34,14 +51,14 @@ export async function useKitFonts(fonts: { id: string; family: string; format: s
           await mkdir(dir, { recursive: true });
           await writeFile(file, await f.bytes());
         }
-        // A font skia can't read is left out; the text falls back to a substitute (preflight names it).
-        try { FontLibrary.use(f.family, [file]); } catch { /* substitute */ }
+        try { FontLibrary.use(kitFamily(f.kitId, f.family), [file]); return true; } catch { return false; }
       })();
       p.catch(() => kit.delete(f.id)); // a failed read is retried next time
       kit.set(f.id, p);
     }
-    return p;
+    return p.catch((e) => { console.warn(`export: kit font ${f.id} (${f.family}) skipped`, e); return false; });
   }));
+  return new Map(fonts.filter((_, i) => ok[i]).map((f) => [f.family, kitFamily(f.kitId, f.family)]));
 }
 
 export function availableFamilies(kitFamilies: string[]): string[] {

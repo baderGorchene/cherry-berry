@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Y from "yjs";
@@ -8,7 +9,7 @@ import { HocuspocusProvider, HocuspocusProviderWebsocket } from "@hocuspocus/pro
 import { addNode, getPageIds, replaceDocument, yToDoc, type CherryDocument, type CherryNode } from "@cherry/doc";
 import { eq } from "drizzle-orm";
 import { assets, brandFonts, designs } from "../src/db/schema";
-import { exportInfo } from "../src/export/service";
+import { exportInfo, fileBase } from "../src/export/service";
 import { setupTestApp, signUp } from "./helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
@@ -95,6 +96,16 @@ async function insertAsset(createdBy: string, over: Partial<typeof assets.$infer
     width: 4, height: 4, bytes: 1, sha256, ...over,
   } as typeof assets.$inferInsert).returning();
   return a!.id;
+}
+
+/** A kit in `ws` whose `family` (400) is the bundled @fontsource `pkg` latin-400 file. */
+async function kitWith(who: { cookie: string; userId: string }, ws: string, family: string, pkg: "inter" | "space-grotesk") {
+  const kit = (await call("POST", `/api/workspaces/${ws}/brand-kits`, who.cookie, { name: "Kit" })).json().kit.id as string;
+  const file = readFileSync(new URL(`../node_modules/@fontsource/${pkg}/files/${pkg}-latin-400-normal.woff2`, import.meta.url));
+  const sha256 = `font-${pkg}-${crypto.randomUUID()}`;
+  await t.storage.put(`fonts/${sha256}`, file, "font/woff2");
+  await t.db.insert(brandFonts).values({ kitId: kit, family, weight: 400, style: "normal", format: "woff2", sha256, bytes: file.length, createdBy: who.userId });
+  return kit;
 }
 
 describe("export formats", () => {
@@ -268,6 +279,35 @@ describe("export service", () => {
     } finally { warn.mockRestore(); }
   });
 
+  it("kit fonts stay inside their own design", async () => {
+    const { ada, eve, ws } = await team();
+    const eveWs = (await call("POST", "/api/workspaces", eve.cookie, { name: "South", accessMode: "invite" })).json().workspace.id as string;
+    const big = (fontFamily: string) => nodes(text({ fontFamily, fontSize: 24, width: 400, height: 60, text: "Hello berry" }));
+    const render = async (cookie: string, workspace: string, fontFamily: string, kitId?: string) => {
+      const id = await design(cookie, workspace, { width: 400, height: 80, unit: "px" });
+      if (kitId) expect((await call("PATCH", `/api/designs/${id}`, cookie, { kitId })).statusCode).toBe(200);
+      const res = await exp(cookie, id, { format: "png", pageIds: await edit(cookie, id, big(fontFamily)) });
+      expect(res.statusCode).toBe(200);
+      return sharp(res.rawPayload).raw().toBuffer();
+    };
+    const interRef = await render(ada.cookie, ws, "Inter");
+    const groteskRef = await render(ada.cookie, ws, "Space Grotesk");
+    expect(interRef.equals(groteskRef)).toBe(false);
+
+    // Same family name in two workspaces, different files: each design renders with its own kit's file.
+    const a = await render(ada.cookie, ws, "Brand Sans", await kitWith(ada, ws, "Brand Sans", "inter"));
+    const b = await render(eve.cookie, eveWs, "Brand Sans", await kitWith(eve, eveWs, "Brand Sans", "space-grotesk"));
+    expect(a.equals(interRef)).toBe(true);
+    expect(b.equals(groteskRef)).toBe(true);
+    // ...and a design without a kit never picks either one up by name.
+    expect((await render(ada.cookie, ws, "Brand Sans")).equals(a)).toBe(false);
+
+    // A kit family named "Inter" applies to its own design only; the built-in Inter is unchanged for everyone else.
+    const shadow = await render(eve.cookie, eveWs, "Inter", await kitWith(eve, eveWs, "Inter", "space-grotesk"));
+    expect(shadow.equals(groteskRef)).toBe(true);
+    expect((await render(ada.cookie, ws, "Inter")).equals(interRef)).toBe(true);
+  });
+
   it("unreadable visual renders the placeholder", async () => {
     const { ada, eve, ws } = await team();
     const id = await design(ada.cookie, ws);
@@ -328,6 +368,30 @@ describe("export service", () => {
     expect((await exp(ada.cookie, id, { format: "png", pageIds })).headers["content-disposition"]).toContain('filename="x-y.png"');
     await edit(ada.cookie, id, (doc) => { doc.title = "   "; });
     expect((await exp(ada.cookie, id, { format: "png", pageIds })).headers["content-disposition"]).toContain('filename="design.png"');
+    // 100 code points ending in an emoji: a UTF-16 cut at 100 would split its surrogate pair.
+    await edit(ada.cookie, id, (doc) => { doc.title = "a".repeat(99) + "😀" + "tail"; });
+    const emoji = await exp(ada.cookie, id, { format: "png", pageIds });
+    expect(emoji.statusCode).toBe(200);
+    expect(emoji.headers["content-disposition"]).toBe(
+      `attachment; filename="${"a".repeat(99)}_.png"; filename*=UTF-8''${"a".repeat(99)}%F0%9F%98%80.png`);
+    for (const [title, base] of [["x\uD800", "x-"], ["\uDC00y", "-y"]] as const) {
+      expect(fileBase(title)).toBe(base);
+      expect(() => encodeURIComponent(fileBase(title))).not.toThrow();
+    }
+  });
+
+  it("huge pages export as vector without rasterising", async () => {
+    const { ada, ws } = await team();
+    const id = await design(ada.cookie, ws, { width: 5000, height: 5000, unit: "mm", bleed: 3 });
+    const pageIds = await edit(ada.cookie, id, nodes(rect({ width: 4000, height: 4000 }), text({ width: 2000, height: 500, fontSize: 400 })));
+    // A raster of this page at 96 dpi would be 18898 × 18898 px (≈1.4 GB of RGBA).
+    for (const format of ["svg", "pdf", "pdf-print"]) {
+      const before = process.memoryUsage().rss, started = Date.now();
+      const res = await exp(ada.cookie, id, { format, pageIds });
+      expect(res.statusCode).toBe(200);
+      expect(process.memoryUsage().rss - before).toBeLessThan(300 * 1024 * 1024);
+      expect(Date.now() - started).toBeLessThan(10_000);
+    }
   });
 
   it("viewer can export; outsider gets 404", async () => {

@@ -1,6 +1,7 @@
 import "konva/skia-backend";
 import Konva from "konva";
 import { Canvas, Path2D, loadImage, type CanvasRenderingContext2D, type Image } from "skia-canvas";
+import type { FontMap } from "./fonts";
 import { PT_PX, UNIT_PX, toPx, type CherryNode, type Page, type Paint, type Stroke } from "@cherry/doc";
 
 /** Decoded visuals by asset id; null = unavailable → placeholder. */
@@ -19,7 +20,7 @@ const paint = (p: Paint) => p.opacity < 1
  * Draws the page with (0,0) at the trim's top-left, in CSS px; the caller sets the transform.
  * Background fills trim + bleed unless `background:false`.
  */
-export function drawPage(ctx: Ctx, page: Page, images: Images, opts: { background?: boolean } = {}): void {
+export function drawPage(ctx: Ctx, page: Page, images: Images, opts: { background?: boolean; fonts?: FontMap } = {}): void {
   ctx.save();
   ctx.scale(UNIT_PX[page.unit], UNIT_PX[page.unit]);
   if (opts.background !== false) {
@@ -27,7 +28,7 @@ export function drawPage(ctx: Ctx, page: Page, images: Images, opts: { backgroun
     ctx.fillStyle = paint(page.background);
     ctx.fillRect(-b, -b, page.width + 2 * b, page.height + 2 * b);
   }
-  for (const n of page.nodes) drawNode(ctx, n, page.unit, images, 1);
+  for (const n of page.nodes) drawNode(ctx, n, page.unit, images, 1, opts.fonts);
   ctx.restore();
 }
 
@@ -35,12 +36,12 @@ export function drawPage(ctx: Ctx, page: Page, images: Images, opts: { backgroun
  * One node alone on a transparent canvas at `scale`, sized to its box (for PPTX).
  * Drawn unrotated and at full node opacity: the caller carries those over to the placed picture.
  */
-export async function nodePng(node: CherryNode, page: Page, images: Images, scale: number): Promise<Buffer> {
+export async function nodePng(node: CherryNode, page: Page, images: Images, scale: number, fonts?: FontMap): Promise<Buffer> {
   const s = UNIT_PX[page.unit] * scale;
   const canvas = new Canvas(Math.max(1, Math.ceil(node.width * s)), Math.max(1, Math.ceil(node.height * s)), { gpu: false });
   const ctx = canvas.getContext("2d");
   ctx.scale(s, s);
-  drawNode(ctx, { ...node, x: 0, y: 0, rotation: 0, opacity: 1, hidden: false }, page.unit, images, 1);
+  drawNode(ctx, { ...node, x: 0, y: 0, rotation: 0, opacity: 1, hidden: false }, page.unit, images, 1, fonts);
   return canvas.toBuffer("png");
 }
 
@@ -54,7 +55,7 @@ export async function loadImages(ids: string[], read: (id: string) => Promise<Ui
 }
 
 /** Mirrors the editor's NodeView: Konva shapes paint with globalAlpha = opacity multiplied down through groups. */
-function drawNode(ctx: Ctx, n: CherryNode, unit: Page["unit"], images: Images, parentAlpha: number): void {
+function drawNode(ctx: Ctx, n: CherryNode, unit: Page["unit"], images: Images, parentAlpha: number, fonts?: FontMap): void {
   if (n.hidden) return;
   const alpha = parentAlpha * n.opacity;
   ctx.save();
@@ -85,7 +86,7 @@ function drawNode(ctx: Ctx, n: CherryNode, unit: Page["unit"], images: Images, p
     }
     case "text": {
       const t = new Konva.Text({
-        text: n.text, width: n.width, fontFamily: n.fontFamily, fontSize: (n.fontSize * PT_PX) / UNIT_PX[unit],
+        text: n.text, width: n.width, fontFamily: fonts?.get(n.fontFamily) ?? n.fontFamily, fontSize: (n.fontSize * PT_PX) / UNIT_PX[unit],
         fontStyle: String(n.fontWeight), lineHeight: n.lineHeight, letterSpacing: n.letterSpacing, align: n.align,
       });
       drawText(ctx, t, n.fill ? paint(n.fill) : "black");
@@ -105,7 +106,7 @@ function drawNode(ctx: Ctx, n: CherryNode, unit: Page["unit"], images: Images, p
       break;
     }
     case "group":
-      for (const c of n.children) drawNode(ctx, c, unit, images, alpha);
+      for (const c of n.children) drawNode(ctx, c, unit, images, alpha, fonts);
       break;
   }
   ctx.restore();

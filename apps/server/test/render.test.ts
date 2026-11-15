@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import "konva/skia-backend";
@@ -5,7 +6,7 @@ import Konva from "konva";
 import { Canvas, FontLibrary, loadImage, type Image } from "skia-canvas";
 import { PT_PX, UNIT_PX, toPx, type CherryNode, type Page } from "@cherry/doc";
 import { drawPage, loadImages, nodePng, pagePx } from "../src/export/render";
-import { availableFamilies, registerBuiltInFonts, useKitFonts } from "../src/export/fonts";
+import { availableFamilies, kitFamily, registerBuiltInFonts, useKitFonts } from "../src/export/fonts";
 
 registerBuiltInFonts();
 
@@ -165,16 +166,30 @@ describe("render", () => {
     expect([img.width, img.height]).toEqual([160, 160]);
   });
 
+  it("built-in fonts draw ASCII with their own glyphs", () => {
+    const ctx = new Canvas(10, 10, { gpu: false }).getContext("2d");
+    const width = (family: string) => { ctx.font = `400 20px "${family}"`; return ctx.measureText("Hello").width; };
+    for (const pkg of ["inter", "space-grotesk"] as const) {
+      const family = pkg === "inter" ? "Inter" : "Space Grotesk";
+      FontLibrary.use(`only-${pkg}`, [fileURLToPath(new URL(`../node_modules/@fontsource/${pkg}/files/${pkg}-latin-400-normal.woff2`, import.meta.url))]);
+      expect(width(family)).toBeCloseTo(width(`only-${pkg}`), 3);
+    }
+  });
+
   it("kit font registers once", async () => {
     const font = (await import("node:fs")).readFileSync(
       new URL("../node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2", import.meta.url));
     let reads = 0;
     const id = randomUUID();
-    const kit = [{ id, family: "Kit Sans", format: "woff2", bytes: async () => { reads++; return new Uint8Array(font); } }];
-    await useKitFonts(kit);
-    await useKitFonts(kit);
+    const kitId = randomUUID();
+    const kit = [{ id, kitId, family: "Kit Sans", format: "woff2", bytes: async () => { reads++; return new Uint8Array(font); } }];
+    expect(await useKitFonts(kit)).toEqual(new Map([["Kit Sans", kitFamily(kitId, "Kit Sans")]]));
+    expect(await useKitFonts(kit)).toEqual(new Map([["Kit Sans", kitFamily(kitId, "Kit Sans")]]));
     expect(reads).toBe(1);
-    expect(FontLibrary.has("Inter") && FontLibrary.has("Space Grotesk") && FontLibrary.has("Kit Sans")).toBe(true);
+    // Registered under its private family only: no other design can pick it up by name.
+    expect(FontLibrary.has("Inter") && FontLibrary.has("Space Grotesk") && FontLibrary.has(kitFamily(kitId, "Kit Sans"))).toBe(true);
+    expect(FontLibrary.has("Kit Sans")).toBe(false);
+    expect(kitFamily(randomUUID(), "Kit Sans")).not.toBe(kitFamily(kitId, "Kit Sans"));
     expect(availableFamilies(["Kit Sans"])).toEqual(["Inter", "Space Grotesk", "Kit Sans"]);
   });
 });
