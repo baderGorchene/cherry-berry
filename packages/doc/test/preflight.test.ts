@@ -54,6 +54,12 @@ describe("preflight", () => {
     expect(get(run(small, "png", a, 2), "resolution")!.status).toBe("pass");
   });
 
+  it("resolution names the first offender and counts the rest", () => {
+    const d = mk([image("i", "a", 101.6), image("j", "b", 101.6), image("k", "c", 101.6)]);
+    const w = get(run(d, "pdf-print", [asset("a"), asset("b"), asset("c")]), "resolution")!;
+    expect(w.detail).toBe('"a" is 150 ppi at this size (and 2 more). 300 ppi is recommended.');
+  });
+
   it("svg assets never warn on resolution", () => {
     const d = mk([image("i", "a", 500)]);
     expect(get(run(d, "pdf-print", [asset("a", { kind: "svg" })]), "resolution")!.status).toBe("pass");

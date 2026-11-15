@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
@@ -35,8 +35,9 @@ export type FontMap = Map<string, string>;
 
 /**
  * Registers brand-kit fonts under their private family, cached under os.tmpdir()/cherry-fonts/<id>.<format>; each id
- * once per process. Returns the mapping for the families that registered. A font whose bytes can't be read, or that
- * skia rejects, is skipped with a warning: its text falls back to a substitute (preflight names it).
+ * once per process. The file is written to a temp name and renamed, and a cached file skia rejects is fetched again,
+ * so a torn write never sticks. Returns the mapping for the families that registered. A font whose bytes can't be
+ * read, or that skia rejects, is skipped with a warning: its text falls back to a substitute (preflight names it).
  */
 export async function useKitFonts(
   fonts: { id: string; kitId: string; family: string; format: string; bytes: () => Promise<Uint8Array> }[],
@@ -47,11 +48,15 @@ export async function useKitFonts(
       p = (async () => {
         const dir = join(tmpdir(), "cherry-fonts");
         const file = join(dir, `${f.id.replace(/[^\w-]/g, "_")}.${f.format.replace(/\W/g, "")}`);
-        if (!existsSync(file)) {
-          await mkdir(dir, { recursive: true });
-          await writeFile(file, await f.bytes());
-        }
-        try { FontLibrary.use(kitFamily(f.kitId, f.family), [file]); return true; } catch { return false; }
+        const register = () => { try { FontLibrary.use(kitFamily(f.kitId, f.family), [file]); return true; } catch { return false; } };
+        if (existsSync(file) && register()) return true;
+        await mkdir(dir, { recursive: true });
+        const tmp = `${file}.${randomUUID()}.tmp`;
+        await writeFile(tmp, await f.bytes());
+        await rename(tmp, file);
+        if (register()) return true;
+        await rm(file, { force: true });
+        return false;
       })();
       p.catch(() => kit.delete(f.id)); // a failed read is retried next time
       kit.set(f.id, p);

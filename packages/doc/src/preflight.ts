@@ -89,7 +89,7 @@ export function preflight(
     const first = low[0];
     const more = new Set(low.map((l) => l.asset.id)).size - 1;
     add("resolution", low.map((l) => l.hit), ["Images sharp", "Low-resolution image"], "Images are sharp enough.",
-      first ? `"${first.asset.title}" is ${Math.round(first.ppi)} ppi at this size.${more > 0 ? ` and ${more} more.` : ""} ${need} ppi is recommended.` : "");
+      first ? `"${first.asset.title}" is ${Math.round(first.ppi)} ppi at this size${more > 0 ? ` (and ${more} more)` : ""}. ${need} ppi is recommended.` : "");
   }
 
   {

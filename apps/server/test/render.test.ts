@@ -1,5 +1,8 @@
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import "konva/skia-backend";
 import Konva from "konva";
@@ -191,5 +194,30 @@ describe("render", () => {
     expect(FontLibrary.has("Kit Sans")).toBe(false);
     expect(kitFamily(randomUUID(), "Kit Sans")).not.toBe(kitFamily(kitId, "Kit Sans"));
     expect(availableFamilies(["Kit Sans"])).toEqual(["Inter", "Space Grotesk", "Kit Sans"]);
+  });
+
+  it("a corrupt cached kit font is replaced by the real bytes", async () => {
+    const font = readFileSync(new URL("../node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2", import.meta.url));
+    const id = randomUUID(), kitId = randomUUID();
+    const dir = join(tmpdir(), "cherry-fonts"), file = join(dir, `${id}.woff2`);
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(file, Buffer.from("wOF2 truncated"));
+    const map = await useKitFonts([{ id, kitId, family: "Torn Sans", format: "woff2", bytes: async () => new Uint8Array(font) }]);
+    expect(map).toEqual(new Map([["Torn Sans", kitFamily(kitId, "Torn Sans")]]));
+    expect(readFileSync(file).equals(font)).toBe(true);
+  });
+
+  it("a text layer can't name another design's private kit family", async () => {
+    const font = readFileSync(new URL("../node_modules/@fontsource/space-grotesk/files/space-grotesk-latin-400-normal.woff2", import.meta.url));
+    const kitId = randomUUID();
+    await useKitFonts([{ id: randomUUID(), kitId, family: "Other Sans", format: "woff2", bytes: async () => new Uint8Array(font) }]);
+    const leak = kitFamily(kitId, "Other Sans");
+    const textAs = (fontFamily: string) => ours(page([{ ...base, id: "t", kind: "text", x: 10, y: 10, width: 380, height: 80,
+      text: "Hello berry", fontFamily, fontSize: 30, fontWeight: 400, lineHeight: 1.2, letterSpacing: 0, align: "left", fill: solid("#000000") }]), new Map());
+    const fallback = Buffer.from(textAs("sans-serif"));
+    expect(Buffer.from(textAs("Inter")).equals(fallback)).toBe(false);
+    expect(Buffer.from(textAs(leak)).equals(fallback)).toBe(true);
+    expect(Buffer.from(textAs(leak.toUpperCase())).equals(fallback)).toBe(true);
+    expect(Buffer.from(textAs(`Nope Sans, ${leak}`)).equals(fallback)).toBe(true);
   });
 });

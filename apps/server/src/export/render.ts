@@ -54,6 +54,12 @@ export async function loadImages(ids: string[], read: (id: string) => Promise<Ui
   return new Map(unique.map((id, i) => [id, loaded[i]!]));
 }
 
+/**
+ * The kit family from this design's map, else the name as written, except a name (or any entry of a list) that targets a
+ * private kit family: every kit's fonts share one process-wide FontLibrary, so that would draw another design's font.
+ */
+const family = (name: string, fonts?: FontMap) => fonts?.get(name) ?? (/cb-kit-/i.test(name) ? "sans-serif" : name);
+
 /** Mirrors the editor's NodeView: Konva shapes paint with globalAlpha = opacity multiplied down through groups. */
 function drawNode(ctx: Ctx, n: CherryNode, unit: Page["unit"], images: Images, parentAlpha: number, fonts?: FontMap): void {
   if (n.hidden) return;
@@ -86,7 +92,7 @@ function drawNode(ctx: Ctx, n: CherryNode, unit: Page["unit"], images: Images, p
     }
     case "text": {
       const t = new Konva.Text({
-        text: n.text, width: n.width, fontFamily: fonts?.get(n.fontFamily) ?? n.fontFamily, fontSize: (n.fontSize * PT_PX) / UNIT_PX[unit],
+        text: n.text, width: n.width, fontFamily: family(n.fontFamily, fonts), fontSize: (n.fontSize * PT_PX) / UNIT_PX[unit],
         fontStyle: String(n.fontWeight), lineHeight: n.lineHeight, letterSpacing: n.letterSpacing, align: n.align,
       });
       drawText(ctx, t, n.fill ? paint(n.fill) : "black");

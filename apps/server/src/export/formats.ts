@@ -2,7 +2,7 @@ import { zipSync } from "fflate";
 import { createRequire } from "node:module";
 import PptxGenJS from "pptxgenjs";
 import { Canvas } from "skia-canvas";
-import { toPx, type Paint, type Page } from "@cherry/doc";
+import { toPx, type CherryNode, type Paint, type Page } from "@cherry/doc";
 import type { FontMap } from "./fonts";
 import { drawPage, nodePng, pagePx, type Images } from "./render";
 
@@ -24,6 +24,29 @@ export const RASTER_SIDE = 8192;
 export const RASTER_AREA = 40_000_000;
 export const rasterOk = ({ width, height }: { width: number; height: number }) =>
   width <= RASTER_SIDE && height <= RASTER_SIDE && width * height <= RASTER_AREA;
+
+/** Most pixels one export may rasterise in total: every png/jpg page, gif frame or pptx node picture together. */
+export const EXPORT_PIXEL_BUDGET = 200_000_000;
+
+/** The scale and pixel area of a node's PPTX picture: 2×, capped to the per-raster limits. */
+function picture(n: CherryNode, page: Page): { scale: number; area: number } {
+  const px = toPx(n.width, page.unit), py = toPx(n.height, page.unit);
+  const scale = Math.min(2, RASTER_SIDE / Math.max(px, py, 1), Math.sqrt(RASTER_AREA / Math.max(px * py, 1)));
+  return { scale, area: Math.max(1, Math.ceil(px * scale)) * Math.max(1, Math.ceil(py * scale)) };
+}
+const pictured = (n: CherryNode) => !n.hidden && n.kind !== "rect" && n.kind !== "ellipse" && n.kind !== "text";
+
+/** Pixels `format` will rasterise for these pages, known before anything is drawn (0 for vector formats). */
+export function exportPixels(format: string, pages: Page[], scale: number): number {
+  const area = (p: Page) => { const { width, height } = rasterSize(p, scale); return width * height; };
+  const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+  switch (format) {
+    case "png": case "jpg": return sum(pages.map(area));
+    case "gif": return pages.length * area(pages[0]!); // every frame is the first page's size
+    case "pptx": return sum(pages.flatMap((p) => p.nodes.filter(pictured).map((n) => picture(n, p).area)));
+    default: return 0;
+  }
+}
 
 const zip = (files: [string, Uint8Array][]): Out =>
   ({ bytes: zipSync(Object.fromEntries(files)), mime: "application/zip", ext: "zip" });
@@ -153,9 +176,7 @@ export async function writePptx(pages: Page[], images: Images, notes: string[], 
         });
       } else {
         // ponytail: images are re-encoded as a PNG of the box at 2× rather than embedding the original file.
-        const px = toPx(n.width, page.unit), py = toPx(n.height, page.unit);
-        const s = Math.min(2, RASTER_SIDE / Math.max(px, py, 1), Math.sqrt(RASTER_AREA / Math.max(px * py, 1)));
-        const png = await nodePng(n, page, images, s, fonts);
+        const png = await nodePng(n, page, images, picture(n, page).scale, fonts);
         slide.addImage({ ...box, data: `image/png;base64,${png.toString("base64")}`, transparency: clear(n.opacity) });
       }
     }

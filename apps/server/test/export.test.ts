@@ -357,6 +357,53 @@ describe("export service", () => {
     }
   });
 
+  it("an export whose pages pass alone but exceed the total pixel budget is refused before rendering", async () => {
+    const { ada, ws } = await team();
+    const assetId = await insertAsset(ada.userId);
+    // 6000 x 6000 px = 36 MP a page (under the per-page limit); six pages = 216 MP, over the 200 MP total.
+    const id = await design(ada.cookie, ws, { width: 6000, height: 6000, unit: "px" });
+    const pageIds = await edit(ada.cookie, id, (doc) => {
+      doc.pages[0]!.nodes.push(image(assetId));
+      for (let i = 0; i < 5; i++) extraPage(doc);
+    });
+    // PPTX: one 4000 px path per page is a ~40 MP picture at the capped 2x; six of them are over the budget too.
+    const deckId = await design(ada.cookie, ws, { width: 4000, height: 4000, unit: "px" });
+    const deckPages = await edit(ada.cookie, deckId, (doc) => {
+      doc.pages[0]!.nodes.push(image(assetId), { ...base, id: crypto.randomUUID(), kind: "path", x: 0, y: 0, width: 4000, height: 4000,
+        d: "M0 0H10V10Z", fillRule: "nonzero", fill: solid("#000000") } as CherryNode);
+      for (let i = 0; i < 5; i++) doc.pages.push({ ...doc.pages[0]!, id: crypto.randomUUID() });
+    });
+    const get = vi.spyOn(t.storage, "get");
+    try {
+      for (const [format, d, p] of [["png", id, pageIds], ["gif", id, pageIds], ["jpg", id, pageIds], ["pptx", deckId, deckPages]] as const) {
+        const res = await exp(ada.cookie, d, { format, pageIds: p });
+        expect(res.statusCode, format).toBe(400);
+        expect(res.json()).toEqual({ error: "export_too_large" });
+      }
+      expect(get).not.toHaveBeenCalled(); // refused before any visual was loaded, so before rendering
+    } finally { get.mockRestore(); }
+  });
+
+  it("exports past the per-process cap are refused while others run", async () => {
+    const { ada, ws } = await team();
+    const id = await design(ada.cookie, ws);
+    const pageIds = await edit(ada.cookie, id, nodes(image(await insertAsset(ada.userId))));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    const real = t.storage.get.bind(t.storage);
+    const get = vi.spyOn(t.storage, "get").mockImplementation(async (k) => { await gate; return real(k); });
+    try {
+      const running = [exp(ada.cookie, id, { format: "png", pageIds }), exp(ada.cookie, id, { format: "png", pageIds })];
+      await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+      const refused = await exp(ada.cookie, id, { format: "png", pageIds });
+      expect(refused.statusCode).toBe(429);
+      expect(refused.json()).toEqual({ error: "rate_limited" });
+      release();
+      for (const res of await Promise.all(running)) expect(res.statusCode).toBe(200);
+    } finally { get.mockRestore(); }
+    expect((await exp(ada.cookie, id, { format: "png", pageIds })).statusCode).toBe(200); // the slots were released
+  });
+
   it("filename is safe for any title", async () => {
     const { ada, ws } = await team();
     const id = await design(ada.cookie, ws);

@@ -10,7 +10,7 @@ import { loadWithRole } from "../designs/service";
 import { HttpError } from "../errors";
 import type { Storage } from "../storage";
 import { WorkspaceError } from "../workspaces/errors";
-import { rasterOk, rasterSize, writeGif, writePdf, writePptx, writeRaster, writeSvg, type Out } from "./formats";
+import { EXPORT_PIXEL_BUDGET, exportPixels, rasterOk, rasterSize, writeGif, writePdf, writePptx, writeRaster, writeSvg, type Out } from "./formats";
 import { availableFamilies, useKitFonts } from "./fonts";
 import { loadImages } from "./render";
 
@@ -67,7 +67,21 @@ export const fileBase = (title: string) => [...title.trim()
   .replace(/[/\\:*?"<>|\u0000-\u001f\u007f]|[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "-")]
   .slice(0, 100).join("") || "design";
 
+// ponytail: a per-process cap, since rendering (gif quantising above all) runs on the event loop; move rendering to
+// worker threads or a job queue when more than a couple of exports at once must be served.
+export const MAX_EXPORTS = 2;
+let running = 0;
+
+/** At most MAX_EXPORTS at once in this process; one more is refused with 429 rate_limited. */
 export async function exportDesign(
+  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody,
+): Promise<Out & { filename: string }> {
+  if (running >= MAX_EXPORTS) throw new HttpError(429, "rate_limited");
+  running++;
+  try { return await renderExport(db, storage, collab, userId, designId, body); } finally { running--; }
+}
+
+async function renderExport(
   db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody,
 ): Promise<Out & { filename: string }> {
   const { design } = await loadWithRole(db, designId, userId);
@@ -77,7 +91,8 @@ export async function exportDesign(
   const pages = doc.pages.filter((p) => wanted.has(p.id));
   if (pages.length !== wanted.size) throw new HttpError(400, "invalid_pages");
   const scale = body.scale ?? 1;
-  if (["png", "jpg", "gif"].includes(body.format) && !pages.every((p) => rasterOk(rasterSize(p, scale)))) {
+  if ((["png", "jpg", "gif"].includes(body.format) && !pages.every((p) => rasterOk(rasterSize(p, scale))))
+    || exportPixels(body.format, pages, scale) > EXPORT_PIXEL_BUDGET) {
     throw new HttpError(400, "export_too_large");
   }
 
