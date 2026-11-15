@@ -37,7 +37,7 @@ export function drawPage(ctx: Ctx, page: Page, images: Images, opts: { backgroun
  */
 export async function nodePng(node: CherryNode, page: Page, images: Images, scale: number): Promise<Buffer> {
   const s = UNIT_PX[page.unit] * scale;
-  const canvas = new Canvas(Math.max(1, Math.ceil(node.width * s)), Math.max(1, Math.ceil(node.height * s)));
+  const canvas = new Canvas(Math.max(1, Math.ceil(node.width * s)), Math.max(1, Math.ceil(node.height * s)), { gpu: false });
   const ctx = canvas.getContext("2d");
   ctx.scale(s, s);
   drawNode(ctx, { ...node, x: 0, y: 0, rotation: 0, opacity: 1, hidden: false }, page.unit, images, 1);

@@ -7,6 +7,8 @@ import { HttpError } from "./errors";
 import { registerAssetRoutes } from "./assets/routes";
 import { registerBrandRoutes } from "./brand/routes";
 import { registerDesignRoutes } from "./designs/routes";
+import { registerExportRoutes } from "./export/routes";
+import { registerBuiltInFonts } from "./export/fonts";
 import { registerReportRoutes } from "./reports/routes";
 import { registerShapeRoutes } from "./shapes/routes";
 import { registerTemplateRoutes } from "./templates/routes";
@@ -88,5 +90,7 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage;
   registerAssetRoutes(app, deps.db, deps.storage, requireUser);
   registerReportRoutes(app, deps.db, deps.storage, requireUser);
   registerTemplateRoutes(app, deps.db, deps.storage, collab, requireUser);
+  registerBuiltInFonts();
+  registerExportRoutes(app, deps.db, deps.storage, collab, requireUser);
   return app;
 }
