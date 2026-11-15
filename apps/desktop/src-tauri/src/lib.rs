@@ -8,6 +8,12 @@ pub fn is_launcher(url: &Url) -> bool {
     }
 }
 
+/// The window moves between the launcher and whichever server the launcher picks. `blob:` is allowed so
+/// `<a download href="blob:...">` exports work; a blob URL carries its creator's origin, so it grants nothing.
+pub fn allows_navigation(url: &Url) -> bool {
+    is_launcher(url) || matches!(url.scheme(), "http" | "https" | "blob")
+}
+
 /// The webview's default user agent plus `CherryBerryDesktop/<version>`. A custom user agent replaces the
 /// whole string, so this rebuilds each platform's default (WebView2 from its runtime version; WebKit's is frozen).
 fn user_agent() -> String {
@@ -24,14 +30,14 @@ fn user_agent() -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // tauri-plugin-opener is used only through its Rust `open_url`, never registered as a plugin: the plugin
+    // injects a script that turns `_blank` link clicks into IPC calls, which server pages (no IPC) can't make.
     tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             let config = app.config().app.windows.iter().find(|w| w.label == "main").expect("main window config");
             let builder = WebviewWindowBuilder::from_config(app, config)?
                 .user_agent(&user_agent())
-                // The window moves between the launcher and whichever server the launcher picks.
-                .on_navigation(|url| is_launcher(url) || matches!(url.scheme(), "http" | "https"))
+                .on_navigation(allows_navigation)
                 // window.open and target=_blank links go to the system browser.
                 .on_new_window(|url, _| {
                     if matches!(url.scheme(), "http" | "https") {
@@ -60,5 +66,15 @@ mod tests {
         assert!(is_launcher(&Url::parse("tauri://localhost/").unwrap()));
         assert!(!is_launcher(&Url::parse("https://tauri.localhost.evil.com/").unwrap()));
         assert!(!is_launcher(&Url::parse("https://localhost/").unwrap()));
+    }
+
+    #[test]
+    fn navigation_allows_launcher_servers_and_blob_downloads_only() {
+        for ok in ["tauri://localhost/", "http://192.168.1.5:3000/", "https://cherry.example/designs", "blob:https://cherry.example/6f1c"] {
+            assert!(allows_navigation(&Url::parse(ok).unwrap()), "{ok}");
+        }
+        for no in ["file:///C:/Windows/win.ini", "javascript:alert(1)", "mailto:a@b.c", "data:text/html,hi", "ms-settings:"] {
+            assert!(!allows_navigation(&Url::parse(no).unwrap()), "{no}");
+        }
     }
 }
