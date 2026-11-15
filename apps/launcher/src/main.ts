@@ -7,7 +7,8 @@ import { checkServer, normalizeServer, STORAGE_KEY } from "./server";
 export type View =
   | { view: "picker"; value: string; error?: string }
   | { view: "go"; origin: string }
-  | { view: "unreachable"; host: string; origin: string };
+  | { view: "unreachable"; host: string; origin: string }
+  | { view: "confirm"; host: string; origin: string; back: string };
 type Check = (origin: string) => Promise<"ok" | "not_cherry" | "unreachable">;
 
 const INVALID = "Enter an address like design.your-company.com.";
@@ -23,11 +24,16 @@ export async function connect(input: string, check: Check = checkServer): Promis
   return { view: "picker", value: input, error: `${host} isn't a Cherry Berry server.` };
 }
 
-/** First view: `?server=X` connects to X, `?change=1` or nothing remembered shows the picker, else the remembered server. */
+/** First view: `?server=X` connects to X (asking first when it replaces another remembered server), `?change=1` or nothing remembered shows the picker, else the remembered server. */
 export async function boot(state: { search: string; stored: string | null }, deps: { check: Check } = { check: checkServer }): Promise<View> {
   const p = new URLSearchParams(state.search);
   const server = p.get("server");
-  if (server !== null) return connect(server, deps.check);
+  if (server !== null) {
+    const v = await connect(server, deps.check);
+    const back = normalizeServer(state.stored ?? "");
+    if (v.view === "go" && "origin" in back && back.origin !== v.origin) return { view: "confirm", host: new URL(v.origin).host, origin: v.origin, back: back.origin };
+    return v;
+  }
   if (p.has("change") || !state.stored) return { view: "picker", value: state.stored ?? "" };
   return connect(state.stored, deps.check);
 }
@@ -72,6 +78,22 @@ function show(v: View) {
     app.querySelector<HTMLButtonElement>("[data-retry]")!.onclick = () => run(connect(v.origin), `Connecting to ${v.host}…`);
     app.querySelector<HTMLButtonElement>("[data-change]")!.onclick = () => show({ view: "picker", value: v.origin });
     app.querySelector<HTMLButtonElement>("[data-retry]")!.focus();
+    return;
+  }
+  if (v.view === "confirm") {
+    const app = mount(`
+      <section class="card" aria-labelledby="t">
+        <h1 id="t">Switch server?</h1>
+        <p class="muted"></p>
+        <div class="actions">
+          <button type="button" class="btn btn-p" data-switch>Switch</button>
+          <button type="button" class="btn" data-cancel>Cancel</button>
+        </div>
+      </section>`);
+    app.querySelector("p")!.textContent = `Switch to ${v.host}?`;
+    app.querySelector<HTMLButtonElement>("[data-switch]")!.onclick = () => show({ view: "go", origin: v.origin });
+    app.querySelector<HTMLButtonElement>("[data-cancel]")!.onclick = () => location.replace(v.back);
+    app.querySelector<HTMLButtonElement>("[data-switch]")!.focus();
     return;
   }
   picker(v.value, v.error);

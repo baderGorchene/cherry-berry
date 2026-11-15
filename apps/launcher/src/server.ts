@@ -19,6 +19,7 @@ export async function checkServer(origin: string, f: typeof fetch = fetch): Prom
   const timer = setTimeout(() => ctl.abort(), 8000);
   try {
     const res = await f(`${origin}/api/health`, { signal: ctl.signal });
+    if (res.status >= 500) return "unreachable"; // a proxy (nginx, Caddy) in front of a server that is down
     if (!res.ok) return "not_cherry";
     const body: unknown = await res.json().catch(() => null);
     return (body as { app?: unknown } | null)?.app === "cherry-berry" ? "ok" : "not_cherry";

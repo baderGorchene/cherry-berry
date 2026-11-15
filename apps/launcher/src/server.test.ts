@@ -30,6 +30,11 @@ describe("checkServer", () => {
     expect(await checkServer("https://x.org", async () => new Response("nope", { status: 404 }))).toBe("not_cherry");
   });
 
+  test("unreachable when a proxy in front of a down server answers 5xx", async () => {
+    expect(await checkServer("https://x.org", async () => new Response("Bad Gateway", { status: 502 }))).toBe("unreachable");
+    expect(await checkServer("https://x.org", async () => new Response("", { status: 504 }))).toBe("unreachable");
+  });
+
   test("unreachable when fetch rejects or times out", async () => {
     expect(await checkServer("https://x.org", async () => { throw new TypeError("Failed to fetch"); })).toBe("unreachable");
     vi.useFakeTimers();
@@ -60,8 +65,15 @@ describe("boot", () => {
     expect(c).not.toHaveBeenCalled();
   });
 
+  test("switching away from a remembered server asks first", async () => {
+    expect(await boot({ search: "?server=b.org", stored: "https://a.org" }, { check: check("ok") }))
+      .toEqual({ view: "confirm", host: "b.org", origin: "https://b.org", back: "https://a.org" });
+    expect(await boot({ search: "?server=" + encodeURIComponent("a.org/login"), stored: "https://a.org" }, { check: check("ok") }))
+      .toEqual({ view: "go", origin: "https://a.org" });
+  });
+
   test("?server= is normalized and checked", async () => {
-    expect(await boot({ search: "?server=" + encodeURIComponent("b.org/x"), stored: "https://a.org" }, { check: check("ok") }))
+    expect(await boot({ search: "?server=" + encodeURIComponent("b.org/x"), stored: null }, { check: check("ok") }))
       .toEqual({ view: "go", origin: "https://b.org" });
     expect(await boot({ search: "?server=b.org", stored: null }, { check: check("not_cherry") }))
       .toEqual({ view: "picker", value: "b.org", error: "b.org isn't a Cherry Berry server." });
