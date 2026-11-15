@@ -185,6 +185,11 @@ button.row:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px;
 .auth-hero h1 { font-size: 40px; line-height: 1.1; letter-spacing: -0.02em; }
 .pill { padding: 8px 14px; border-radius: 999px; background: var(--petal); color: var(--deep); font-weight: 600; font-size: 13px; }
 @media (max-width: 899px) { .auth-hero { display: none; } }
+.server { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 10px; }
+.server-opts { border: 0; padding: 0; margin: 0; display: flex; gap: 10px; flex-wrap: wrap; }
+.server-opts .opt { min-height: 44px; }
+.server-addr { display: flex; gap: 8px; }
+.warn-note { color: var(--warning); font-size: 14px; }
 
 /* New design dialog */
 .dlg-page { min-height: 100vh; padding: 48px 16px; display: flex; justify-content: center; align-items: flex-start; box-sizing: border-box; }

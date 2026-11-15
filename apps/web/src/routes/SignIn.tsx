@@ -2,6 +2,44 @@ import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { errorMessage, signIn, signUp } from "../api";
 import { useSession } from "../App";
+import { shell, switchServerUrl } from "../native";
+
+const CLOUD = (() => { try { return new URL(import.meta.env.VITE_CLOUD_URL ?? "").origin; } catch { return null; } })();
+
+/** Native shells only: which server this app is on; picking another hands over to the launcher. */
+function ServerPicker() {
+  const here = location.origin;
+  const [kind, setKind] = useState<"cloud" | "self">(here === CLOUD ? "cloud" : "self");
+  const [address, setAddress] = useState(here === CLOUD ? "" : here);
+  const target = address.trim();
+  const go = (to: string) => { const url = switchServerUrl(to); if (url) location.href = url; };
+  return (
+    <form className="server" onSubmit={(e) => { e.preventDefault(); if (target && target !== here) go(target); }}>
+      <fieldset className="server-opts">
+        <legend className="lbl">Server</legend>
+        {CLOUD && (
+          <label className="opt">
+            <input type="radio" name="server" checked={kind === "cloud"} onChange={() => { setKind("cloud"); if (CLOUD !== here) go(CLOUD!); }} />
+            <span><strong>Cherry Berry Cloud</strong><br /><span className="muted">The central instance, nothing to install.</span></span>
+          </label>
+        )}
+        <label className="opt">
+          <input type="radio" name="server" checked={kind === "self"} onChange={() => setKind("self")} />
+          <span><strong>Self-hosted server</strong><br /><span className="muted">Your organization's own instance.</span></span>
+        </label>
+      </fieldset>
+      {kind === "self" && (
+        <div className="server-addr">
+          <label className="sr-only" htmlFor="server-address">Server address</label>
+          <input id="server-address" className="inp" inputMode="url" autoCapitalize="off" spellCheck={false} placeholder="https://design.your-company.com"
+            value={address} onChange={(e) => setAddress(e.target.value)} />
+          <button type="submit" className="btn" disabled={!target || target === here}>Connect</button>
+        </div>
+      )}
+      {kind === "self" && /^http:\/\//i.test(target) && <p className="warn-note">Not secure: this address uses http.</p>}
+    </form>
+  );
+}
 
 export default function SignIn() {
   const { setUser } = useSession();
@@ -45,7 +83,8 @@ export default function SignIn() {
         </div>
       </section>
 
-      <section style={{ flex: "1 1 420px", display: "flex", alignItems: "center", justifyContent: "center", padding: "48px 24px" }}>
+      <section style={{ flex: "1 1 420px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, padding: "48px 24px" }}>
+        {shell() && <ServerPicker />}
         <form onSubmit={submit} style={{ width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 22 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <h2 style={{ fontSize: 32, letterSpacing: "-0.01em" }}>{mode === "in" ? "Sign in" : "Create your account"}</h2>
