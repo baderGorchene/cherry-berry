@@ -22,6 +22,10 @@ Open http://localhost:5173 (the API server listens on `:3000` by default).
 
 Uploads live in S3-compatible object storage (`S3_ENDPOINT`, `S3_BUCKET`, `S3_ACCESS_KEY`, `S3_SECRET_KEY`, optional `S3_REGION`). `pnpm db:up` starts RustFS on `:9000` (console `:9001`, sign in with `rustfsadmin` / `rustfsadmin`) and creates the `cherry` bucket; any S3-compatible service works in production.
 
+## Production
+
+Build the web app with `pnpm --filter @cherry/web build`, set `WEB_DIST=apps/web/dist` and `PUBLIC_URL` to the address people use; one origin serves app and API. A relative `WEB_DIST` resolves against the server process working directory.
+
 ## Workspace structure
 
 - `apps/server` (`@cherry/server`) — Fastify 5 API, Better Auth, Drizzle ORM (PostgreSQL / PGlite), and S3-compatible asset storage

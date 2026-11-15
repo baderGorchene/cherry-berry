@@ -15,6 +15,8 @@ import { registerTemplateRoutes } from "./templates/routes";
 import { registerWorkspaceRoutes } from "./workspaces/routes";
 import rateLimit from "@fastify/rate-limit";
 import websocket from "@fastify/websocket";
+import fastifyStatic from "@fastify/static";
+import { resolve } from "node:path";
 import { createCollab, type Collab } from "./collab/server";
 import { registerCollabRoutes } from "./collab/routes";
 import { registerVersionRoutes } from "./versions/routes";
@@ -54,7 +56,11 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage;
     return reply.status(500).send({ error: "internal" });
   });
 
-  app.get("/api/health", async () => ({ status: "ok" }));
+  // Public: native launchers on another origin probe this to confirm a Cherry Berry server.
+  app.get("/api/health", async (_req, reply) => {
+    reply.header("access-control-allow-origin", "*");
+    return { status: "ok", app: "cherry-berry" };
+  });
 
   // Better Auth speaks Fetch Request/Response; bridge it onto Fastify.
   app.route({
@@ -92,5 +98,20 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage;
   registerTemplateRoutes(app, deps.db, deps.storage, collab, requireUser);
   registerBuiltInFonts();
   registerExportRoutes(app, deps.db, deps.storage, collab, requireUser);
+  if (config.webDist) {
+    const root = resolve(config.webDist);
+    await app.register(fastifyStatic, {
+      root,
+      setHeaders: (res, path) => {
+        const hashed = /[\\/]assets[\\/]/.test(path);
+        res.header("cache-control", hashed ? "public, max-age=31536000, immutable" : "no-cache");
+      },
+    });
+    // SPA fallback; unknown /api paths keep Fastify's JSON 404.
+    app.setNotFoundHandler((req, reply) => {
+      if (req.method === "GET" && !req.url.startsWith("/api/")) return reply.sendFile("index.html");
+      return reply.status(404).send({ message: `Route ${req.method}:${req.url} not found`, error: "Not Found", statusCode: 404 });
+    });
+  }
   return app;
 }
