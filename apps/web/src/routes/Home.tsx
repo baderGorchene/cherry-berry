@@ -22,6 +22,9 @@ export const PRESETS: { name: string; size: string; w: number; h: number; bg: st
     body: { title: "Untitled design", width: 85, height: 55, unit: "mm", colorMode: "cmyk", bleed: 3 } },
 ];
 
+/** Phone size row: label → preset name (null: custom size). */
+const SIZES: [string, string | null][] = [["Post", "Social post"], ["Story", "Story"], ["A4 print", "A4 print"], ["Custom", null]];
+
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 export function edited(iso: string, now = Date.now()): string {
   const s = (new Date(iso).getTime() - now) / 1000;
@@ -101,18 +104,32 @@ export default function Home() {
             <input type="search" className="inp" aria-label="Search designs" placeholder="Search designs"
               value={q} onChange={(e) => setQ(e.target.value)} />
           </label>
-          <span style={{ flex: 1 }} />
-          {viewOnly ? null : <Link to="/new" className="btn btn-p"><IconPlus /> New design</Link>}
-          <span aria-label={`Signed in as ${user?.name}`} title={user?.email} style={{
-            width: 40, height: 40, borderRadius: "50%", background: "var(--berry)", color: "#fff",
-            display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700,
-          }}>{initials(user?.name ?? "")}</span>
+          <span className="only-d" style={{ flex: 1 }} />
+          {viewOnly ? null : <Link to="/new" className="btn btn-p only-d"><IconPlus /> New design</Link>}
+          <span className="me only-d" role="img" aria-label={`Signed in as ${user?.name}`} title={user?.email}>{initials(user?.name ?? "")}</span>
         </header>
 
         <section className="sec">
-          <h1 className="page-title">Start something</h1>
+          <h1 className="page-title home-title">Start something</h1>
           {createError && <p role="alert" className="field-error">{createError}</p>}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 14 }}>
+          {viewOnly ? null : (
+            <ul className="sizes" aria-label="Sizes">
+              {SIZES.map(([label, preset]) => {
+                const p = PRESETS.find((x) => x.name === preset);
+                return (
+                  <li key={label}>
+                    <Link to={p ? `/new?preset=${encodeURIComponent(p.name)}` : "/new"} className="size">
+                      <span className="size-box" aria-hidden="true">
+                        {p ? <span style={{ width: p.w * 0.66, height: p.h * 0.66, background: p.bg, borderRadius: 4 }} /> : <IconPlus />}
+                      </span>
+                      {label}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <div className="preset-grid">
             {PRESETS.map((p) => (
               <button key={p.name} type="button" className="card" disabled={viewOnly || busy}
                 title={viewOnly ? "View-only access" : undefined} onClick={() => create(p.body)}
@@ -139,7 +156,7 @@ export default function Home() {
         </section>
 
         <section className="sec">
-          <h2 className="sec-title">Recent designs</h2>
+          <h2 className="sec-title">Recent<span className="only-d"> designs</span></h2>
           {designs === null ? <p className="muted">Loading…</p> : designs === "error" ? (
             <div className="card" style={{ alignItems: "flex-start" }}>
               <p role="alert">Couldn't load your designs.</p>
@@ -153,7 +170,7 @@ export default function Home() {
           ) : shown.length === 0 ? (
             <p className="muted">No designs match “{q.trim()}”.</p>
           ) : (
-            <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 20 }}>
+            <ul className="recent">
               {shown.map((d) => (
                 <li key={d.id}>
                   <Link to={`/d/${d.id}`} className="card" style={{ ...tile, height: "100%" }}>
@@ -177,6 +194,7 @@ export default function Home() {
             </ul>
           )}
         </section>
+        {viewOnly ? null : <Link to="/new" className="fab" aria-label="New design"><IconPlus /></Link>}
     </AppShell>
   );
 }

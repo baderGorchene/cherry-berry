@@ -147,15 +147,17 @@ export default function Library() {
           <header className="page-head">
             <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 4 }}>
               <h1 className="page-title">Visual library</h1>
-              <p className="page-sub">Images, GIFs and SVGs you can use in any design.</p>
+              <p className="page-sub only-d">Images, GIFs and SVGs you can use in any design.</p>
             </div>
-            <button className="btn btn-p" onClick={() => setUploading(true)}><IconUpload />Upload visuals</button>
+            <button className="btn btn-p only-d" onClick={() => setUploading(true)}><IconUpload />Upload visuals</button>
           </header>
           <input className="inp" type="search" aria-label="Search visuals" placeholder="Search by title, tag or uploader"
             value={text} onChange={(e) => setText(e.target.value)} />
-          <Chips label="Type" options={TYPES} value={kind} onPick={setKind} />
-          <Chips label="Source" options={SOURCES} value={scope} onPick={setScope} />
-          <Chips label="License" options={LICENSE_CHIPS} value={lic} onPick={setLic} />
+          <div className="filters">
+            <Chips label="Type" options={TYPES} value={kind} onPick={setKind} />
+            <Chips label="Source" options={SOURCES} value={scope} onPick={setScope} />
+            <Chips label="License" options={LICENSE_CHIPS} value={lic} onPick={setLic} />
+          </div>
           {!res ? <p className="muted">Loading…</p> : "error" in res ? (
             <div><p role="alert" className="field-error">{res.error}</p><button className="btn" onClick={retry}>Retry</button></div>
           ) : !res.assets.length ? <p className="muted">No visuals yet. Upload the first one.</p> : (
@@ -181,6 +183,7 @@ export default function Library() {
           ) : <p className="muted" style={{ fontSize: 14 }}>Select a visual to see its details.</p>}
         </aside>
       </div>
+      <button type="button" className="fab" aria-label="Upload visuals" onClick={() => setUploading(true)}><IconUpload /></button>
       {uploading && (
         <UploadDialog workspaceId={ws.id} viewer={ws.role === "viewer"} onClose={() => setUploading(false)}
           onDone={(a) => { if (a) setSelectedId(a.id); retry(); }} />

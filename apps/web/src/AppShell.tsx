@@ -7,14 +7,16 @@ import { IconBrand, IconChevron, IconHome, IconImage, IconShapes, IconTemplate }
 import { initials } from "./routes/Workspaces";
 
 const ROLE: Record<string, string> = { owner: "Owner", admin: "Admin", editor: "Editor", viewer: "Viewer" };
+// [id, path, label, phone tab label (null: not a phone tab, it sits in the menu instead), icon]
 const LINKS = [
-  ["home", "/", "Home", IconHome], ["templates", "/templates", "Templates", IconTemplate], ["library", "/library", "Visual library", IconImage],
-  ["shapes", "/shapes", "Shapes", IconShapes], ["brand", "/brand", "Brand kits", IconBrand],
+  ["home", "/", "Home", "Home", IconHome], ["templates", "/templates", "Templates", "Templates", IconTemplate],
+  ["library", "/library", "Visual library", "Library", IconImage], ["shapes", "/shapes", "Shapes", null, IconShapes],
+  ["brand", "/brand", "Brand kits", "Brand", IconBrand],
 ] as const;
 
-/** Page frame: brand, workspace switcher, page links and sign out (bottom tab bar on phones). `onSwitch` lets the page follow a workspace change; `bleed` drops the page padding so the page can run a flush side panel. */
+/** Page frame: brand, workspace switcher, page links and sign out (top bar + bottom tab bar on phones). `onSwitch` lets the page follow a workspace change; `bleed` drops the page padding so the page can run a flush side panel. */
 export default function AppShell({ active, onSwitch, bleed, children }: { active: "home" | "templates" | "library" | "shapes" | "brand"; onSwitch?(id: string): void; bleed?: boolean; children: ReactNode }) {
-  const { setUser } = useSession();
+  const { user, setUser } = useSession();
   const [list, setList] = useState<Workspace[]>([]);
   const [currentId, setCurrentId] = useState(currentWorkspace.get());
   const [open, setOpen] = useState(false);
@@ -65,15 +67,18 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
                 </button>
               ))}
               <p className="muted ws-id">{ROLE[current.role ?? "viewer"]} · ID <code data-testid="workspace-public-id">{current.publicId}</code></p>
+              <Link to="/shapes" className="nav only-m" aria-current={active === "shapes" ? "page" : undefined}>Shapes</Link>
               <Link to="/workspaces" className="nav">Join or create another workspace</Link>
               {switchServerUrl(null) && <button type="button" className="nav" onClick={() => { location.href = switchServerUrl(null)!; }}>Switch server</button>}
               <button type="button" className="nav only-m" onClick={out}>Sign out</button>
             </div>
           )}
         </div>
-        {LINKS.map(([id, to, label, Icon]) => (
-          <Link key={id} to={to} className={`nav${active === id ? " nav-on" : ""}`} aria-current={active === id ? "page" : undefined}>
-            <Icon />{label}
+        <span className="me only-m" role="img" aria-label={`Signed in as ${user?.name}`} title={user?.email}>{initials(user?.name ?? "")}</span>
+        {LINKS.map(([id, to, label, short, Icon]) => (
+          <Link key={id} to={to} className={`nav${active === id ? " nav-on" : ""}${short ? "" : " only-d"}`} aria-current={active === id ? "page" : undefined}
+            aria-label={label}>
+            <Icon /><span className="only-d">{label}</span><span className="only-m" aria-hidden="true">{short}</span>
           </Link>
         ))}
         <span style={{ flex: 1 }} className="only-d" />

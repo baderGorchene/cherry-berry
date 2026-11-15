@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { createDesign, errorMessage, myWorkspaces, type NewDesign } from "../api";
 import { currentWorkspace } from "../App";
 import { IconClose } from "../icons";
@@ -9,7 +9,10 @@ const DEFAULT_BLEED: Record<string, number> = { mm: 3, in: 0.125 };
 
 export default function NewDesign() {
   const navigate = useNavigate();
-  const [unit, setUnit] = useState("px");
+  // ?preset=<name> (the phone size row) fills the custom form with that preset
+  const [params] = useSearchParams();
+  const preset = PRESETS.find((p) => p.name === params.get("preset"))?.body;
+  const [unit, setUnit] = useState(preset?.unit ?? "px");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [viewOnly, setViewOnly] = useState(false);
@@ -77,11 +80,11 @@ export default function NewDesign() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10 }}>
           <div>
             <label className="lbl" htmlFor="width">Width</label>
-            <input id="width" name="width" className="inp" type="number" min="0.01" step="any" defaultValue={1080} required />
+            <input id="width" name="width" className="inp" type="number" min="0.01" step="any" defaultValue={preset?.width ?? 1080} required />
           </div>
           <div>
             <label className="lbl" htmlFor="height">Height</label>
-            <input id="height" name="height" className="inp" type="number" min="0.01" step="any" defaultValue={1080} required />
+            <input id="height" name="height" className="inp" type="number" min="0.01" step="any" defaultValue={preset?.height ?? 1080} required />
           </div>
           <div>
             <label className="lbl" htmlFor="unit">Unit</label>
@@ -93,14 +96,14 @@ export default function NewDesign() {
         <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
           <legend className="lbl">Color mode</legend>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <label className="opt"><input type="radio" name="colorMode" value="rgb" defaultChecked />RGB · screen</label>
-            <label className="opt"><input type="radio" name="colorMode" value="cmyk" />CMYK · print</label>
+            <label className="opt"><input type="radio" name="colorMode" value="rgb" defaultChecked={preset?.colorMode !== "cmyk"} />RGB · screen</label>
+            <label className="opt"><input type="radio" name="colorMode" value="cmyk" defaultChecked={preset?.colorMode === "cmyk"} />CMYK · print</label>
           </div>
         </fieldset>
         {unit !== "px" && (
           <div>
             <label className="lbl" htmlFor="bleed">Bleed ({unit})</label>
-            <input id="bleed" key={unit} name="bleed" className="inp" type="number" min="0" step="any" defaultValue={DEFAULT_BLEED[unit]} required />
+            <input id="bleed" key={unit} name="bleed" className="inp" type="number" min="0" step="any" defaultValue={unit === preset?.unit ? preset.bleed ?? DEFAULT_BLEED[unit] : DEFAULT_BLEED[unit]} required />
           </div>
         )}
         <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>

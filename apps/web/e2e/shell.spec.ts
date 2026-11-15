@@ -96,14 +96,17 @@ test("library and shapes keep the detail panel beside the grid on wide screens",
   expect(Math.round(sa.x + sa.width)).toBe(1280);
 });
 
-test("sign in shows the welcome panel on wide screens only", async ({ page }) => {
+test("sign in shows the full welcome panel on wide screens and a band on phones", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.goto("/sign-in");
   const h = page.getByRole("heading", { name: "Design freely. Own every file." });
   await expect(h).toBeVisible();
   for (const b of ["Open source", "Self-hostable", "Vector editing"]) await expect(page.getByText(b, { exact: true })).toBeVisible();
-  await page.setViewportSize({ width: 390, height: 844 });
+  await page.setViewportSize({ width: 800, height: 800 });
   await expect(h).toBeHidden();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(h).toBeVisible();
+  await expect(page.getByText("Open source", { exact: true })).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 

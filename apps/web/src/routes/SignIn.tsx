@@ -17,16 +17,18 @@ function ServerPicker() {
     <form className="server" onSubmit={(e) => { e.preventDefault(); if (target && target !== here) go(target); }}>
       <fieldset className="server-opts">
         <legend className="lbl">Server</legend>
-        {CLOUD && (
+        <div className="seg">
+          {CLOUD && (
+            <label className="opt">
+              <input type="radio" name="server" checked={kind === "cloud"} onChange={() => { setKind("cloud"); if (CLOUD !== here) go(CLOUD!); }} />
+              <span><strong><span className="only-d">Cherry Berry </span>Cloud</strong><span className="muted only-d"><br />The central instance, nothing to install.</span></span>
+            </label>
+          )}
           <label className="opt">
-            <input type="radio" name="server" checked={kind === "cloud"} onChange={() => { setKind("cloud"); if (CLOUD !== here) go(CLOUD!); }} />
-            <span><strong>Cherry Berry Cloud</strong><br /><span className="muted">The central instance, nothing to install.</span></span>
+            <input type="radio" name="server" checked={kind === "self"} onChange={() => setKind("self")} />
+            <span><strong>Self-hosted<span className="only-d"> server</span></strong><span className="muted only-d"><br />Your organization's own instance.</span></span>
           </label>
-        )}
-        <label className="opt">
-          <input type="radio" name="server" checked={kind === "self"} onChange={() => setKind("self")} />
-          <span><strong>Self-hosted server</strong><br /><span className="muted">Your organization's own instance.</span></span>
-        </label>
+        </div>
       </fieldset>
       {kind === "self" && (
         <div className="server-addr">
@@ -69,21 +71,23 @@ export default function SignIn() {
   return (
     <div className="auth">
       <section className="auth-hero">
-        <p className="brand" style={{ color: "#fff", fontSize: 22 }}>Cherry Berry</p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 520 }}>
-          <h1>Design freely. Own every file.</h1>
-          <p style={{ fontSize: 18, lineHeight: 1.5, color: "#FFE3F1" }}>
+        <span className="blob blob-a only-m" aria-hidden="true" />
+        <span className="blob blob-b only-m" aria-hidden="true" />
+        <p className="brand auth-brand">Cherry Berry</p>
+        <div className="auth-copy">
+          <h1><span>Design freely.</span> <span>Own every file.</span></h1>
+          <p className="only-d" style={{ fontSize: 18, lineHeight: 1.5, color: "#FFE3F1" }}>
             An open-source design studio. Real vector tools, print-ready export and nothing locked behind a paywall.
           </p>
         </div>
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+        <div className="auth-pills">
           <span className="pill">Open source</span>
           <span className="pill">Self-hostable</span>
           <span className="pill">Vector editing</span>
         </div>
       </section>
 
-      <section style={{ flex: "1 1 420px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 28, padding: "48px 24px" }}>
+      <section className="auth-main">
         {shell() && <ServerPicker />}
         <form onSubmit={submit} style={{ width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 22 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
