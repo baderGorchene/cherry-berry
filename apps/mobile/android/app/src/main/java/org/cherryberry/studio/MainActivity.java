@@ -20,6 +20,7 @@ import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.Logger;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import org.json.JSONObject;
 
@@ -37,9 +38,13 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         WebView webView = bridge.getWebView();
 
-        // Capacitor falls back to addJavascriptInterface (every origin and frame) when WebMessageListener is missing or
-        // rejects its origin rules. The launcher needs no plugins, so drop that fallback; the origin-scoped listener stays.
+        // addJavascriptInterface objects reach every origin and frame. Capacitor uses one for androidBridge when
+        // WebMessageListener is missing or rejects its origin rules, and the core CapacitorCookies / CapacitorHttp plugins
+        // always add one (setCookie writes any domain's cookies, no enabled check). The launcher needs none of them and
+        // native-bridge.js checks each with typeof; the origin-scoped androidBridge listener stays.
         webView.removeJavascriptInterface("androidBridge");
+        webView.removeJavascriptInterface("CapacitorCookiesAndroidInterface");
+        webView.removeJavascriptInterface("CapacitorHttpAndroidInterface");
 
         bridge.setWebViewClient(
             new BridgeWebViewClient(bridge) {
@@ -49,7 +54,10 @@ public class MainActivity extends BridgeActivity {
                     String scheme = url.getScheme();
                     // The chosen server is any http(s) origin; Capacitor would hand it to the system browser. New windows
                     // never get here (onCreateWindow below sends them out), and the bridge is origin-scoped, not URL-scoped.
-                    if (("https".equals(scheme) || "http".equals(scheme)) && !isApp(url)) return false;
+                    if (("https".equals(scheme) || "http".equals(scheme)) && !isApp(url)) {
+                        view.getSettings().setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW); // before the page loads anything
+                        return false;
+                    }
                     return super.shouldOverrideUrlLoading(view, request);
                 }
 
@@ -155,15 +163,22 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
-    /** Basename only, no control characters, at most 120 characters, never empty or a dot name. */
+    /** Basename only, no control characters, at most 200 UTF-8 bytes (filesystems allow 255) cut at a code point,
+     * keeping a short extension; never empty or a dot name. */
     static String safeName(String name) {
         String base = name.substring(Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\')) + 1);
         base = base.replaceAll("[\\p{Cntrl}:*?\"<>|]", "_").trim();
-        if (base.length() > 120) {
+        if (utf8(base) > 200) {
             int dot = base.lastIndexOf('.');
             String ext = dot > 0 && base.length() - dot <= 10 ? base.substring(dot) : "";
-            base = base.substring(0, 120 - ext.length()) + ext;
+            String stem = base.substring(0, base.length() - ext.length());
+            while (utf8(stem) + utf8(ext) > 200) stem = stem.substring(0, stem.offsetByCodePoints(stem.length(), -1));
+            base = stem + ext;
         }
         return base.isEmpty() || base.matches("\\.+") ? "export" : base;
+    }
+
+    static int utf8(String s) {
+        return s.getBytes(StandardCharsets.UTF_8).length;
     }
 }

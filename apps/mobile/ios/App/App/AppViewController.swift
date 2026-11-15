@@ -5,15 +5,27 @@ import Capacitor
 /// The launcher (capacitor://localhost) is the only page that may reach Capacitor's plugin bridge. The chosen server's
 /// page is remote: it stays in this webview and gets `cherryNative` for exports, the iOS twin of Android's MainActivity.
 class AppViewController: CAPBridgeViewController {
+    private var uiGuard: CookiePromptGuard? // WKWebView holds its uiDelegate weakly
+
     override func capacitorDidLoad() {
         guard let bridge = bridge as? CapacitorBridge else { return }
-        let content = bridge.webViewDelegationHandler.contentController
+        let handler = bridge.webViewDelegationHandler
+        let app = bridge.config.localURL
         // Capacitor's "bridge" handler runs plugin calls from any origin and frame; put an origin check in front of it.
-        content.removeScriptMessageHandler(forName: "bridge")
-        content.add(AppOriginOnly(inner: bridge.webViewDelegationHandler, app: bridge.config.localURL), name: "bridge")
-        content.add(ExportHandler(controller: self), name: "cherryNative")
+        handler.contentController.removeScriptMessageHandler(forName: "bridge")
+        handler.contentController.add(AppOriginOnly(inner: handler, app: app), name: "bridge")
+        handler.contentController.add(ExportHandler(controller: self), name: "cherryNative")
         bridge.registerPluginInstance(ServerNavigation())
+        // CapacitorCookies also listens on prompt() with no origin check; screen that too.
+        uiGuard = CookiePromptGuard(inner: handler, app: app)
+        webView?.uiDelegate = uiGuard
     }
+}
+
+/// True for the app origin's (capacitor://localhost) main frame.
+func isAppMainFrame(_ frame: WKFrameInfo, _ app: URL) -> Bool {
+    let origin = frame.securityOrigin
+    return frame.isMainFrame && origin.protocol == app.scheme && origin.host == app.host && origin.port == (app.port ?? 0)
 }
 
 /// Forwards script messages to Capacitor only from the app origin's main frame.
@@ -27,9 +39,41 @@ final class AppOriginOnly: NSObject, WKScriptMessageHandler {
     }
 
     func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-        let origin = message.frameInfo.securityOrigin
-        guard message.frameInfo.isMainFrame, origin.protocol == app.scheme, origin.host == app.host, origin.port == (app.port ?? 0) else { return }
+        guard isAppMainFrame(message.frameInfo, app) else { return }
         inner?.userContentController(controller, didReceive: message)
+    }
+}
+
+/// Capacitor's WKUIDelegate, except a `{"type":"CapacitorCookies.…"}` prompt from any other frame or origin gets nil.
+/// Every other WKUIDelegate call (alert, confirm, other prompts, new windows to Safari, permissions) is forwarded as is.
+final class CookiePromptGuard: NSObject, WKUIDelegate {
+    weak var inner: WebViewDelegationHandler?
+    let app: URL
+
+    init(inner: WebViewDelegationHandler, app: URL) {
+        self.inner = inner
+        self.app = app
+    }
+
+    override func responds(to aSelector: Selector!) -> Bool {
+        super.responds(to: aSelector) || (inner?.responds(to: aSelector) ?? false)
+    }
+
+    override func forwardingTarget(for aSelector: Selector!) -> Any? {
+        inner
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String, defaultText: String?,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (String?) -> Void) {
+        if !isAppMainFrame(frame, app),
+           let payload = (try? JSONSerialization.jsonObject(with: Data(prompt.utf8), options: .fragmentsAllowed)) as? [String: Any],
+           (payload["type"] as? String)?.hasPrefix("CapacitorCookies.") == true {
+            completionHandler(nil)
+            return
+        }
+        guard let inner = inner else { return completionHandler(nil) }
+        inner.webView(webView, runJavaScriptTextInputPanelWithPrompt: prompt, defaultText: defaultText,
+                      initiatedByFrame: frame, completionHandler: completionHandler)
     }
 }
 
@@ -88,17 +132,20 @@ final class ExportHandler: NSObject, WKScriptMessageHandler {
         }
     }
 
-    /// Basename only, no control characters, at most 120 characters, never empty or a dot name (as MainActivity.safeName).
+    /// Basename only, no control characters, at most 200 UTF-8 bytes (filesystems allow 255) cut at a character,
+    /// keeping a short extension; never empty or a dot name (as MainActivity.safeName).
     static func safeName(_ name: String) -> String {
         var base = name.components(separatedBy: CharacterSet(charactersIn: "/\\")).last ?? ""
         base = base.replacingOccurrences(of: "[\\p{Cc}:*?\"<>|]", with: "_", options: .regularExpression)
             .trimmingCharacters(in: .whitespaces)
-        if base.count > 120 {
+        if base.utf8.count > 200 {
             var ext = ""
             if let dot = base.lastIndex(of: "."), dot > base.startIndex, base.distance(from: dot, to: base.endIndex) <= 10 {
                 ext = String(base[dot...])
             }
-            base = String(base.prefix(120 - ext.count)) + ext
+            var stem = String(base.dropLast(ext.count))
+            while stem.utf8.count + ext.utf8.count > 200 { stem.removeLast() }
+            base = stem + ext
         }
         return base.isEmpty || base.allSatisfy({ $0 == "." }) ? "export" : base
     }
