@@ -80,6 +80,9 @@ describe("ingest svg", () => {
   it("an event handler attribute flags the svg", async () => {
     expect((await ingest(enc(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" onload="alert(1)"><rect width="4" height="4"/></svg>`))).sanitized).toBe(true);
   });
+  it("an unknown element carrying a handler flags the svg", async () => {
+    expect((await ingest(enc(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><foo onload="x()"/><rect width="4" height="4"/></svg>`))).sanitized).toBe(true);
+  });
   it("svg keeps internal references", async () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40"><defs><linearGradient id="g"><stop offset="0" stop-color="#fff"/></linearGradient><rect id="s" width="5" height="5"/></defs><rect fill="url(#g)" width="9" height="9"/><use href="#s"/></svg>`;
     const r = await ingest(enc(svg));

@@ -25,6 +25,7 @@ let n = 0;
 async function asset(createdBy: string, over: Partial<typeof assets.$inferInsert> = {}) {
   const sha256 = `mod${++n}`;
   await t.storage.put(`files/${sha256}`, await sharp({ create: { width: 4, height: 4, channels: 3, background: "#00f" } }).png().toBuffer(), "image/png");
+  await t.storage.put(`thumbs/${sha256}.webp`, new Uint8Array([1]), "image/webp");
   const [a] = await t.db.insert(assets).values({
     createdBy, visibility: "public", title: "Berry", tags: [], license: "cc0", kind: "image", format: "png", width: 4, height: 4, bytes: 1, sha256, ...over,
   }).returning();

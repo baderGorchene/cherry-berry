@@ -48,6 +48,11 @@ function securityStrip(r) {
   }
   const el = r.element;
   if (!el || el.nodeType !== 1) return false; // comments, text, the wrapping BODY
+  // A removed element's own handler or unsafe href attributes count whatever its tag.
+  if (Array.from(el.attributes).some((x) => {
+    const n = x.name.toLowerCase();
+    return n.startsWith("on") || (n.split(":").pop() === "href" && unsafeHref(x.value));
+  })) return true;
   const tag = el.localName.toLowerCase();
   if (DENY.has(tag)) return true;
   const attr = (n) => el.getAttribute(n) ?? "";
