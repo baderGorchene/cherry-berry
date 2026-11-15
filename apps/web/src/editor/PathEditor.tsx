@@ -15,8 +15,13 @@ const BERRY = "#8E1EA2";
 const ZERO: Pt = { x: 0, y: 0 };
 const ANCHOR_PX = 10, HANDLE_PX = 5, HIT_PX = 6;
 export type PathKeys = RefObject<((e: KeyboardEvent) => boolean) | null>;
-/** Stage presses and moves, forwarded by Canvas (a full-canvas Konva hit shape misses presses until its first hit redraw). */
-export type PathInput = RefObject<{ down(e: MouseEvent): void; hover(e: MouseEvent | null): void } | null>;
+/**
+ * Stage presses and moves, forwarded by Canvas (a full-canvas Konva hit shape misses presses until its first hit redraw).
+ * Mouse drags then follow the window; touch drives a drag itself with move/up, and cancel drops it uncommitted.
+ */
+export type PathInput = RefObject<{
+  down(e: MouseEvent): void; hover(e: MouseEvent | null): void; move(e: MouseEvent): void; up(): void; cancel(): void;
+} | null>;
 
 const allRefs = (m: PathModel) => m.flatMap((sp, sub) => sp.anchors.map((_, i) => ({ sub, i })));
 const same = (a: AnchorRef, b: AnchorRef) => a.sub === b.sub && a.i === b.i;
@@ -53,7 +58,10 @@ export default function PathEditor({ ydoc, page, node, tool, scale, anchors, act
   onTool(t: Tool): void; onPreview(n: CherryNode | null): void;
 }) {
   const root = useRef<Konva.Group>(null);
-  const [drag, setDrag] = useState<Drag | null>(null);
+  const [drag, setDragState] = useState<Drag | null>(null);
+  // Mirrors `drag` synchronously, so touch input can end a drag within the event that started it.
+  const dragRef = useRef<Drag | null>(null);
+  const setDrag = (d: Drag | null) => { dragRef.current = d; setDragState(d); };
   const [draft, setDraftState] = useState<Draft | null>(null);
   // Mirrors `draft` synchronously, so an unmount right after finishing doesn't commit the stale draft again.
   const draftRef = useRef<Draft | null>(null);
@@ -69,15 +77,16 @@ export default function PathEditor({ ydoc, page, node, tool, scale, anchors, act
   const near = (p: Pt, pagePt: Pt, px: number) => dist(pg(p), pagePt) * scale <= px;
   const commit = (m: PathModel) => node && commitEdit(ydoc, page, node, m, act);
 
-  const work = (() => {
-    if (!model || !drag) return model;
-    if (drag.kind === "anchors") return moveAnchors(model, drag.refs, drag.to.x - drag.from.x, drag.to.y - drag.from.y);
-    if (drag.kind === "handle") {
-      const h = anchorAt(model, drag.ref)![drag.which];
-      return moveHandle(model, drag.ref, drag.which, { x: h.x + drag.to.x - drag.from.x, y: h.y + drag.to.y - drag.from.y }, drag.alt);
+  const workOf = (d: Drag | null) => {
+    if (!model || !d) return model;
+    if (d.kind === "anchors") return moveAnchors(model, d.refs, d.to.x - d.from.x, d.to.y - d.from.y);
+    if (d.kind === "handle") {
+      const h = anchorAt(model, d.ref)![d.which];
+      return moveHandle(model, d.ref, d.which, { x: h.x + d.to.x - d.from.x, y: h.y + d.to.y - d.from.y }, d.alt);
     }
     return model;
-  })();
+  };
+  const work = workOf(drag);
 
   /** The draft with its last anchor made symmetric while the pen press is dragged out. */
   const pulled = (dr: Draft | null, d: Drag | null): Draft | null => {
@@ -174,7 +183,7 @@ export default function PathEditor({ ydoc, page, node, tool, scale, anchors, act
 
   const endDrag = (d: Drag) => {
     setDrag(null);
-    if (d.kind === "pen") return setDraft(pulled(draft, d));
+    if (d.kind === "pen") return setDraft(pulled(draftRef.current, d));
     if (d.kind === "marquee") {
       const x0 = Math.min(d.from.x, d.to.x), x1 = Math.max(d.from.x, d.to.x);
       const y0 = Math.min(d.from.y, d.to.y), y1 = Math.max(d.from.y, d.to.y);
@@ -185,17 +194,20 @@ export default function PathEditor({ ydoc, page, node, tool, scale, anchors, act
       }) : [];
       return onAnchors(d.shift ? [...sel, ...hits.filter((h) => !sel.some((r) => same(r, h)))] : hits);
     }
-    if ((d.to.x !== d.from.x || d.to.y !== d.from.y) && work) commit(work);
+    const w = workOf(d);
+    if ((d.to.x !== d.from.x || d.to.y !== d.from.y) && w) commit(w);
+  };
+
+  const dragTo = (d: Drag, e: MouseEvent) => {
+    root.current!.getStage()!.setPointersPositions(e);
+    const pagePt = pointer();
+    setDrag({ ...d, to: d.kind === "marquee" ? pagePt : frame(pagePt), ...(d.kind === "handle" ? { alt: e.altKey } : {}) });
   };
 
   // Track the drag on the window so it keeps going (and ends) outside the canvas.
   useEffect(() => {
     if (!drag) return;
-    const move = (e: MouseEvent) => {
-      root.current!.getStage()!.setPointersPositions(e);
-      const pagePt = pointer();
-      setDrag({ ...drag, to: drag.kind === "marquee" ? pagePt : frame(pagePt), ...(drag.kind === "handle" ? { alt: e.altKey } : {}) });
-    };
+    const move = (e: MouseEvent) => dragTo(drag, e);
     const up = () => endDrag(drag);
     window.addEventListener("mousemove", move);
     window.addEventListener("mouseup", up);
@@ -212,6 +224,16 @@ export default function PathEditor({ ydoc, page, node, tool, scale, anchors, act
     input.current = {
       down: (e) => { if (e.button === 0) onDown(e); },
       hover: (e) => setHover(e && { p: pointer(), shift: e.shiftKey }),
+      move: (e) => { if (dragRef.current) dragTo(dragRef.current, e); },
+      up: () => { if (dragRef.current) endDrag(dragRef.current); },
+      cancel: () => {
+        const d = dragRef.current;
+        if (!d) return;
+        setDrag(null);
+        // A pen press already placed its anchor; take it back.
+        const dr = draftRef.current;
+        if (d.kind === "pen" && dr) setDraft({ ...dr, anchors: dr.anchors.slice(0, -1) });
+      },
     };
     keys.current = (e) => {
       if (draft && (e.key === "Enter" || e.key === "Escape")) {

@@ -118,6 +118,8 @@ export default function Canvas({
   const touch = useRef({
     pts: new Map<number, Pt>(), last: 0, start: { x: 0, y: 0 }, moved: false,
     pinch: null as { start: [Pt, Pt]; zoom: number; pan: Pt } | null, pan: null as { from: Pt; pan: Pt } | null, tap: undefined as string | undefined,
+    // Path tools: the press, replayed once the finger moves (so a pinch never reaches them), and whether that drag is live.
+    press: null as PointerEvent | null, pathDrag: false,
   });
   const [pinching, setPinching] = useState(false);
 
@@ -136,7 +138,7 @@ export default function Canvas({
   const top = (id: string) => page.nodes.find((n) => n.id === id);
   const pathNode = editingPath ? top(editingPath) : undefined;
   const pathMode = !readOnly && (tool === "pen" || !!pathNode);
-  const pathInput: PathInput = useRef<{ down(e: MouseEvent): void; hover(e: MouseEvent | null): void }>(null);
+  const pathInput: PathInput = useRef(null);
   const selectable = (n: CherryNode) => !n.hidden && !n.locked && canEditContent(n, role);
 
   // Attach the transformer to the selected Konva nodes after each render.
@@ -274,6 +276,9 @@ export default function Canvas({
         t.pan = null;
         t.tap = undefined;
         setDrag(null);
+        if (t.pathDrag) pathInput.current?.cancel();
+        t.press = null;
+        t.pathDrag = false;
         // Stop what the first finger started; commitKonva puts those layers back.
         nodesRef.current?.getChildren().forEach((k) => { if (k.isDragging()) k.stopDrag(); });
         if (trRef.current?.isTransforming()) trRef.current.stopTransform();
@@ -282,7 +287,7 @@ export default function Canvas({
       if (t.pts.size > 2 || editing) return;
       t.start = p;
       t.moved = false;
-      if (pathMode) return; // the pen and anchor tools take a tap on release, so a pinch never adds or grabs anchors
+      if (pathMode) { t.press = e; t.pathDrag = false; return; } // replayed on a drag or a tap, never on a pinch
       if (tool !== "select" && !readOnly) { const q = pointer(); return setDrag({ kind: "create", from: q, to: q, shift: false }); }
       const shape = stageRef.current!.getIntersection({ x: p.x + r.width / 2, y: p.y + r.height / 2 });
       const hit = shape && hitOf(shape);
@@ -293,6 +298,15 @@ export default function Canvas({
       if (!t.pts.has(e.pointerId)) return;
       t.pts.set(e.pointerId, p);
       if (Math.hypot(p.x - t.start.x, p.y - t.start.y) > 8) t.moved = true;
+      if (pathMode && !t.pinch && t.press) {
+        if (!t.pathDrag && t.moved) {
+          stageRef.current!.setPointersPositions(t.press); // the press lands where the finger went down
+          pathInput.current?.down(t.press);
+          t.pathDrag = true;
+        }
+        if (t.pathDrag) pathInput.current?.move(e);
+        return;
+      }
       if (t.pinch) {
         if (t.pts.size !== 2) return;
         const z = pinch(t.pinch.start, [...t.pts.values()] as [Pt, Pt], t.pinch.zoom, t.pinch.pan);
@@ -308,7 +322,14 @@ export default function Canvas({
         return;
       }
       const tap = !t.moved && e.type === "pointerup";
-      if (pathMode) return void (tap && pathInput.current?.down(e));
+      if (pathMode && t.press) {
+        const press = t.press, live = t.pathDrag;
+        t.press = null;
+        t.pathDrag = false;
+        if (e.type === "pointercancel") return void (live && pathInput.current?.cancel());
+        if (!live && tap) { stageRef.current!.setPointersPositions(press); pathInput.current?.down(press); }
+        return pathInput.current?.up(); // end the drag here rather than waiting on a compatibility mouseup
+      }
       // Tapping a selected text edits it (a double tap would land on the sheet that the first tap opens).
       if (tap && t.tap && !readOnly && selected.includes(t.tap) && top(t.tap)?.kind === "text") setEditing(t.tap);
       else if (tap && t.tap) onSelect([t.tap]);

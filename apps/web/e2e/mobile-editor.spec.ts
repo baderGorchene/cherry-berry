@@ -193,6 +193,79 @@ test("pinching with Draw armed adds no anchors", async ({ page }) => {
   await expect(sheet(page, "Layers").getByRole("button", { name: /^Hide / })).toHaveCount(0);
 });
 
+type P = { x: number; y: number };
+/** One-finger touch drag through CDP (move events in steps, so the 8 px tap threshold is passed). */
+async function touchDrag(page: Page, from: P, to: P) {
+  const cdp = await page.context().newCDPSession(page);
+  const send = (type: "touchStart" | "touchMove" | "touchEnd", touchPoints: (P & { id: number })[]) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints });
+  await send("touchStart", [{ ...from, id: 1 }]);
+  for (let i = 1; i <= 6; i++) await send("touchMove", [{ x: from.x + ((to.x - from.x) * i) / 6, y: from.y + ((to.y - from.y) * i) / 6, id: 1 }]);
+  await send("touchEnd", []);
+}
+
+/** Pen-taps a closed triangle around the canvas center; returns its first anchor (screen px). */
+async function tapTriangle(page: Page) {
+  const c = await canvasCenter(page);
+  const pts = [{ x: c.x - 80, y: c.y - 50 }, { x: c.x + 80, y: c.y - 50 }, { x: c.x, y: c.y + 70 }];
+  await tools(page).getByRole("button", { name: "Draw" }).click();
+  for (const p of pts) await page.touchscreen.tap(p.x, p.y);
+  await page.touchscreen.tap(pts[0]!.x, pts[0]!.y); // back on the first point closes the path
+  await expect(sheet(page, "Properties")).toBeVisible(); // the new path is selected
+  return pts[0]!;
+}
+
+const pathLayer = async (page: Page) => {
+  await page.getByRole("banner").getByRole("button", { name: "Layers" }).click();
+  return sheet(page, "Layers").getByRole("button", { name: "Path", exact: true });
+};
+
+test("pen taps draw a path", async ({ page }) => {
+  await newPost(page);
+  await tapTriangle(page);
+  await page.keyboard.press("Escape");
+  await expect(await pathLayer(page)).toHaveCount(1);
+});
+
+test("a pen touch drag pulls a curve handle", async ({ page }) => {
+  await newPost(page);
+  const c = await canvasCenter(page);
+  const draw = tools(page).getByRole("button", { name: "Draw" });
+  await draw.click();
+  // three points on one line; the middle one is dragged out, so the path bends off that line
+  await page.touchscreen.tap(c.x - 90, c.y);
+  await touchDrag(page, { x: c.x, y: c.y }, { x: c.x, y: c.y + 50 });
+  await page.touchscreen.tap(c.x + 90, c.y);
+  await draw.click(); // switching tool finishes the open path
+  const props = sheet(page, "Properties");
+  await expect(props).toBeVisible();
+  const h = Number(await props.getByLabel("H", { exact: true }).inputValue()), w = Number(await props.getByLabel("W", { exact: true }).inputValue());
+  // bent by the pulled handle, but only by about that pull (a drag left armed would follow the mouse to the tool bar)
+  expect(h).toBeGreaterThan(0);
+  expect(h).toBeLessThan(w / 2);
+  await page.keyboard.press("Escape");
+  await expect(await pathLayer(page)).toHaveCount(1);
+});
+
+test("a touch drag moves an anchor in point-edit mode", async ({ page }) => {
+  await newPost(page);
+  const first = await tapTriangle(page);
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Enter"); // point-edit the selected path
+  await expect(page.getByRole("button", { name: "Done" })).toBeVisible();
+  await page.keyboard.press("Escape"); // close the sheet that opened with it, stay in point edit
+  await page.touchscreen.tap(first.x, first.y); // select the first anchor
+  const pointX = async () => {
+    await (await pathLayer(page)).click();
+    const x = Number(await sheet(page, "Properties").getByRole("complementary", { name: "Path properties" }).getByLabel("X", { exact: true }).inputValue());
+    await page.keyboard.press("Escape");
+    return x;
+  };
+  const x0 = await pointX();
+  await touchDrag(page, first, { x: first.x + 40, y: first.y });
+  expect(await pointX()).toBeGreaterThan(x0);
+  await expect(page.getByRole("button", { name: "Done" })).toBeVisible();
+});
+
 test("export from the phone header", async ({ page }) => {
   await newPost(page);
   await placeRect(page);
