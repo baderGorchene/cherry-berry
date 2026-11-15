@@ -82,6 +82,7 @@ test("phone editor shows tool bar and opens sheets", async ({ page }) => {
   // History, Publish, presence and zoom live in More
   await page.getByRole("button", { name: "More" }).click();
   const more = page.getByRole("dialog", { name: "More" });
+  await expect(more).toBeFocused();
   await expect(more.getByRole("link", { name: "History" })).toBeVisible();
   await expect(more.getByRole("button", { name: "Publish" })).toBeVisible();
   await expect(more.getByRole("group", { name: "Zoom" })).toBeVisible();
@@ -109,6 +110,7 @@ test("selecting a layer opens properties in the sheet", async ({ page }) => {
   await sheet(page, "Layers").getByRole("button", { name: "Spring", exact: true }).click();
   const props = sheet(page, "Properties");
   await expect(props).toBeVisible();
+  await expect(props).toBeFocused(); // the sheet that replaced Layers takes focus
   for (const name of ["Font", "Color", "Spacing", "Effects"]) await expect(props.getByRole("tab", { name })).toBeVisible();
   await expect(props.getByRole("tab", { name: "Font" })).toHaveAttribute("aria-selected", "true");
   await expect(props.getByLabel("Size", { exact: true })).toBeVisible();
@@ -144,6 +146,51 @@ test("pinch zooms without moving the layer", async ({ page }) => {
   await sheet(page, "Layers").getByRole("button", { name: "Rectangle", exact: true }).click();
   await expect(sheet(page, "Properties").getByLabel("X", { exact: true })).toHaveValue(x0);
   await expect(sheet(page, "Properties").getByLabel("Y", { exact: true })).toHaveValue(y0);
+});
+
+test("a second finger landing mid-drag pinches without moving the layer", async ({ page }) => {
+  await newPost(page);
+  await placeRect(page);
+  const x0 = await sheet(page, "Properties").getByLabel("X", { exact: true }).inputValue();
+  const y0 = await sheet(page, "Properties").getByLabel("Y", { exact: true }).inputValue();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const z0 = await zoomLabel(page);
+
+  // one finger starts dragging the rectangle, then a second lands and both spread
+  const c = await canvasCenter(page);
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type: "touchStart" | "touchMove" | "touchEnd", touchPoints: { x: number; y: number; id: number }[]) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints });
+  await touch("touchStart", [{ x: c.x, y: c.y, id: 1 }]);
+  for (let dx = 5; dx <= 20; dx += 5) await touch("touchMove", [{ x: c.x + dx, y: c.y, id: 1 }]);
+  await touch("touchStart", [{ x: c.x + 20, y: c.y, id: 1 }, { x: c.x + 60, y: c.y, id: 2 }]);
+  for (let d = 10; d <= 60; d += 10) await touch("touchMove", [{ x: c.x + 20 - d, y: c.y, id: 1 }, { x: c.x + 60 + d, y: c.y, id: 2 }]);
+  await touch("touchEnd", []);
+
+  expect(await zoomLabel(page)).toBeGreaterThan(z0);
+  await page.getByRole("banner").getByRole("button", { name: "Layers" }).click();
+  await sheet(page, "Layers").getByRole("button", { name: "Rectangle", exact: true }).click();
+  await expect(sheet(page, "Properties").getByLabel("X", { exact: true })).toHaveValue(x0);
+  await expect(sheet(page, "Properties").getByLabel("Y", { exact: true })).toHaveValue(y0);
+});
+
+test("pinching with Draw armed adds no anchors", async ({ page }) => {
+  await newPost(page);
+  const draw = tools(page).getByRole("button", { name: "Draw" });
+  await draw.click();
+  const c = await canvasCenter(page);
+  const cdp = await page.context().newCDPSession(page);
+  const at = (d: number) => [{ x: c.x - d, y: c.y + d / 2, id: 1 }, { x: c.x + d, y: c.y, id: 2 }];
+  for (let i = 0; i < 2; i++) {
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at(20) });
+    for (let d = 30; d <= 60; d += 10) await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: at(d) });
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  }
+  await draw.click(); // switching tool finishes a pen path in progress
+  await expect(draw).toHaveAttribute("aria-pressed", "false");
+  await page.getByRole("banner").getByRole("button", { name: "Layers" }).click();
+  await expect(sheet(page, "Layers").getByRole("button", { name: "Path", exact: true })).toHaveCount(0);
+  await expect(sheet(page, "Layers").getByRole("button", { name: /^Hide / })).toHaveCount(0);
 });
 
 test("export from the phone header", async ({ page }) => {

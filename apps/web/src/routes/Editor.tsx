@@ -152,8 +152,10 @@ function Shell({ d }: { d: Ready }) {
   const [more, setMore] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
+  const morePop = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!more) return;
+    morePop.current?.focus();
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setMore(false); moreBtn.current?.focus(); } };
     const down = (e: PointerEvent) => { if (!moreRef.current?.contains(e.target as Node)) setMore(false); };
     document.addEventListener("keydown", key);
@@ -343,7 +345,7 @@ function Shell({ d }: { d: Ready }) {
           <div className="ed-more-w" ref={moreRef}>
             <button ref={moreBtn} className="ed-ib" aria-label="More" aria-expanded={more} onClick={() => setMore(!more)}><IconMore /></button>
             {more && (
-              <div className="ed-pop ed-more" role="dialog" aria-label="More">
+              <div className="ed-pop ed-more" role="dialog" aria-label="More" tabIndex={-1} ref={morePop}>
                 {statusLine}
                 {zoomGroup}
                 <Avatars people={people} />
@@ -354,7 +356,7 @@ function Shell({ d }: { d: Ready }) {
           </div>
         </header>
         <div className="ed-body">{canvas}</div>
-        {sheet && <Sheet label={SHEET_LABEL[sheet]} onClose={() => setSheet(null)}>{sheet === "properties" ? properties(true) : panelBody(sheet)}</Sheet>}
+        {sheet && <Sheet key={sheet} label={SHEET_LABEL[sheet]} onClose={() => setSheet(null)}>{sheet === "properties" ? properties(true) : panelBody(sheet)}</Sheet>}
         <nav aria-label="Tools" className="ed-mtools">
           {tl("Text", <IconText />, tool === "text", () => arm("text"), readOnly)}
           {tl("Shapes", <IconShapes />, sheet === "shapes", () => toggleSheet("shapes"))}
