@@ -91,7 +91,7 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage;
   await app.register(rateLimit, { global: false });
   await app.register(websocket, { options: { maxPayload: 10 * 1024 * 1024 } });
   registerCollabRoutes(app, collab);
-  registerAdminRoutes(app, deps.db, config, collab, requireAdmin);
+  registerAdminRoutes(app, deps.db, deps.storage, config, collab, requireAdmin);
   app.get("/api/instance", async (req) => {
     const user = await requireUser(req);
     const s = await getSettings(deps.db);

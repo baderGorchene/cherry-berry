@@ -6,6 +6,7 @@ import type { Db } from "../db/client";
 import { designs, session, user, workspaces } from "../db/schema";
 import { HttpError } from "../errors";
 import { isAdmin } from "../auth";
+import { listQueue } from "./moderation";
 import { getSettings } from "./settings";
 
 const PAGE = 50;
@@ -50,7 +51,7 @@ export async function overview(db: Db, config: Config) {
     usedBytes: await storageUsed(db),
     quotaBytes: quotaGb === null ? null : quotaGb * 1024 ** 3,
     users: num(c?.users), workspaces: num(c?.workspaces), designs: num(c?.designs),
-    queue: 0, // Task 3 fills this in
+    queue: (await listQueue(db)).length,
   };
 }
 

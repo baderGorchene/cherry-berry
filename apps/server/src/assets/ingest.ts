@@ -16,6 +16,7 @@ export type Ingested = {
   sha256: string;
   file: Uint8Array;
   thumb: Uint8Array;
+  sanitized: boolean; // the SVG sanitizer stripped something (always false for rasters)
 };
 
 const MAX_BYTES = 50 * 1024 * 1024;
@@ -72,7 +73,7 @@ const RENDER_SCRIPT = fileURLToPath(new URL("./render.mjs", import.meta.url));
 const MAX_RENDERS = 2;
 export const renderStats = { active: 0, max: 0 }; // max is for tests
 const waiting: (() => void)[] = [];
-type SvgResult = { file: Uint8Array; width: number; height: number; thumb: Uint8Array };
+type SvgResult = { file: Uint8Array; width: number; height: number; thumb: Uint8Array; sanitized: boolean };
 async function processSvg(svg: Uint8Array): Promise<SvgResult> {
   // Wait for a slot; a render's 5 s clock starts only when it hands its own child the work.
   // A full queue answers busy at once, so a flood can't make every later SVG wait without bound.
@@ -164,14 +165,14 @@ function parseReply({ out, err }: { out: Buffer; err: string }): SvgResult {
   // Frame: 4-byte header length, JSON header, sanitized svg (head.svg bytes), webp thumbnail.
   try {
     const n = out.readUInt32BE(0);
-    const head: { error?: IngestError["code"]; message?: string; width: number; height: number; svg: number } = JSON.parse(out.subarray(4, 4 + n).toString("utf8"));
+    const head: { error?: IngestError["code"]; message?: string; width: number; height: number; svg: number; sanitized?: boolean } = JSON.parse(out.subarray(4, 4 + n).toString("utf8"));
     if (head.error) throw new IngestError(head.error, head.message);
     const file = new Uint8Array(out.subarray(4 + n, 4 + n + head.svg));
     const thumb = new Uint8Array(out.subarray(4 + n + head.svg));
     if (file.length > MAX_SVG_BYTES) throw new IngestError("too_large", "sanitized svg too large");
     if (!(head.width > 0 && head.height > 0) || thumb.length === 0) throw new IngestError("invalid_image");
     if (head.width * head.height > MAX_PIXELS) throw new IngestError("too_large");
-    return { file, width: head.width, height: head.height, thumb };
+    return { file, width: head.width, height: head.height, thumb, sanitized: head.sanitized === true };
   } catch (e) {
     throw e instanceof IngestError ? e : new IngestError("invalid_image", err || String(e));
   }
@@ -185,8 +186,8 @@ export async function ingest(bytes: Uint8Array): Promise<Ingested> {
   if (isSvg(bytes)) {
     if (bytes.length > MAX_SVG_BYTES) throw new IngestError("too_large", "svg over 2 MB");
     prescan(new TextDecoder().decode(bytes));
-    const { file, width, height, thumb } = await processSvg(bytes);
-    return { kind: "svg", format: "svg", contentType: "image/svg+xml", width, height, sha256, file, thumb };
+    const { file, width, height, thumb, sanitized } = await processSvg(bytes);
+    return { kind: "svg", format: "svg", contentType: "image/svg+xml", width, height, sha256, file, thumb, sanitized };
   }
 
   if (!looksRaster(bytes)) throw new IngestError("unsupported_type");
@@ -204,6 +205,6 @@ export async function ingest(bytes: Uint8Array): Promise<Ingested> {
   const thumb = await thumbnail(bytes);
   return {
     kind: format === "gif" && (meta.pages ?? 1) > 1 ? "gif" : "image",
-    format, contentType: TYPES[format], width, height, sha256, file: bytes, thumb,
+    format, contentType: TYPES[format], width, height, sha256, file: bytes, thumb, sanitized: false,
   };
 }

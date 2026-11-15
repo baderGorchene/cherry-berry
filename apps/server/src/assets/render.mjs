@@ -34,6 +34,9 @@ function checkDepth(root) {
   }
 }
 
+// True when the sanitizer or the walk below stripped anything; the parent flags such uploads for review.
+let stripped = false;
+
 function sanitizeSvg(svg) {
   // Parse as XML, like librsvg does (an HTML parse would see a different tree), then
   // let DOMPurify clean that tree in place of the text.
@@ -48,6 +51,8 @@ function sanitizeSvg(svg) {
     FORBID_TAGS: ["foreignObject", "a", "script"],
     RETURN_DOM: true,
   });
+  // Sanitizing a node (not a string) always lists the BODY it wraps it in as removed; that is not content.
+  stripped = purify.removed.some((r) => r.element?.nodeName !== "BODY");
   const root = body.querySelector("svg");
   if (!root) throw fail("invalid_image", "no svg root");
   const all = [root, ...Array.from(root.querySelectorAll("*"))];
@@ -55,7 +60,7 @@ function sanitizeSvg(svg) {
 
   for (const el of all) {
     const tag = el.localName.toLowerCase();
-    if (tag === "style" && badCss(el.textContent ?? "")) { el.remove(); continue; }
+    if (tag === "style" && badCss(el.textContent ?? "")) { el.remove(); stripped = true; continue; }
     for (const attr of Array.from(el.attributes)) {
       const name = attr.name.toLowerCase();
       const value = attr.value;
@@ -65,9 +70,9 @@ function sanitizeSvg(svg) {
         const v = value.trim();
         bad = !(v.startsWith("#") || (tag === "image" && DATA_IMAGE.test(v)));
       } else bad = value.includes("\\") || EXTERNAL_URL.test(value);
-      if (bad) el.removeAttribute(attr.name);
+      if (bad) { el.removeAttribute(attr.name); stripped = true; }
     }
-    if (tag === "use" && !el.hasAttribute("href") && !el.hasAttribute("xlink:href")) el.remove();
+    if (tag === "use" && !el.hasAttribute("href") && !el.hasAttribute("xlink:href")) { el.remove(); stripped = true; }
   }
   if (!root.getAttribute("xmlns")) root.setAttribute("xmlns", "http://www.w3.org/2000/svg");
   const out = new win.XMLSerializer().serializeToString(root);
@@ -95,7 +100,7 @@ try {
   if (!(width > 0 && height > 0)) throw fail("invalid_image");
   if (width * height > maxPixels) throw fail("too_large");
   const thumb = await sharp(svg, opts).resize(size, size, { fit: "inside", withoutEnlargement: true }).webp().toBuffer();
-  send({ width, height, svg: svg.length }, svg, thumb);
+  send({ width, height, svg: svg.length, sanitized: stripped }, svg, thumb);
 } catch (e) {
   const message = String(e?.message ?? e);
   send({ error: CODES.has(e?.code) ? e.code : /pixel limit/i.test(message) ? "too_large" : "invalid_image", message });

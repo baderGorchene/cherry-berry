@@ -119,7 +119,7 @@ export async function createAsset(
     const [r] = await tx.insert(assets).values({
       createdBy: userId, workspaceId, visibility: meta.visibility, title: meta.title, tags: meta.tags,
       license: meta.license, attribution: meta.attribution, kind: img.kind, format: img.format,
-      width: img.width, height: img.height, bytes: img.file.length, sha256: img.sha256,
+      width: img.width, height: img.height, bytes: img.file.length, sha256: img.sha256, sanitized: img.sanitized,
     }).returning({ id: assets.id });
     return r!;
   });
@@ -223,6 +223,18 @@ export async function deleteAsset(db: Db, storage: Storage, userId: string, id: 
     const role = a.visibility === "workspace" && a.workspaceId ? await getRole(db, a.workspaceId, userId) : undefined;
     if (role !== "owner" && role !== "admin") throw new WorkspaceError("forbidden");
   }
+  await removeAsset(db, storage, a);
+}
+
+/** Instance-moderation delete: no membership check, so only the admin module may call it. 404 when gone. */
+export async function deleteAssetAsAdmin(db: Db, storage: Storage, id: string): Promise<void> {
+  const r = await loadRow(db, id);
+  if (!r || r.a.deletedAt) throw new WorkspaceError("not_found");
+  await removeAsset(db, storage, r.a);
+}
+
+async function removeAsset(db: Db, storage: Storage, a: Row): Promise<void> {
+  const id = a.id;
   await db.transaction(async (tx) => {
     await lockBytes(tx, a.sha256);
     const [{ n }] = await tx.select({ n: sql<number>`count(*)::int` }).from(assetUses).where(eq(assetUses.assetId, id)) as [{ n: number }];

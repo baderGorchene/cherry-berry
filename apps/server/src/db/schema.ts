@@ -188,6 +188,8 @@ export const assets = pgTable("assets", {
   sha256: text("sha256").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  sanitized: boolean("sanitized").notNull().default(false),
+  reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
 }, (t) => [
   check("assets_visibility", sql`${t.visibility} in ('private','workspace','public')`),
   check("assets_license", sql`${t.license} in ('cc0','cc-by','own','workspace-only')`),
