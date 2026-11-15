@@ -93,6 +93,7 @@ describe("moderation queue", () => {
     const a = await admin();
     const ada = await signUp(t.app, "ada@example.com");
     const as = await asset(ada.userId);
+    const [asRow] = await t.db.select().from(assets).where(eq(assets.id, as));
     const sh = await shape(ada.userId);
     const tp = await template(ada.userId, await workspaceOf(ada.cookie));
     for (const [type, id] of [["asset", as], ["shape", sh], ["template", tp]] as const) {
@@ -103,6 +104,8 @@ describe("moderation queue", () => {
     expect(await t.db.select().from(assets)).toHaveLength(0);
     expect(await t.db.select().from(shapes)).toHaveLength(0);
     expect(await t.db.select().from(templates)).toHaveLength(0);
+    expect(t.storage.keys()).not.toContain(`files/${asRow!.sha256}`);
+    expect(t.storage.keys()).not.toContain(`thumbs/${asRow!.sha256}.webp`);
     expect(t.storage.keys()).not.toContain(`template-thumbs/${tp}.webp`);
     expect(await queue(a.cookie)).toEqual([]);
     expect((await act(a.cookie, "asset", as, "remove")).statusCode).toBe(404);
@@ -169,6 +172,28 @@ describe("moderation queue", () => {
     const res = await call("POST", `/api/designs/${did}/export`, ada.cookie, { format: "png", pageIds: r.doc.pages.map((p) => p.id) });
     expect(res.statusCode).toBe(200);
     expect(res.headers["content-type"]).toBe("image/png");
+  });
+
+  it("private and workspace targets are not the instance queue's to touch", async () => {
+    const a = await admin();
+    const ada = await signUp(t.app, "ada@example.com");
+    const ws = await asset(ada.userId, { visibility: "workspace", workspaceId: await workspaceOf(ada.cookie), license: "workspace-only", sanitized: true });
+    const priv = await shape(ada.userId, "private");
+    for (const action of ["keep", "remove", "suspend", "approve"]) {
+      expect((await act(a.cookie, "asset", ws, action)).statusCode).toBe(404);
+      expect((await act(a.cookie, "shape", priv, action)).statusCode).toBe(404);
+    }
+    expect(await t.db.select().from(assets)).toHaveLength(1);
+    expect(await t.db.select().from(shapes)).toHaveLength(1);
+  });
+
+  it("suspend works on an already suspended uploader, so a failed attempt can be retried", async () => {
+    const a = await admin();
+    const ada = await signUp(t.app, "ada@example.com");
+    const id = await asset(ada.userId);
+    expect((await call("POST", `/api/admin/users/${ada.userId}/suspend`, a.cookie)).statusCode).toBe(204);
+    expect((await act(a.cookie, "asset", id, "suspend")).statusCode).toBe(204);
+    expect(await t.db.select().from(assets)).toHaveLength(0);
   });
 
   it("queue is admin-only", async () => {

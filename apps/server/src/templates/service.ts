@@ -207,7 +207,7 @@ export async function deleteTemplate(db: Db, storage: Storage, userId: string, i
   await storage.delete(thumbKey(id));
 }
 
-/** Instance-moderation delete: no membership check, so only the admin module may call it. */
+/** Instance-moderation delete: no membership or existence check (the caller has already loaded the template), so only the admin module may call it. */
 export async function deleteTemplateAsAdmin(db: Db, storage: Storage, id: string): Promise<void> {
   await db.delete(templates).where(eq(templates.id, id));
   await storage.delete(thumbKey(id));

@@ -70,6 +70,16 @@ describe("ingest svg", () => {
     expect((await ingest(enc(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><rect width="4" height="4"/></svg>`))).sanitized).toBe(false);
     expect((await ingest(await solid(8, 8).png().toBuffer())).sanitized).toBe(false);
   });
+  it("routine svg exports are not flagged for review", async () => {
+    const ns = `xmlns="http://www.w3.org/2000/svg" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/"`;
+    const commented = await ingest(enc(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><!-- made by hand --><rect width="4" height="4"/></svg>`));
+    expect(commented.sanitized).toBe(false);
+    const inkscape = await ingest(enc(`<svg ${ns} width="10" height="10" inkscape:version="1.2"><sodipodi:namedview id="nv" inkscape:zoom="2"/><metadata><rdf:RDF><dc:title>x</dc:title></rdf:RDF></metadata><rect inkscape:label="r" width="4" height="4"/></svg>`));
+    expect(inkscape.sanitized).toBe(false);
+  });
+  it("an event handler attribute flags the svg", async () => {
+    expect((await ingest(enc(`<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" onload="alert(1)"><rect width="4" height="4"/></svg>`))).sanitized).toBe(true);
+  });
   it("svg keeps internal references", async () => {
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 40"><defs><linearGradient id="g"><stop offset="0" stop-color="#fff"/></linearGradient><rect id="s" width="5" height="5"/></defs><rect fill="url(#g)" width="9" height="9"/><use href="#s"/></svg>`;
     const r = await ingest(enc(svg));

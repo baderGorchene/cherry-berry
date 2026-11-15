@@ -37,6 +37,26 @@ function checkDepth(root) {
 // True when the sanitizer or the walk below stripped anything; the parent flags such uploads for review.
 let stripped = false;
 
+// Only strips of real security content flag an upload; comments, <metadata> and editor namespaces
+// (inkscape:, sodipodi:, rdf:, cc:, dc:) are routine in exports and are not worth a moderator's time.
+const DENY = new Set(["script", "foreignobject", "iframe", "object", "embed"]);
+const unsafeHref = (v) => !v.trim().startsWith("#");
+function securityStrip(r) {
+  if (r.attribute) {
+    const name = r.attribute.name.toLowerCase();
+    return name.startsWith("on") || (name.split(":").pop() === "href" && unsafeHref(r.attribute.value ?? ""));
+  }
+  const el = r.element;
+  if (!el || el.nodeType !== 1) return false; // comments, text, the wrapping BODY
+  const tag = el.localName.toLowerCase();
+  if (DENY.has(tag)) return true;
+  const attr = (n) => el.getAttribute(n) ?? "";
+  if (tag === "a") return unsafeHref(attr("href") || attr("xlink:href"));
+  if (tag === "style") return /url\(|expression|@import/i.test(el.textContent ?? "");
+  if (tag === "set" || tag === "animate") return /^(xlink:)?href$/i.test(attr("attributeName"));
+  return false;
+}
+
 function sanitizeSvg(svg) {
   // Parse as XML, like librsvg does (an HTML parse would see a different tree), then
   // let DOMPurify clean that tree in place of the text.
@@ -51,8 +71,7 @@ function sanitizeSvg(svg) {
     FORBID_TAGS: ["foreignObject", "a", "script"],
     RETURN_DOM: true,
   });
-  // Sanitizing a node (not a string) always lists the BODY it wraps it in as removed; that is not content.
-  stripped = purify.removed.some((r) => r.element?.nodeName !== "BODY");
+  stripped = purify.removed.some(securityStrip);
   const root = body.querySelector("svg");
   if (!root) throw fail("invalid_image", "no svg root");
   const all = [root, ...Array.from(root.querySelectorAll("*"))];

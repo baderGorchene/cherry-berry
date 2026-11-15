@@ -61,11 +61,12 @@ export async function listQueue(db: Db): Promise<QueueItem[]> {
 async function load({ targetType, targetId }: Target, db: Db) {
   if (!UUID.test(targetId)) throw new WorkspaceError("not_found");
   const [t] = targetType === "asset"
-    ? await db.select({ by: assets.createdBy, sanitized: assets.sanitized, reviewed: assets.reviewedAt, gone: assets.deletedAt }).from(assets).where(eq(assets.id, targetId))
+    ? await db.select({ by: assets.createdBy, visibility: assets.visibility, sanitized: assets.sanitized, reviewed: assets.reviewedAt, gone: assets.deletedAt }).from(assets).where(eq(assets.id, targetId))
     : targetType === "shape"
-      ? await db.select({ by: shapes.createdBy, sanitized: sql<boolean>`false`, reviewed: sql<null>`null`, gone: sql<null>`null` }).from(shapes).where(eq(shapes.id, targetId))
-      : await db.select({ by: templates.createdBy, sanitized: sql<boolean>`false`, reviewed: sql<null>`null`, gone: sql<null>`null` }).from(templates).where(eq(templates.id, targetId));
-  if (!t || t.gone) throw new WorkspaceError("not_found");
+      ? await db.select({ by: shapes.createdBy, visibility: shapes.visibility, sanitized: sql<boolean>`false`, reviewed: sql<null>`null`, gone: sql<null>`null` }).from(shapes).where(eq(shapes.id, targetId))
+      : await db.select({ by: templates.createdBy, visibility: templates.visibility, sanitized: sql<boolean>`false`, reviewed: sql<null>`null`, gone: sql<null>`null` }).from(templates).where(eq(templates.id, targetId));
+  // The instance queue only covers public content; private and workspace items are not an admin's to touch here.
+  if (!t || t.gone || t.visibility !== "public") throw new WorkspaceError("not_found");
   return t;
 }
 
@@ -91,11 +92,13 @@ export async function actOnQueue(
   if (action === "keep") { await close("dismissed"); return; }
   if (action === "suspend") {
     const [u] = await db.select({ email: user.email }).from(user).where(eq(user.id, t.by));
-    if (u && isAdmin(config, u.email)) throw new HttpError(400, "invalid_body"); // refuse before removing anything
+    if (u && isAdmin(config, u.email)) throw new HttpError(400, "invalid_body"); // refuse before changing anything
+    // Suspend first: if the removal below fails the admin can retry, and suspending twice is harmless.
+    await suspendUser(db, config, t.by);
+    onSuspend?.(t.by);
   }
   if (item.targetType === "asset") await deleteAssetAsAdmin(db, storage, item.targetId);
   else if (item.targetType === "shape") await db.delete(shapes).where(eq(shapes.id, item.targetId));
   else await deleteTemplateAsAdmin(db, storage, item.targetId);
   await close("removed");
-  if (action === "suspend") { await suspendUser(db, config, t.by); onSuspend?.(t.by); }
 }
