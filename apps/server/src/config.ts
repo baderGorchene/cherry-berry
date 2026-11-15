@@ -17,6 +17,10 @@ const Env = z.object({
   S3_REGION: z.string().default("us-east-1"),
   // Built web app to serve at "/" (e.g. apps/web/dist); relative paths resolve against the process cwd.
   WEB_DIST: z.string().min(1).optional(),
+  // Comma-separated emails of instance admins (case-insensitive). Empty means none.
+  ADMIN_EMAILS: z.string().default(""),
+  // Optional print service (apps/print); enables the pdf-x and plates export formats.
+  PRINT_URL: z.url().optional(),
 }).superRefine((e, ctx) => {
   if (e.S3_ENDPOINT === "memory:") return;
   for (const k of ["S3_BUCKET", "S3_ACCESS_KEY", "S3_SECRET_KEY"] as const) {
@@ -28,6 +32,7 @@ export type Config = {
   databaseUrl: string; authSecret: string; publicUrl: string; port: number;
   trustProxy: boolean | number | string; logLevel: string;
   webDist?: string;
+  adminEmails: string[]; printUrl?: string;
   s3: { endpoint: string; bucket: string; accessKey: string; secretKey: string; region: string };
 };
 
@@ -41,6 +46,7 @@ export function loadConfig(env: Record<string, string | undefined>): Config {
   return {
     databaseUrl: e.DATABASE_URL, authSecret: e.AUTH_SECRET, publicUrl: e.PUBLIC_URL, port: e.PORT,
     trustProxy: parseTrustProxy(e.TRUST_PROXY), logLevel: e.LOG_LEVEL, webDist: e.WEB_DIST,
+    adminEmails: e.ADMIN_EMAILS.split(",").map((x) => x.trim().toLowerCase()).filter(Boolean), printUrl: e.PRINT_URL,
     s3: { endpoint: e.S3_ENDPOINT, bucket: e.S3_BUCKET, accessKey: e.S3_ACCESS_KEY, secretKey: e.S3_SECRET_KEY, region: e.S3_REGION },
   };
 }

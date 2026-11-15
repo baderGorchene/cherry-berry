@@ -1,6 +1,9 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import type { SessionUser } from "../auth";
+import { isAdmin, type SessionUser } from "../auth";
+import { getSettings } from "../admin/settings";
+import type { Config } from "../config";
+import { WorkspaceError } from "./errors";
 import type { Db } from "../db/client";
 import { parse } from "../http";
 import * as svc from "./service";
@@ -17,10 +20,11 @@ const IdParams = z.object({ id: z.string() });
 const TokenParams = z.object({ token: z.string() });
 
 export function registerWorkspaceRoutes(
-  app: FastifyInstance, db: Db, requireUser: (req: FastifyRequest) => Promise<SessionUser>,
+  app: FastifyInstance, db: Db, requireUser: (req: FastifyRequest) => Promise<SessionUser>, config: Config,
 ) {
   app.post("/api/workspaces", async (req, reply) => {
     const user = await requireUser(req);
+    if ((await getSettings(db)).workspaceCreation === "admins" && !isAdmin(config, user.email)) throw new WorkspaceError("forbidden");
     const workspace = await svc.createWorkspace(db, user.id, parse(CreateBody, req.body));
     return reply.status(201).send({ workspace });
   });

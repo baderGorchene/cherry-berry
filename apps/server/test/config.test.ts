@@ -39,3 +39,15 @@ describe("loadConfig storage", () => {
     expect(() => loadConfig(noS3)).toThrow(/S3_ENDPOINT/);
   });
 });
+
+describe("loadConfig admin and print", () => {
+  it("ADMIN_EMAILS is trimmed and lowercased", () => {
+    expect(loadConfig(base).adminEmails).toEqual([]);
+    expect(loadConfig({ ...base, ADMIN_EMAILS: " Ada@Example.com, ,bo@x.io " }).adminEmails).toEqual(["ada@example.com", "bo@x.io"]);
+  });
+  it("PRINT_URL must be a URL when set", () => {
+    expect(loadConfig(base).printUrl).toBeUndefined();
+    expect(loadConfig({ ...base, PRINT_URL: "http://print:8080" }).printUrl).toBe("http://print:8080");
+    expect(() => loadConfig({ ...base, PRINT_URL: "nope" })).toThrow(/PRINT_URL/);
+  });
+});

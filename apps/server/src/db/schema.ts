@@ -254,3 +254,19 @@ export const templates = pgTable("templates", {
   index("templates_visibility_created").on(t.visibility, t.createdAt.desc()),
   index("templates_workspace").on(t.workspaceId),
 ]);
+
+// One row (id = 1); a missing row reads as the defaults.
+export const instanceSettings = pgTable("instance_settings", {
+  id: integer("id").primaryKey().default(1),
+  registration: text("registration").notNull().default("open"),
+  allowedDomains: text("allowed_domains").array().notNull().default(sql`'{}'::text[]`),
+  workspaceCreation: text("workspace_creation").notNull().default("anyone"),
+  maxUploadMb: integer("max_upload_mb").notNull().default(50),
+  storageQuotaGb: integer("storage_quota_gb"),
+}, (t) => [
+  check("instance_settings_single", sql`${t.id} = 1`),
+  check("instance_settings_registration", sql`${t.registration} in ('open','invited','domains')`),
+  check("instance_settings_workspace_creation", sql`${t.workspaceCreation} in ('anyone','admins')`),
+  check("instance_settings_max_upload", sql`${t.maxUploadMb} in (20,50,100)`),
+  check("instance_settings_quota", sql`${t.storageQuotaGb} is null or ${t.storageQuotaGb} >= 1`),
+]);

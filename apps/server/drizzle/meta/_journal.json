@@ -71,6 +71,13 @@
       "when": 1794664385185,
       "tag": "0009_uneven_impossible_man",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794772798821,
+      "tag": "0010_tired_stellaris",
+      "breakpoints": true
     }
   ]
 }

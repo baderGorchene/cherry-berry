@@ -2,6 +2,7 @@ import multipart from "@fastify/multipart";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { SessionUser } from "../auth";
+import { getSettings } from "../admin/settings";
 import type { Db } from "../db/client";
 import { HttpError } from "../errors";
 import { parse } from "../http";
@@ -10,7 +11,7 @@ import { WorkspaceError } from "../workspaces/errors";
 import { IngestError, ingest } from "./ingest";
 import * as svc from "./service";
 
-const MAX_FILE = 50 * 1024 * 1024;
+const MAX_FILE = 100 * 1024 * 1024; // the largest max_upload_mb; the instance setting is checked after reading
 const CONTENT_TYPES: Record<string, string> = {
   png: "image/png", jpeg: "image/jpeg", webp: "image/webp", gif: "image/gif", svg: "image/svg+xml",
 };
@@ -75,6 +76,7 @@ export function registerAssetRoutes(
     }
     if (fields.confirmed !== "true") throw new HttpError(400, "rights_not_confirmed");
     if (!file) throw new HttpError(400, "invalid_body");
+    if (file.byteLength > (await getSettings(db)).maxUploadMb * 1024 * 1024) throw new HttpError(413, "too_large");
     const tags = fields.tags ? fields.tags.split(",") : [];
     const meta = parse(Meta, { ...fields, tags, attribution: fields.attribution ?? "", workspaceId: fields.workspaceId || undefined });
     await svc.placement(db, user.id, meta); // cheap permission check before the expensive ingest
