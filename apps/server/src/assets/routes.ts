@@ -2,6 +2,7 @@ import multipart from "@fastify/multipart";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import type { SessionUser } from "../auth";
+import { storageUsed } from "../admin/service";
 import { getSettings } from "../admin/settings";
 import type { Db } from "../db/client";
 import { HttpError } from "../errors";
@@ -66,9 +67,12 @@ export function registerAssetRoutes(
   app.post("/api/assets", { config: { rateLimit: limit } }, async (req, reply) => {
     const user = await requireUser(req);
     if (!req.isMultipart()) throw new HttpError(400, "invalid_body");
+    // Read the settings first so the multipart limit is the admin's cap, not the 100 MB ceiling: nothing larger is buffered.
+    const settings = await getSettings(db);
+    const maxBytes = settings.maxUploadMb * 1024 * 1024;
     const fields: Record<string, string> = {};
     let file: Uint8Array | undefined;
-    for await (const part of req.parts()) {
+    for await (const part of req.parts({ limits: { fileSize: maxBytes } })) {
       if (part.type === "file") {
         if (part.fieldname !== "file" || file) throw new HttpError(400, "invalid_body");
         file = await part.toBuffer(); // throws a 413 when over the limit
@@ -76,7 +80,10 @@ export function registerAssetRoutes(
     }
     if (fields.confirmed !== "true") throw new HttpError(400, "rights_not_confirmed");
     if (!file) throw new HttpError(400, "invalid_body");
-    if (file.byteLength > (await getSettings(db)).maxUploadMb * 1024 * 1024) throw new HttpError(413, "too_large");
+    if (file.byteLength > maxBytes) throw new HttpError(413, "too_large");
+    if (settings.storageQuotaGb !== null && (await storageUsed(db)) + file.byteLength > settings.storageQuotaGb * 1024 ** 3) {
+      throw new HttpError(507, "storage_full");
+    }
     const tags = fields.tags ? fields.tags.split(",") : [];
     const meta = parse(Meta, { ...fields, tags, attribution: fields.attribution ?? "", workspaceId: fields.workspaceId || undefined });
     await svc.placement(db, user.id, meta); // cheap permission check before the expensive ingest

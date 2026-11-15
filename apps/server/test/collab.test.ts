@@ -108,6 +108,15 @@ describe("live collaboration", () => {
     expect([a.closes, b.closes]).toEqual([[], []]);
   });
 
+  it("disconnectUser closes only that user's sockets", async () => {
+    const { ada, bo, id } = await team();
+    const a = connect(ada.cookie, id), b = connect(bo.cookie, id);
+    await synced(a, b);
+    t.app.collab.disconnectUser(bo.userId);
+    await vi.waitFor(() => expect(b.closes).toContain("suspended"), { timeout: 3000 });
+    expect(a.closes).toEqual([]);
+  });
+
   it("unauthenticated and non-member connections are refused", async () => {
     const { eve, id } = await team();
     const anon = connect(undefined, id), stranger = connect(eve.cookie, id), bogus = connect(eve.cookie, "not-a-uuid");

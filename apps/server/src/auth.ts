@@ -1,5 +1,6 @@
 import { APIError, betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { eq } from "drizzle-orm";
 import { fromNodeHeaders } from "better-auth/node";
 import type { FastifyRequest } from "fastify";
 import type { Config } from "./config";
@@ -23,6 +24,15 @@ export function createAuth(config: Config, db: Db) {
             if (!(await mayRegister(db, u.email, await getSettings(db), config.adminEmails))) {
               throw new APIError("FORBIDDEN", { code: "registration_closed", message: "registration_closed" });
             }
+          },
+        },
+      },
+      session: {
+        create: {
+          // Suspension: no new sessions (sign-in). Existing ones are deleted when the admin suspends.
+          before: async (s) => {
+            const [u] = await db.select({ at: schema.user.suspendedAt }).from(schema.user).where(eq(schema.user.id, s.userId));
+            if (u?.at) throw new APIError("FORBIDDEN", { code: "suspended", message: "suspended" });
           },
         },
       },

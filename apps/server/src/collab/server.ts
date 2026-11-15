@@ -19,6 +19,8 @@ export type Collab = {
   withDocument<T>(id: string, fn: (doc: Y.Doc) => T | Promise<T>, by?: string): Promise<T>;
   /** Called after each store with the last user who changed the document. */
   onStored(cb: (id: string, doc: Y.Doc, by: string | null) => Promise<void>): void;
+  /** Closes every live socket the user has open (a suspension must not wait for the next reconnect). */
+  disconnectUser(userId: string): void;
   close(): Promise<void>;
 };
 type Context = { userId?: string; userName?: string; role?: Role };
@@ -161,6 +163,11 @@ export function createCollab(db: Db, auth: Auth, publicUrl: string): Collab {
       return out;
     },
     onStored(cb) { stored.push(cb); },
+    disconnectUser(userId) {
+      for (const doc of hp.documents.values()) {
+        for (const c of doc.getConnections()) if (c.context?.userId === userId) c.close({ code: 4000, reason: "suspended" });
+      }
+    },
     async close() {
       hp.closeConnections();
       hp.flushPendingStores();
