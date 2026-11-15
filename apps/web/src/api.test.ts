@@ -47,6 +47,12 @@ describe("saveFile", () => {
     expect(writeFile).toHaveBeenCalledWith({ path: "a b.png", data: btoa("hi"), directory: "CACHE" });
     expect(share).toHaveBeenCalledWith({ files: ["file:///cache/a b.png"], title: "a b.png" });
   });
+  it("save posts to cherryNative on android", async () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal("window", { cherryNative: { postMessage } });
+    await saveFile(new Blob(["hi"], { type: "image/png" }), "a.png");
+    expect(JSON.parse(postMessage.mock.calls[0]![0])).toEqual({ type: "save", filename: "a.png", mime: "image/png", base64: btoa("hi") });
+  });
   it("falls back to an anchor download", async () => {
     const a = { href: "", download: "", click: vi.fn() };
     vi.stubGlobal("window", {});
