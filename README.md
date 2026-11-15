@@ -26,10 +26,22 @@ Uploads live in S3-compatible object storage (`S3_ENDPOINT`, `S3_BUCKET`, `S3_AC
 
 Build the web app with `pnpm --filter @cherry/web build`, set `WEB_DIST=apps/web/dist` and `PUBLIC_URL` to the address people use; one origin serves app and API. A relative `WEB_DIST` resolves against the server process working directory.
 
+## Desktop app
+
+`apps/desktop` (`@cherry/desktop`) is a Tauri 2 shell. It opens the launcher (`apps/launcher`), which picks a server, then loads that server's web app in the window; links to other sites open in the system browser and downloads go to your Downloads folder. Requires Rust (stable) and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform (WebView2 ships with Windows 11).
+
+```bash
+pnpm --filter @cherry/desktop dev:app                       # run it
+pnpm --filter @cherry/desktop build                         # installers in apps/desktop/src-tauri/target/release/bundle
+pnpm --filter @cherry/desktop build --debug --no-bundle     # just the executable, in src-tauri/target/debug
+pnpm --filter @cherry/desktop test:rust                     # Rust unit tests
+```
+
 ## Workspace structure
 
 - `apps/server` (`@cherry/server`) — Fastify 5 API, Better Auth, Drizzle ORM (PostgreSQL / PGlite), and S3-compatible asset storage
 - `apps/web` (`@cherry/web`) — React 19 + Vite 8 + Konva (`react-konva`) web editor
+- `apps/desktop` (`@cherry/desktop`) — Tauri 2 desktop shell around the launcher and the server's web app
 - `packages/doc` (`@cherry/doc`) — `.cherry` document Zod schemas, Yjs sync, units, and I/O
 - `packages/vector` (`@cherry/vector`) — Paper.js boolean operations, SVG import/export, and path editing
 
