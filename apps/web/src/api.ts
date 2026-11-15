@@ -225,36 +225,16 @@ export async function exportFile(designId: string, body: ExportBody): Promise<{ 
   return { blob: await res.blob(), filename };
 }
 
-/** The bits of Capacitor's injected bridge we use; the web app never imports `@capacitor/*` (Decision 6). */
-type CapacitorBridge = {
-  isNativePlatform?(): boolean;
-  Plugins?: {
-    Filesystem?: { writeFile(o: { path: string; data: string; directory: "CACHE" }): Promise<{ uri: string }> };
-    Share?: { share(o: { files: string[]; title: string }): Promise<unknown> };
-  };
-};
+type NativeSaver = { postMessage(msg: string): void };
 
 /** Hands a file to the user: the share sheet inside the mobile app (WebViews ignore `blob:` downloads), else a download.
- * iOS gets Capacitor's plugins on the server's page; Android gets `window.cherryNative` from MainActivity. */
+ * The mobile shells expose a `cherryNative` handler to the server's page: Android via MainActivity, iOS via AppViewController. */
 export async function saveFile(blob: Blob, filename: string): Promise<void> {
-  const w = window as { Capacitor?: CapacitorBridge; cherryNative?: { postMessage(msg: string): void } };
-  const cap = w.Capacitor;
-  const fs = cap?.Plugins?.Filesystem, share = cap?.Plugins?.Share;
-  if (cap?.isNativePlatform?.() && fs && share) {
-    const data = toBase64(new Uint8Array(await blob.arrayBuffer()));
-    // The name comes from the server; keep it inside the cache directory.
-    const { uri } = await fs.writeFile({ path: filename.replace(/[\\/]/g, "_"), data, directory: "CACHE" });
-    try {
-      await share.share({ files: [uri], title: filename });
-    } catch (e) {
-      if (!/cancel/i.test(String((e as Error)?.message))) throw e; // closing the share sheet is not an error
-    }
-    return;
-  }
-  if (w.cherryNative) {
-    // Android: Capacitor's bridge isn't on the server's page, so MainActivity listens for this and opens the share sheet.
+  const w = window as { cherryNative?: NativeSaver; webkit?: { messageHandlers?: { cherryNative?: NativeSaver } } };
+  const native = w.cherryNative ?? w.webkit?.messageHandlers?.cherryNative;
+  if (native) {
     const base64 = toBase64(new Uint8Array(await blob.arrayBuffer()));
-    w.cherryNative.postMessage(JSON.stringify({ type: "save", filename, mime: blob.type, base64 }));
+    native.postMessage(JSON.stringify({ type: "save", filename, mime: blob.type, base64 }));
     return;
   }
   const a = document.createElement("a");

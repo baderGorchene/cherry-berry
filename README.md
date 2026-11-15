@@ -39,7 +39,7 @@ pnpm --filter @cherry/desktop test:rust                     # Rust unit tests
 
 ## Mobile app
 
-`apps/mobile` (`@cherry/mobile`) is a Capacitor 8 shell for Android and iOS. Like the desktop app it ships only the launcher and then loads the chosen server's web app; `http://` servers on your network are allowed. Exports open the share sheet, and links that open a new window go to the system browser. Icons and splash are plain colors (`apps/mobile/assets`); there is no logo. `pnpm --filter @cherry/mobile sync` builds the launcher and copies it, with the native plugins, into both projects; run it after a fresh clone.
+`apps/mobile` (`@cherry/mobile`) is a Capacitor 8 shell for Android and iOS. Like the desktop app it ships only the launcher and then loads the chosen server's web app; `http://` servers on your network are allowed. Exports open the share sheet, and links that open a new window go to the system browser. Only the launcher can reach Capacitor's native bridge; the server's page gets just a `cherryNative` export handler. Icons and splash are plain colors (`apps/mobile/assets`); there is no logo. `pnpm --filter @cherry/mobile sync` builds the launcher and copies it into both projects; run it after a fresh clone.
 
 ```bash
 pnpm --filter @cherry/mobile sync android          # or ios

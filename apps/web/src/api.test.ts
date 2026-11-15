@@ -39,19 +39,26 @@ describe("exportFile", () => {
 });
 
 describe("saveFile", () => {
-  it("save uses share on capacitor", async () => {
-    const writeFile = vi.fn(async (_: { path: string; data: string; directory: string }) => ({ uri: "file:///cache/a b.png" }));
-    const share = vi.fn(async (_: { files: string[]; title: string }) => ({}));
-    vi.stubGlobal("window", { Capacitor: { isNativePlatform: () => true, Plugins: { Filesystem: { writeFile }, Share: { share } } } });
-    await saveFile(new Blob(["hi"]), "a b.png");
-    expect(writeFile).toHaveBeenCalledWith({ path: "a b.png", data: btoa("hi"), directory: "CACHE" });
-    expect(share).toHaveBeenCalledWith({ files: ["file:///cache/a b.png"], title: "a b.png" });
-  });
   it("save posts to cherryNative on android", async () => {
     const postMessage = vi.fn();
     vi.stubGlobal("window", { cherryNative: { postMessage } });
     await saveFile(new Blob(["hi"], { type: "image/png" }), "a.png");
     expect(JSON.parse(postMessage.mock.calls[0]![0])).toEqual({ type: "save", filename: "a.png", mime: "image/png", base64: btoa("hi") });
+  });
+  it("save posts to the cherryNative message handler on ios", async () => {
+    const postMessage = vi.fn();
+    vi.stubGlobal("window", { webkit: { messageHandlers: { cherryNative: { postMessage } } } });
+    await saveFile(new Blob(["hi"], { type: "image/png" }), "a.png");
+    expect(JSON.parse(postMessage.mock.calls[0]![0])).toEqual({ type: "save", filename: "a.png", mime: "image/png", base64: btoa("hi") });
+  });
+  it("ignores Capacitor plugins on the server's page", async () => {
+    const a = { href: "", download: "", click: vi.fn() };
+    const writeFile = vi.fn();
+    vi.stubGlobal("window", { Capacitor: { isNativePlatform: () => true, Plugins: { Filesystem: { writeFile }, Share: { share: vi.fn() } } } });
+    vi.stubGlobal("document", { createElement: () => a });
+    await saveFile(new Blob(["hi"]), "a.png");
+    expect(writeFile).not.toHaveBeenCalled();
+    expect(a.click).toHaveBeenCalled();
   });
   it("falls back to an anchor download", async () => {
     const a = { href: "", download: "", click: vi.fn() };

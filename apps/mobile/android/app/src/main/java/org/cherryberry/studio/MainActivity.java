@@ -8,6 +8,7 @@ import android.os.Bundle;
 import android.os.Message;
 import android.util.Base64;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import androidx.core.content.FileProvider;
@@ -15,6 +16,7 @@ import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebChromeClient;
+import com.getcapacitor.BridgeWebViewClient;
 import com.getcapacitor.Logger;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -22,8 +24,9 @@ import java.util.Collections;
 import org.json.JSONObject;
 
 /**
- * Two things Capacitor doesn't do for the server's page (it is remote, so Capacitor's plugin bridge isn't injected there):
- * exports reach the share sheet through `window.cherryNative`, and `target=_blank` / `window.open` open the system browser.
+ * The launcher (https://localhost) is the only page that may reach Capacitor's plugin bridge. The server's page is remote:
+ * it stays in the webview (there is no allowNavigation, which would also widen the bridge's allowed origins), exports reach
+ * the share sheet through `window.cherryNative`, and `target=_blank` / `window.open` open the system browser.
  */
 public class MainActivity extends BridgeActivity {
 
@@ -33,6 +36,33 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         WebView webView = bridge.getWebView();
+
+        // Capacitor falls back to addJavascriptInterface (every origin and frame) when WebMessageListener is missing or
+        // rejects its origin rules. The launcher needs no plugins, so drop that fallback; the origin-scoped listener stays.
+        webView.removeJavascriptInterface("androidBridge");
+
+        bridge.setWebViewClient(
+            new BridgeWebViewClient(bridge) {
+                @Override
+                public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                    Uri url = request.getUrl();
+                    String scheme = url.getScheme();
+                    // The chosen server is any http(s) origin; Capacitor would hand it to the system browser. New windows
+                    // never get here (onCreateWindow below sends them out), and the bridge is origin-scoped, not URL-scoped.
+                    if (("https".equals(scheme) || "http".equals(scheme)) && !isApp(url)) return false;
+                    return super.shouldOverrideUrlLoading(view, request);
+                }
+
+                @Override
+                public void onPageStarted(WebView view, String url, Bitmap favicon) {
+                    super.onPageStarted(view, url, favicon);
+                    // Mixed content is only for the launcher's health check of http:// servers.
+                    view
+                        .getSettings()
+                        .setMixedContentMode(isApp(Uri.parse(url)) ? WebSettings.MIXED_CONTENT_ALWAYS_ALLOW : WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+                }
+            }
+        );
 
         if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             // "*" because self-hosted servers are any origin; the listener checks the scheme and frame itself.
@@ -81,6 +111,10 @@ public class MainActivity extends BridgeActivity {
                 }
             }
         );
+    }
+
+    boolean isApp(Uri url) {
+        return bridge.getScheme().equals(url.getScheme()) && bridge.getHost().equals(url.getHost()) && url.getPort() == -1;
     }
 
     void openExternal(Uri url) {
