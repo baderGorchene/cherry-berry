@@ -3,5 +3,5 @@
   "identifier": "default",
   "description": "Launcher window. Remote server pages get no IPC.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": []
 }
