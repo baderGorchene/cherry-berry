@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import * as Y from "yjs";
 import type { AnchorRef, BoolOp } from "@cherry/vector";
@@ -11,7 +11,7 @@ import { canDelete, canEditContent, canMove } from "../editor/brandLock";
 import { useKitFonts } from "../brand/fonts";
 import "../editor/editor.css";
 import BrandPanel from "../editor/BrandPanel";
-import { IconBack, IconRedo, IconUndo } from "../icons";
+import { IconBack, IconBrand, IconImage, IconLayers, IconMore, IconRedo, IconShapes, IconText, IconUndo } from "../icons";
 import Canvas, { type Tool } from "../editor/Canvas";
 import { NUDGE, allIds, clampZoom, fitZoom } from "../editor/geometry";
 import ExportDialog from "../editor/ExportDialog";
@@ -26,7 +26,8 @@ import VisualsPanel from "../editor/VisualsPanel";
 import Properties from "../editor/Properties";
 import { Avatars, SharePopover } from "../editor/PresenceBar";
 import { colorFor, usePeers, type PresenceUser } from "../editor/presence";
-import Toolbar from "../editor/Toolbar";
+import Sheet from "../editor/Sheet";
+import Toolbar, { PEN } from "../editor/Toolbar";
 import { useDesign, type DesignState } from "../editor/useDesign";
 import { useYValue } from "../editor/useYValue";
 
@@ -37,6 +38,14 @@ const EDIT_KEYS: Record<string, Tool> = { a: "direct", p: "pen", "+": "add-ancho
 
 type Panel = "layers" | "shapes" | "visuals" | "brand";
 const TABS: [Panel, string][] = [["layers", "Layers"], ["shapes", "Shapes"], ["visuals", "Visuals"], ["brand", "Brand"]];
+
+type SheetId = Panel | "properties";
+const SHEET_LABEL: Record<SheetId, string> = { layers: "Layers", shapes: "Shapes", visuals: "Visuals", brand: "Brand", properties: "Properties" };
+
+// The phone layout (bottom tool bar and sheets) follows the theme's phone breakpoint.
+const phoneQuery = () => matchMedia("(max-width: 759px)");
+const onPhoneChange = (cb: () => void) => { const q = phoneQuery(); q.addEventListener("change", cb); return () => q.removeEventListener("change", cb); };
+const usePhone = () => useSyncExternalStore(onPhoneChange, () => phoneQuery().matches);
 
 const BOOL_KEYS: Record<string, BoolOp> = { u: "union", s: "subtract", i: "intersect", e: "exclude" };
 
@@ -137,6 +146,20 @@ function Shell({ d }: { d: Ready }) {
   useEffect(() => setMessage(""), [sel.selected.join()]);
   const [tool, setTool] = useState<Tool>("select");
   const [panel, setPanel] = useState<Panel>("layers");
+  const phone = usePhone();
+  const [sheet, setSheet] = useState<SheetId | null>(null);
+  const toggleSheet = (s: SheetId) => setSheet((cur) => (cur === s ? null : s));
+  const [more, setMore] = useState(false);
+  const moreRef = useRef<HTMLDivElement>(null);
+  const moreBtn = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!more) return;
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setMore(false); moreBtn.current?.focus(); } };
+    const down = (e: PointerEvent) => { if (!moreRef.current?.contains(e.target as Node)) setMore(false); };
+    document.addEventListener("keydown", key);
+    document.addEventListener("pointerdown", down);
+    return () => { document.removeEventListener("keydown", key); document.removeEventListener("pointerdown", down); };
+  }, [more]);
   const [vp, setVp] = useState({ width: 0, height: 0 });
   const [zoomSet, setZoomSet] = useState<number | null>(null); // null = fit to viewport
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -219,7 +242,11 @@ function Shell({ d }: { d: Ready }) {
   }, []);
 
   const closeExport = useCallback(() => setExporting(false), []);
-  const select = (selected: string[]) => setSel({ pageId: page.id, selected });
+  const select = (selected: string[]) => {
+    setSel({ pageId: page.id, selected });
+    // On phones, picking a layer shows its properties; clearing the selection closes them.
+    if (phone) setSheet((s) => (selected.length ? "properties" : s === "properties" ? null : s));
+  };
   /** One committed action = one undo step, even within captureTimeout of the last. */
   const act = (fn: () => void) => { undo.stopCapturing(); fn(); undo.stopCapturing(); };
   const selectedNodes = sel.selected.map((s) => findNode(page.nodes, s)).filter((n): n is CherryNode => !!n);
@@ -232,73 +259,59 @@ function Shell({ d }: { d: Ready }) {
   const left: Panel = editNode ? "layers" : panel; // path edit mode always shows Layers
   const status = d.status === "error" ? `Not saved: ${d.statusMessage ?? ""}` : STATUS[d.status];
 
-  return (
-    <div className="ed">
-      <header className="ed-head">
-        <Link className="ed-ib" to="/" aria-label="Back to home"><IconBack /></Link>
-        <div className="ed-title">
-          <input aria-label="Design title" key={doc.title} defaultValue={doc.title} disabled={readOnly} maxLength={120}
-            onBlur={(e) => { const t = e.currentTarget.value.trim(); if (t && t !== doc.title) act(() => setTitle(ydoc, t)); else e.currentTarget.value = doc.title; }}
-            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
-          <span className="muted ell">
-            {page.width} × {page.height} {page.unit} · {page.colorMode.toUpperCase()} · {readOnly ? <span>View only</span> : <span role="status">{status}</span>}
-            {(d.statusCode === "invalid_document" || d.statusCode === "brand_locked") && <> <button className="ed-mini" onClick={d.reload}>Reload to get the latest version</button></>}
-          </span>
-        </div>
-        <button className="ed-ib" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={readOnly} onClick={() => undo.undo()}><IconUndo /></button>
-        <button className="ed-ib" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={readOnly} onClick={() => undo.redo()}><IconRedo /></button>
-        {editNode && <span className="ed-pill">Editing path</span>}
-        <span style={{ flex: 1 }} />
-        <div className="ed-zoom" role="group" aria-label="Zoom">
-          <button className="ed-mini" aria-label="Zoom out" title="Zoom out (Ctrl+-)" onClick={() => zoomTo(zoom / 1.2)}>−</button>
-          <span className="ed-f" title="Zoom level">{Math.round(zoom * 100)}%</span>
-          <button className="ed-mini" aria-label="Zoom in" title="Zoom in (Ctrl+=)" onClick={() => zoomTo(zoom * 1.2)}>+</button>
-          <button className="ed-mini" title="Fit (Ctrl+0)" onClick={() => zoomTo(null)}>Fit</button>
-        </div>
-        <Avatars people={people} />
-        <Link className="btn" to={`/d/${d.design.id}/history`}>History</Link>
-        <button className="btn" onClick={() => setExporting(true)}>Export</button>
-        <SharePopover workspace={workspaceName} />
-        {role !== "viewer" && !editNode && <button className="btn" onClick={() => setPublishing(true)}>Publish</button>}
-        {editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>}
-      </header>
-      <div className="ed-body">
-        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} panel={panel} onTool={setTool} onPanel={(p) => setPanel(panel === p ? "layers" : p)} />
-        <div className="ed-left">
-          {/* Enter/Space on a focused tab activate it; keep them from the editor's global shortcuts. */}
-          <div role="tablist" aria-label="Left panel" className="ed-ltabs" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>
-            {TABS.map(([id, label]) => (
-              <button key={id} role="tab" aria-selected={left === id} className="ed-tab" disabled={!!editNode && id !== "layers"}
-                onClick={(e) => { setPanel(id); if (e.detail > 0) e.currentTarget.blur(); }}>{id === "brand" && issueCount ? `${label} (${issueCount})` : label}</button>
-            ))}
-          </div>
-          {left === "layers" && (
-            <aside aria-label="Layers" className="ed-pane">
-              <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} role={role} act={act} onSelect={select} />
-              <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} role={role} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
-            </aside>
-          )}
-          {left === "shapes" && (
-            <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onTool={setTool} onSelect={select} />
-          )}
-          {left === "visuals" && (
-            <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role} selected={sel.selected} act={act} onSelect={select} />
-          )}
-          {left === "brand" && (
-            <BrandPanel ydoc={ydoc} page={page} kit={kit} loading={kitLoading} issues={issues} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role}
-              act={act} selected={sel.selected} onSelect={select} onLinked={setKitId} />
-          )}
-        </div>
-        <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} role={role} tool={tool} zoom={zoom} pan={pan}
-          editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys} snapRef={snapRef}
-          kit={kit} fontsVersion={fontsVersion} peers={peers} onCursor={onCursor}
-          act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
-          onAnchors={setAnchors} onEditPath={enterEdit} />
-        {editNode
-          ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
-          : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} kit={kit} onLinked={setKitId} nodes={selectedNodes} readOnly={readOnly} role={role} act={act}
-            combinable={canCombine} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} />}
-      </div>
+  const titleInput = (
+    <input aria-label="Design title" key={doc.title} defaultValue={doc.title} disabled={readOnly} maxLength={120}
+      onBlur={(e) => { const t = e.currentTarget.value.trim(); if (t && t !== doc.title) act(() => setTitle(ydoc, t)); else e.currentTarget.value = doc.title; }}
+      onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+  );
+  const statusLine = (
+    <span className="muted ell">
+      {page.width} × {page.height} {page.unit} · {page.colorMode.toUpperCase()} · {readOnly ? <span>View only</span> : <span role="status">{status}</span>}
+      {(d.statusCode === "invalid_document" || d.statusCode === "brand_locked") && <> <button className="ed-mini" onClick={d.reload}>Reload to get the latest version</button></>}
+    </span>
+  );
+  const undoBtn = <button className="ed-ib" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={readOnly} onClick={() => undo.undo()}><IconUndo /></button>;
+  const redoBtn = <button className="ed-ib" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={readOnly} onClick={() => undo.redo()}><IconRedo /></button>;
+  const zoomGroup = (
+    <div className="ed-zoom" role="group" aria-label="Zoom">
+      <button className="ed-mini" aria-label="Zoom out" title="Zoom out (Ctrl+-)" onClick={() => zoomTo(zoom / 1.2)}>−</button>
+      <span className="ed-f" title="Zoom level">{Math.round(zoom * 100)}%</span>
+      <button className="ed-mini" aria-label="Zoom in" title="Zoom in (Ctrl+=)" onClick={() => zoomTo(zoom * 1.2)}>+</button>
+      <button className="ed-mini" title="Fit (Ctrl+0)" onClick={() => zoomTo(null)}>Fit</button>
+    </div>
+  );
+  const history = <Link className="btn" to={`/d/${d.design.id}/history`}>History</Link>;
+  const publish = role !== "viewer" && !editNode && <button className="btn" onClick={() => { setMore(false); setPublishing(true); }}>Publish</button>;
+  const done = editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>;
+  const panelBody = (p: Panel) => ({
+    layers: (
+      <aside aria-label="Layers" className="ed-pane">
+        <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} role={role} act={act} onSelect={select} />
+        <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} role={role} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
+      </aside>
+    ),
+    // On phones an armed tool closes the sheet so the canvas can take the tap.
+    shapes: <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onSelect={select}
+      onTool={(t) => { setTool(t); if (phone) setSheet(null); }} />,
+    visuals: <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role} selected={sel.selected} act={act} onSelect={select} />,
+    brand: (
+      <BrandPanel ydoc={ydoc} page={page} kit={kit} loading={kitLoading} issues={issues} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role}
+        act={act} selected={sel.selected} onSelect={select} onLinked={setKitId} />
+    ),
+  })[p];
+  const properties = (tabs: boolean) => editNode
+    ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
+    : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} kit={kit} onLinked={setKitId} nodes={selectedNodes} readOnly={readOnly} role={role} act={act}
+      combinable={canCombine} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} tabs={tabs} />;
+  const canvas = (
+    <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} role={role} tool={tool} zoom={zoom} pan={pan}
+      editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys} snapRef={snapRef}
+      kit={kit} fontsVersion={fontsVersion} peers={peers} onCursor={onCursor}
+      act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
+      onAnchors={setAnchors} onEditPath={enterEdit} />
+  );
+  const dialogs = (
+    <>
       {publishing && (
         <PublishDialog designId={d.design.id} workspaceId={d.design.workspaceId} title={doc.title} kitId={kitId} saved={d.status === "saved"}
           snapRef={snapRef} onClose={closePublish} />
@@ -311,6 +324,85 @@ function Shell({ d }: { d: Ready }) {
             setExporting(false);
           }} />
       )}
+    </>
+  );
+
+  if (phone) {
+    const tl = (label: string, icon: ReactNode, pressed: boolean, onClick: () => void, disabled = false) => (
+      <button className="ed-tl" aria-pressed={pressed} disabled={disabled} onClick={onClick}>{icon}{label}</button>
+    );
+    const arm = (t: Tool) => { setTool(tool === t ? "select" : t); setSheet(null); };
+    return (
+      <div className="ed ed-m">
+        <header className="ed-head">
+          <Link className="ed-ib" to="/" aria-label="Back to home"><IconBack /></Link>
+          <div className="ed-title">{titleInput}</div>
+          {undoBtn}
+          <button className={`ed-ib${sheet === "layers" ? " ed-ib-on" : ""}`} aria-label="Layers" aria-pressed={sheet === "layers"} onClick={() => toggleSheet("layers")}><IconLayers /></button>
+          {done || <button className="btn btn-p" onClick={() => setExporting(true)}>Export</button>}
+          <div className="ed-more-w" ref={moreRef}>
+            <button ref={moreBtn} className="ed-ib" aria-label="More" aria-expanded={more} onClick={() => setMore(!more)}><IconMore /></button>
+            {more && (
+              <div className="ed-pop ed-more" role="dialog" aria-label="More">
+                {statusLine}
+                {zoomGroup}
+                <Avatars people={people} />
+                <div className="ed-more-row">{redoBtn}{history}{publish}</div>
+                <SharePopover workspace={workspaceName} />
+              </div>
+            )}
+          </div>
+        </header>
+        <div className="ed-body">{canvas}</div>
+        {sheet && <Sheet label={SHEET_LABEL[sheet]} onClose={() => setSheet(null)}>{sheet === "properties" ? properties(true) : panelBody(sheet)}</Sheet>}
+        <nav aria-label="Tools" className="ed-mtools">
+          {tl("Text", <IconText />, tool === "text", () => arm("text"), readOnly)}
+          {tl("Shapes", <IconShapes />, sheet === "shapes", () => toggleSheet("shapes"))}
+          {tl("Visuals", <IconImage />, sheet === "visuals", () => toggleSheet("visuals"))}
+          {tl("Draw", PEN, tool === "pen", () => arm("pen"), readOnly || !!editNode)}
+          {tl(issueCount ? `Brand (${issueCount})` : "Brand", <IconBrand />, sheet === "brand", () => toggleSheet("brand"))}
+        </nav>
+        {dialogs}
+      </div>
+    );
+  }
+
+  return (
+    <div className="ed">
+      <header className="ed-head">
+        <Link className="ed-ib" to="/" aria-label="Back to home"><IconBack /></Link>
+        <div className="ed-title">
+          {titleInput}
+          {statusLine}
+        </div>
+        {undoBtn}
+        {redoBtn}
+        {editNode && <span className="ed-pill">Editing path</span>}
+        <span style={{ flex: 1 }} />
+        {zoomGroup}
+        <Avatars people={people} />
+        {history}
+        <button className="btn" onClick={() => setExporting(true)}>Export</button>
+        <SharePopover workspace={workspaceName} />
+        {publish}
+        {done}
+      </header>
+      <div className="ed-body">
+        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} panel={panel} onTool={setTool} onPanel={(p) => setPanel(panel === p ? "layers" : p)} />
+        <div className="ed-left">
+          {/* Enter/Space on a focused tab activate it; keep them from the editor's global shortcuts. */}
+          <div role="tablist" aria-label="Left panel" className="ed-ltabs" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>
+            {TABS.map(([id, label]) => (
+              <button key={id} role="tab" aria-selected={left === id} className="ed-tab" disabled={!!editNode && id !== "layers"}
+                onClick={(e) => { setPanel(id); if (e.detail > 0) e.currentTarget.blur(); }}>{id === "brand" && issueCount ? `${label} (${issueCount})` : label}</button>
+            ))}
+          </div>
+          {panelBody(left)}
+        </div>
+        {canvas}
+        {properties(false)}
+      </div>
+      {dialogs}
     </div>
   );
 }

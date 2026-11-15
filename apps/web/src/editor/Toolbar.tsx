@@ -16,7 +16,7 @@ export const SHAPES: { kind: BasicShape; label: string; icon: ReactNode }[] = [
   { kind: "arrow", label: "Arrow", icon: svg(<path d="M4 12h14M13 6l6 6-6 6" />) },
 ];
 
-const PEN = svg(<><path d="M12 19l7-7 3 3-7 7z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z" /><circle cx="11" cy="11" r="2" /></>);
+export const PEN = svg(<><path d="M12 19l7-7 3 3-7 7z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z" /><circle cx="11" cy="11" r="2" /></>);
 
 /** Every button arms a tool; Text and shape tools then place on the canvas (click, or drag out a box). */
 export default function Toolbar({ readOnly, tool, editing, panel, onTool, onPanel }: {

@@ -29,3 +29,5 @@ export const IconDown = svg(p("M12 5v14M5 12l7 7 7-7"));
 export const IconCopy = svg(<rect key="r" x="9" y="9" width="11" height="11" rx="2" />, p("M5 15V5a2 2 0 012-2h8"));
 export const IconTrash = svg(p("M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"));
 export const IconUpload = svg(p("M12 16V4M7 9l5-5 5 5"), p("M4 16v4h16v-4"));
+export const IconText = svg(p("M5 5h14M12 5v14"));
+export const IconMore = svg(<circle key="a" cx="5" cy="12" r="1.2" />, <circle key="b" cx="12" cy="12" r="1.2" />, <circle key="c" cx="19" cy="12" r="1.2" />);

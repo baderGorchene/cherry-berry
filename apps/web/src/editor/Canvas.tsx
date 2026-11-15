@@ -13,6 +13,7 @@ import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
 import TextEditor from "./TextEditor";
 import type { BrandKit, Role } from "../api";
 import { useAssetImage } from "./useAssetImage";
+import { pinch } from "./gestures";
 import { canEditContent, canMove } from "./brandLock";
 import type { Peer } from "./presence";
 
@@ -113,6 +114,12 @@ export default function Canvas({
   const [draft, setDraft] = useState<TextNode | null>(null);
   // The edited path as it follows an anchor or handle drag, drawn in place of the stored node.
   const [edited, setEdited] = useState<CherryNode | null>(null);
+  // Fingers on the canvas (px from its centre) and what the gesture is doing; `last` is the latest touch time.
+  const touch = useRef({
+    pts: new Map<number, Pt>(), last: 0, start: { x: 0, y: 0 }, moved: false,
+    pinch: null as { start: [Pt, Pt]; zoom: number; pan: Pt } | null, pan: null as { from: Pt; pan: Pt } | null, tap: undefined as string | undefined,
+  });
+  const [pinching, setPinching] = useState(false);
 
   useEffect(() => {
     const ro = new ResizeObserver(([e]) => {
@@ -180,7 +187,8 @@ export default function Canvas({
   const pointer = () => nodesRef.current!.getRelativePointerPosition()!;
 
   const onDown = (e: KonvaEventObject<MouseEvent>) => {
-    if (e.evt.button !== 0 || editing) return;
+    // A tap also sends compatibility mouse events; touch is handled below.
+    if (e.evt.button !== 0 || editing || Date.now() - touch.current.last < 800) return;
     if (pathMode) return pathInput.current?.down(e.evt);
     const p = pointer();
     if (tool !== "select" && !readOnly) return setDrag({ kind: "create", from: p, to: p, shift: false });
@@ -242,6 +250,70 @@ export default function Canvas({
     return () => window.removeEventListener("mouseup", onUp);
   }, [drag]);
 
+  // Touch: one finger taps a layer to select it (Konva drags it as with a mouse), pans empty canvas, or uses the armed tool;
+  // a second finger pinch-zooms and pans, and no layer drags while it is down.
+  const onTouch = useRef<(e: PointerEvent) => void>(null);
+  onTouch.current = (e) => {
+    const t = touch.current;
+    const r = box.current!.getBoundingClientRect();
+    const p = { x: e.clientX - r.left - r.width / 2, y: e.clientY - r.top - r.height / 2 };
+    t.last = Date.now();
+    if (e.type === "pointerdown") {
+      if (!(e.target instanceof HTMLCanvasElement)) return; // the text editor and peer labels sit over the canvas
+      t.pts.set(e.pointerId, p);
+      if (t.pts.size === 2) {
+        t.pinch = { start: [...t.pts.values()] as [Pt, Pt], zoom, pan };
+        t.pan = null;
+        t.tap = undefined;
+        setDrag(null);
+        return setPinching(true);
+      }
+      if (t.pts.size > 2 || editing) return;
+      t.start = p;
+      t.moved = false;
+      if (pathMode) return pathInput.current?.down(e);
+      if (tool !== "select" && !readOnly) { const q = pointer(); return setDrag({ kind: "create", from: q, to: q, shift: false }); }
+      const shape = stageRef.current!.getIntersection({ x: p.x + r.width / 2, y: p.y + r.height / 2 });
+      const hit = shape && hitOf(shape);
+      if (hit === "tr") return;
+      if (hit) t.tap = hit;
+      else t.pan = { from: p, pan };
+    } else if (e.type === "pointermove") {
+      if (!t.pts.has(e.pointerId)) return;
+      t.pts.set(e.pointerId, p);
+      if (Math.hypot(p.x - t.start.x, p.y - t.start.y) > 8) t.moved = true;
+      if (t.pinch) {
+        if (t.pts.size !== 2) return;
+        const z = pinch(t.pinch.start, [...t.pts.values()] as [Pt, Pt], t.pinch.zoom, t.pinch.pan);
+        onZoom(z.zoom);
+        onPan(z.pan);
+      } else if (t.pan) onPan({ x: t.pan.pan.x + p.x - t.pan.from.x, y: t.pan.pan.y + p.y - t.pan.from.y });
+      else if (drag) setDrag({ ...drag, to: pointer() });
+      else if (pathMode) pathInput.current?.hover(e);
+    } else {
+      if (!t.pts.delete(e.pointerId)) return;
+      if (t.pinch) {
+        if (!t.pts.size) { t.pinch = null; setPinching(false); }
+        return;
+      }
+      const tap = !t.moved && e.type === "pointerup";
+      // Tapping a selected text edits it (a double tap would land on the sheet that the first tap opens).
+      if (tap && t.tap && !readOnly && selected.includes(t.tap) && top(t.tap)?.kind === "text") setEditing(t.tap);
+      else if (tap && t.tap) onSelect([t.tap]);
+      else if (tap && t.pan) onSelect([]);
+      t.pan = null;
+      t.tap = undefined;
+      if (drag) { if (e.type === "pointerup") onUp(); else setDrag(null); }
+    }
+  };
+  useEffect(() => {
+    const el = box.current!;
+    const h = (e: PointerEvent) => { if (e.pointerType === "touch") onTouch.current!(e); };
+    const types = ["pointerdown", "pointermove", "pointerup", "pointercancel"] as const;
+    types.forEach((type) => el.addEventListener(type, h));
+    return () => types.forEach((type) => el.removeEventListener(type, h));
+  }, []);
+
   // Page-unit rect → stage (screen) rect, the space getClientRect() reports in.
   const rectOnScreen = (r: { x: number; y: number; width: number; height: number }) =>
     ({ x: origin.x + r.x * scale, y: origin.y + r.y * scale, width: r.width * scale, height: r.height * scale });
@@ -298,7 +370,7 @@ export default function Canvas({
               {page.nodes.map((n) => (
                 <NodeView key={n.id} n={edited?.id === n.id ? edited : n} unit={page.unit} top editing={editing}
                   inert={!canEditContent(n, role)}
-                  draggable={!readOnly && tool === "select" && !n.locked && canMove(n, role)}
+                  draggable={!readOnly && tool === "select" && !n.locked && canMove(n, role) && !pinching}
                   onDragEnd={(e) => commitKonva([...new Set([e.target, ...(trRef.current?.nodes() ?? [])])])}
                   onDblClick={() => {
                     if (readOnly || pathMode) return;

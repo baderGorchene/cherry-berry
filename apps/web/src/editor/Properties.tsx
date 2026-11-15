@@ -96,10 +96,15 @@ function VisualInfo({ assetId }: { assetId: string }) {
   );
 }
 
-export default function Properties({ ydoc, page, workspaceId, designId, kit, onLinked, nodes, readOnly, role, act, combinable, canConvert, message, onCombine, onConvert }: {
+const TEXT_TABS = ["Font", "Color", "Spacing", "Effects"] as const;
+type TextTab = (typeof TEXT_TABS)[number];
+
+/** `tabs` (the phone sheet) groups a text layer's sections under Font, Color, Spacing and Effects pills. */
+export default function Properties({ ydoc, page, workspaceId, designId, kit, onLinked, nodes, readOnly, role, act, combinable, canConvert, message, onCombine, onConvert, tabs = false }: {
   ydoc: Y.Doc; page: Page; workspaceId: string; designId: string; kit: BrandKit | null; onLinked(kitId: string | null): void; nodes: CherryNode[]; readOnly: boolean; role: Role; act(fn: () => void): void;
-  combinable: boolean; canConvert: boolean; message: string; onCombine(op: BoolOp): void; onConvert(n: CherryNode): void;
+  combinable: boolean; canConvert: boolean; message: string; onCombine(op: BoolOp): void; onConvert(n: CherryNode): void; tabs?: boolean;
 }) {
+  const [tab, setTab] = useState<TextTab>("Font");
   const { id: pageId, unit } = page;
   if (nodes.length === 0) return (
     <aside aria-label="Properties" className="ed-props">
@@ -195,10 +200,21 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
     </div>
   ) : <ColorField label={label} color={color} disabled={ro} onCommit={onCommit} />;
   const paint = (color: string, prev?: Paint): Paint => ({ type: "solid", color, opacity: prev?.opacity ?? 1 });
+  const tabbed = tabs && n.kind === "text";
+  const on = (t: TextTab) => !tabbed || tab === t;
+  const opacity = (
+    <Num label="Opacity" unit="%" value={n.opacity * 100} disabled={ro}
+      onCommit={(o) => set(n, { opacity: Math.min(100, Math.max(0, o)) / 100 })} />
+  );
 
   return (
     <aside aria-label="Properties" className="ed-props" key={n.id}>
-      <section className="ed-sec">
+      {tabbed && (
+        <div role="tablist" aria-label="Text properties" className="ed-pills">
+          {TEXT_TABS.map((t) => <button key={t} role="tab" aria-selected={tab === t} className="ed-pill-t" onClick={() => setTab(t)}>{t}</button>)}
+        </div>
+      )}
+      {on("Spacing") && <section className="ed-sec">
         <h2 className="ed-ph">Layout</h2>
         <div className="ed-grid">
           <Num label="X" unit={unit} value={n.x} disabled={ro} onCommit={(x) => set(n, { x })} />
@@ -206,44 +222,44 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
           <Num label="W" unit={unit} value={n.width} disabled={ro} onCommit={(w) => resize(w, n.height)} />
           <Num label="H" unit={unit} value={n.height} disabled={ro} onCommit={(h) => resize(n.width, h)} />
           <Num label="Rotation" unit="°" value={n.rotation} disabled={ro} onCommit={(rotation) => set(n, { rotation })} />
-          <Num label="Opacity" unit="%" value={n.opacity * 100} disabled={ro}
-            onCommit={(o) => set(n, { opacity: Math.min(100, Math.max(0, o)) / 100 })} />
+          {!tabbed && opacity}
           {n.kind === "rect" && (
             <Num label="Corner radius" unit={unit} value={n.cornerRadius} disabled={ro}
               onCommit={(r) => set(n, { cornerRadius: Math.max(0, r) })} />
           )}
         </div>
-      </section>
+      </section>}
+      {tabbed && tab === "Effects" && <section className="ed-sec"><h2 className="ed-ph">Effects</h2>{opacity}</section>}
 
       {n.kind === "image" && <VisualInfo assetId={n.assetId} />}
-      {n.kind === "text" && (
+      {n.kind === "text" && (on("Font") || on("Spacing")) && (
         <section className="ed-sec">
           <h2 className="ed-ph">Text</h2>
-          <label className="ed-f"><b>Font</b>
+          {on("Font") && <label className="ed-f"><b>Font</b>
             <select value={n.fontFamily} disabled={ro} onChange={(e) => set(n, { fontFamily: e.target.value })}>
               {(fonts.includes(n.fontFamily) ? fonts : [n.fontFamily, ...fonts]).map((f) => <option key={f}>{f}</option>)}
             </select>
-          </label>
+          </label>}
           <div className="ed-grid">
-            <Num label="Size" unit="pt" value={n.fontSize} disabled={ro}
-              onCommit={(fontSize) => fontSize > 0 && set(n, { fontSize })} />
-            <label className="ed-f"><b>Weight</b>
+            {on("Font") && <Num label="Size" unit="pt" value={n.fontSize} disabled={ro}
+              onCommit={(fontSize) => fontSize > 0 && set(n, { fontSize })} />}
+            {on("Font") && <label className="ed-f"><b>Weight</b>
               <select value={n.fontWeight} disabled={ro} onChange={(e) => set(n, { fontWeight: Number(e.target.value) })}>
                 {[400, 500, 600, 700].map((w) => <option key={w}>{w}</option>)}
               </select>
-            </label>
-            <Num label="Line height" value={n.lineHeight} disabled={ro} onCommit={(lineHeight) => lineHeight > 0 && set(n, { lineHeight })} />
-            <Num label="Letter spacing" value={n.letterSpacing} disabled={ro} onCommit={(letterSpacing) => set(n, { letterSpacing })} />
+            </label>}
+            {on("Spacing") && <Num label="Line height" value={n.lineHeight} disabled={ro} onCommit={(lineHeight) => lineHeight > 0 && set(n, { lineHeight })} />}
+            {on("Spacing") && <Num label="Letter spacing" value={n.letterSpacing} disabled={ro} onCommit={(letterSpacing) => set(n, { letterSpacing })} />}
           </div>
-          <label className="ed-f"><b>Align</b>
+          {on("Font") && <label className="ed-f"><b>Align</b>
             <select value={n.align} disabled={ro} onChange={(e) => set(n, { align: e.target.value })}>
               <option value="left">Left</option><option value="center">Center</option><option value="right">Right</option>
             </select>
-          </label>
+          </label>}
         </section>
       )}
 
-      {hasFill && (
+      {hasFill && on("Color") && (
         <section className="ed-sec">
           <h2 className="ed-ph">Fill</h2>
           {colorInput("Fill", fill?.color ?? "", (c) => set(n, { fill: c ? paint(c, fill) : undefined }))}
