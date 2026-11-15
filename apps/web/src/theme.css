@@ -199,7 +199,7 @@ button.row:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px;
   /* home */
   .home-title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .preset-grid { display: none; }
-  .sizes { display: flex; gap: 12px; list-style: none; padding: 0 20px 4px; margin: 0 -20px; overflow-x: auto; scrollbar-width: none; }
+  .sizes { display: flex; gap: 12px; list-style: none; padding: 4px 20px; margin: -4px -20px 0; overflow-x: auto; scrollbar-width: none; }
   .size { flex: none; width: 96px; display: flex; flex-direction: column; align-items: center; gap: 6px; font: 600 12px Inter, sans-serif; color: var(--ink); text-decoration: none; }
   .size-box { width: 96px; height: 80px; border-radius: 12px; background: #fff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; color: var(--berry); }
   .size-box svg { width: 26px; height: 26px; }
@@ -210,11 +210,11 @@ button.row:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px;
 
   /* library */
   .page-title { font-size: 26px; }
-  .filters { flex-direction: row; gap: 8px; margin: 0 -20px; padding: 0 20px 4px; overflow-x: auto; scrollbar-width: none; }
+  .filters { flex-direction: row; gap: 8px; margin: -4px -20px 0; padding: 4px 20px; overflow-x: auto; scrollbar-width: none; }
   .filters .ph-row { display: contents; }
   .filters .ph { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .filters .chips { flex-wrap: nowrap; }
-  .filters .chip { flex: none; font-size: 13px; }
+  .filters .chip { flex: none; min-height: 44px; font-size: 13px; }
   .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .tile { height: 110px; }
   .badge { padding: 2px 6px; border-radius: 5px; font: 700 10px Inter, sans-serif; }
@@ -257,7 +257,7 @@ button.row:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px;
   .auth-main { flex: 1; justify-content: flex-start; gap: 16px; padding: 24px 24px calc(24px + env(safe-area-inset-bottom)); }
   .auth .inp, .auth .btn:not(.btn-link) { min-height: 50px; font-size: 15px; border-radius: 12px; }
   .seg { flex: 1; display: flex; padding: 4px; background: #F1E8F3; border-radius: 12px; }
-  .server-opts .opt { flex: 1; justify-content: center; align-items: center; padding: 0; border: 0; border-radius: 9px; background: none; color: var(--muted); font: 600 13px Inter, sans-serif; }
+  .server-opts .opt { position: relative; flex: 1; justify-content: center; align-items: center; padding: 0; border: 0; border-radius: 9px; background: none; color: var(--muted); font: 600 13px Inter, sans-serif; }
   .server-opts .opt:has(input:checked) { background: #fff; color: var(--berry); box-shadow: 0 1px 3px rgba(34, 20, 42, .12); }
   .server-opts .opt input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; }
   .server-opts strong { font-weight: 600; }

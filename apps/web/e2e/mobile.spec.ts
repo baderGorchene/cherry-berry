@@ -69,6 +69,7 @@ test("phone library shows chips and upload button", async ({ page }) => {
     ys.add(Math.round((await b.boundingBox())!.y));
   }
   expect(ys.size).toBe(1);
+  expect((await workspace.boundingBox())!.height).toBeGreaterThanOrEqual(44);
   expect(await noSideScroll(page)).toBe(true);
 
   const upload = page.getByRole("button", { name: "Upload visuals" });
