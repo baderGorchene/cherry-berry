@@ -7,6 +7,9 @@ import { setupTestApp, signUp } from "./helpers";
 
 const PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 let stub: Server;
+/** What the stub does next: normal, or a failure/junk reply. */
+let behave: "ok" | "429" | "junk" | "badname" | "empty" | "slash" = "ok";
+const seen: { path: string; type?: string; dpi?: string | null }[] = [];
 let stubUrl = "";
 let t: Awaited<ReturnType<typeof setupTestApp>>;      // with PRINT_URL
 let down: Awaited<ReturnType<typeof setupTestApp>>;   // PRINT_URL points at a closed port
@@ -17,7 +20,17 @@ beforeAll(async () => {
     const chunks: Buffer[] = [];
     req.on("data", (c) => chunks.push(c));
     req.on("end", () => {
-      const path = new URL(req.url!, "http://x").pathname;
+      const u = new URL(req.url!, "http://x");
+      const path = u.pathname;
+      seen.push({ path, type: req.headers["content-type"], dpi: u.searchParams.get("dpi") });
+      if (behave === "429") { res.writeHead(429); return void res.end("{}"); }
+      if (behave === "junk") { res.writeHead(200, { "content-type": "application/json" }); return void res.end("not json"); }
+      if (behave === "empty") { res.writeHead(200); return void res.end(JSON.stringify({ plates: [] })); }
+      if (behave === "badname") { res.writeHead(200); return void res.end(JSON.stringify({ plates: [{ page: 1, name: 5, png: "AA==" }] })); }
+      if (behave === "slash") {
+        res.writeHead(200);
+        return void res.end(JSON.stringify({ plates: [{ page: 1, name: "..\\..\\x", png: "AA==" }, { page: 1, name: "../x", png: "AA==" }] }));
+      }
       if (path === "/pdfx") {
         res.writeHead(200, { "content-type": "application/pdf" });
         res.end(Buffer.concat([Buffer.from("%PDF-1.4 CMYK-MARKER "), Buffer.concat(chunks).subarray(0, 5)]));
@@ -62,7 +75,7 @@ describe("print exports", () => {
     method: "POST", url: `/api/designs/${who.id}/export`, headers: { cookie: who.cookie }, payload: { format, pageIds },
   });
 
-  beforeEach(async () => { s = await setup(t); pageIds = await firstPage(t, s); });
+  beforeEach(async () => { behave = "ok"; seen.length = 0; s = await setup(t); pageIds = await firstPage(t, s); });
 
   it("pdf-x export returns the converted PDF", async () => {
     const res = await run(t, "pdf-x");
@@ -80,6 +93,36 @@ describe("print exports", () => {
     const files = unzipSync(new Uint8Array(res.rawPayload));
     expect(Object.keys(files).sort()).toEqual(["p1-Black.png", "p1-Cyan.png", "p1-Magenta.png", "p1-Yellow.png"]);
     expect(strFromU8(files["p1-Cyan.png"]!.subarray(1, 4))).toBe("PNG");
+  });
+
+  it("sends the pdf content type and the dpi", async () => {
+    await run(t, "pdf-x");
+    await run(t, "plates");
+    expect(seen.map((x) => x.type)).toEqual(["application/pdf", "application/pdf"]);
+    expect(seen.find((x) => x.path === "/plates")?.dpi).toBe("150");
+  });
+
+  it("a service error status gives print_unavailable", async () => {
+    behave = "429";
+    const res = await run(t, "pdf-x");
+    expect([res.statusCode, res.json().error]).toEqual([503, "print_unavailable"]);
+  });
+
+  it("junk, empty and badly shaped plates give print_unavailable", async () => {
+    for (const b of ["junk", "empty", "badname"] as const) {
+      behave = b;
+      const res = await run(t, "plates");
+      expect([b, res.statusCode, res.json().error]).toEqual([b, 503, "print_unavailable"]);
+    }
+  });
+
+  it("plate names cannot escape the zip entry name", async () => {
+    behave = "slash";
+    const res = await run(t, "plates");
+    expect(res.statusCode).toBe(200);
+    const names = Object.keys(unzipSync(new Uint8Array(res.rawPayload)));
+    expect(names).toHaveLength(2);
+    for (const n of names) expect(n).not.toMatch(/[\\/]/);
   });
 
   it("print formats need PRINT_URL", async () => {

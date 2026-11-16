@@ -114,10 +114,11 @@ export function preflight(
 
   if (format !== "cherry") {
     const cmyk = pages.some((p) => p.colorMode === "cmyk");
-    const done = cmyk && env.print;
+    const done = cmyk && env.print && (format === "pdf-x" || format === "plates");
     out.push({
       id: "color", status: cmyk && !done ? "warn" : "pass", title: done ? "Converted to CMYK" : cmyk ? "Exported as RGB" : "Colors",
       detail: done ? "Converted to CMYK with the print service"
+        : cmyk && env.print ? "Exported as RGB. Choose PDF/X or Colour plates for CMYK."
         : cmyk ? "CMYK and PDF/X come with the print service; spot swatches aren't supported yet." : "Colors export as RGB.",
       nodes: [],
     });

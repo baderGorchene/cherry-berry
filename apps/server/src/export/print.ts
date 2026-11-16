@@ -7,7 +7,7 @@ const unavailable = () => new HttpError(503, "print_unavailable");
 /** POSTs to the print service. Network errors, timeouts and any non-2xx status all become 503 print_unavailable. */
 async function post(url: string, body: Uint8Array): Promise<Response> {
   try {
-    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/pdf" }, body: Buffer.from(body), signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/pdf" }, body: body as BodyInit, signal: AbortSignal.timeout(TIMEOUT_MS) });
     if (!res.ok) { await res.body?.cancel(); throw unavailable(); }
     return res;
   } catch (e) {
@@ -28,10 +28,21 @@ export async function toPlates(printUrl: string, pdf: Uint8Array, dpi = 150): Pr
   const res = await post(new URL(`/plates?dpi=${dpi}`, printUrl).href, pdf);
   try {
     const { plates } = (await res.json()) as { plates: { page: number; name: string; png: string }[] };
+    if (!Array.isArray(plates) || !plates.length
+      || !plates.every((p) => p && Number.isInteger(p.page) && typeof p.name === "string" && typeof p.png === "string")) throw unavailable();
     return plates.map((p) => ({ page: p.page, name: p.name, png: new Uint8Array(Buffer.from(p.png, "base64")) }));
   } catch { throw unavailable(); } // junk from the service
 }
 
-const safe = (name: string) => name.replace(/[/\:*?"<>|\u0000-\u001f]/g, "-");
-export const zipPlates = (plates: Plate[]): Uint8Array =>
-  zipSync(Object.fromEntries(plates.map((p) => [`p${p.page}-${safe(p.name)}.png`, p.png])));
+const safe = (name: string) => name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-");
+/** Files named p<page>-<ink>.png; a name that collides after sanitising gets a numeric suffix. */
+export function zipPlates(plates: Plate[]): Uint8Array {
+  const files: Record<string, Uint8Array> = {};
+  for (const p of plates) {
+    const stem = `p${p.page}-${safe(p.name)}`;
+    let name = `${stem}.png`;
+    for (let n = 2; name in files; n++) name = `${stem}-${n}.png`;
+    files[name] = p.png;
+  }
+  return zipSync(files);
+}

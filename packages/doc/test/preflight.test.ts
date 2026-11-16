@@ -97,6 +97,14 @@ describe("preflight", () => {
     expect(c.detail).toBe("Converted to CMYK with the print service");
   });
 
+  it("cmyk with print but a non-converting format warns to pick PDF/X", () => {
+    const d = mk([]);
+    d.pages[0]!.colorMode = "cmyk";
+    const c = get(preflight(d, { format: "pdf-print", pageIds: [d.pages[0]!.id], scale: 1 }, { fonts: ["Inter"], assets: [], print: true }), "color")!;
+    expect(c.status).toBe("warn");
+    expect(c.detail).toBe("Exported as RGB. Choose PDF/X or Colour plates for CMYK.");
+  });
+
   it("cmyk copy mentions spot swatches without print", () => {
     const d = mk([]);
     d.pages[0]!.colorMode = "cmyk";

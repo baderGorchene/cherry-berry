@@ -1,4 +1,6 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmdirSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { createWorkspace, signUp, unique, uniquePng } from "./helpers";
 
@@ -62,6 +64,15 @@ async function seedQueue(browser: Browser, titles: string[], svgTitle: string) {
   for (const c of [owner, ...reporters]) await c.ctx.close();
 }
 
+// Instance settings are global to the server, so admin tests never overlap, even across --repeat-each workers.
+const LOCK = join(tmpdir(), "cherry-e2e-admin.lock");
+test.beforeEach(async () => {
+  for (let i = 0; i < 600; i++) {
+    try { mkdirSync(LOCK); return; } catch { await new Promise((r) => setTimeout(r, 200)); }
+  }
+  throw new Error("admin e2e lock is stuck");
+});
+
 // Runs even after a failure or timeout, so a closed registration never leaks into the other specs.
 test.afterEach(async ({ browser }) => {
   const ctx = await browser.newContext();
@@ -71,6 +82,7 @@ test.afterEach(async ({ browser }) => {
   expect(res.ok()).toBe(true);
   await ctx.close();
 });
+test.afterEach(() => { try { rmdirSync(LOCK); } catch { /* already gone */ } }); // after the reset above
 
 test("non-admin has no admin menu and /admin redirects home", async ({ page }) => {
   await signUp(page, unique("plain"));
@@ -82,23 +94,25 @@ test("non-admin has no admin menu and /admin redirects home", async ({ page }) =
   await expect(page).toHaveURL(/\/$/);
 });
 
+/** Clicks Save and waits for the settings PUT to come back. */
+async function save(page: Page) {
+  const put = page.waitForResponse((r) => r.url().endsWith("/api/admin/settings") && r.request().method() === "PUT");
+  await page.getByRole("button", { name: "Save" }).click();
+  expect((await put).ok()).toBe(true);
+  await expect(page.getByRole("status")).toHaveText("Saved");
+}
+
 test("admin changes registration to allowed domains and a stranger can't sign up", async ({ page, browser }) => {
   await asAdmin(page);
   await page.goto("/workspaces"); // an admin without a workspace still gets in from here
   await expect(page.getByRole("link", { name: "Instance admin" })).toBeVisible();
-  await page.goto("/");
-  await page.getByRole("button", { name: /^Workspace:/ }).click();
-  await page.getByRole("link", { name: "Instance admin" }).click();
-  await expect(page).toHaveURL(/\/admin$/);
-  await expect(page.getByRole("heading", { name: "Instance admin" })).toBeVisible();
-  await expect(page.getByText("PGlite")).toBeVisible();
-
-  await page.getByRole("link", { name: "Sign-in & registration" }).click();
+  await page.goto("/admin/registration");
+  // The form renders once the saved settings have loaded; touching it earlier lets the load overwrite the edit.
+  await expect(page.getByRole("button", { name: "Save" })).toBeVisible();
   await page.getByLabel("Only emails on allowed domains").check();
   // example.com stays allowed: the other specs sign up there while this one runs.
   await page.getByLabel("Allowed domains", { exact: true }).fill("acme.test\nexample.com");
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("status")).toHaveText("Saved");
+  await save(page);
 
   const stranger = await (await browser.newContext()).newPage();
   await stranger.goto("/sign-in");
@@ -113,8 +127,17 @@ test("admin changes registration to allowed domains and a stranger can't sign up
   // A bad domain hidden behind another mode doesn't block saving that mode.
   await page.getByLabel("Allowed domains", { exact: true }).fill("not a domain");
   await page.getByLabel("Anyone").check();
-  await page.getByRole("button", { name: "Save" }).click();
-  await expect(page.getByRole("status")).toHaveText("Saved");
+  await save(page);
+});
+
+test("account menu opens the instance admin overview", async ({ page }) => {
+  await asAdmin(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Workspace:/ }).click();
+  await page.getByRole("link", { name: "Instance admin" }).click();
+  await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByRole("heading", { name: "Instance admin" })).toBeVisible();
+  await expect(page.getByText("PGlite")).toBeVisible();
 });
 
 test("admin suspends a user who then can't sign in", async ({ page, browser }) => {
