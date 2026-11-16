@@ -8,7 +8,6 @@ const X = 0.6, W = 7.3;
 
 export default starterDoc("starter-yard-sale-poster", "Yard sale poster", [
   page("yard-sale-poster-p1", "Poster", size, YELLOW, [
-    b.bleedFill(size, YELLOW),
     b.rect("Band", -0.125, -0.125, 8.75, 5.125, BLACK),
     b.text("Kicker", X, 0.6, 5, "THIS SATURDAY ONLY", { family: "Inter", size: 14, weight: 700, letterSpacing: 0.04, color: YELLOW }),
     b.text("Headline", X - 0.05, 0.95, 5.2, "YARD\nSALE", { family: "Bebas Neue", size: 150, lineHeight: 0.86, color: YELLOW }),

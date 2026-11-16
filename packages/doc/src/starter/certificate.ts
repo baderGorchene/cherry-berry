@@ -7,7 +7,6 @@ const X = 20, W = 257;
 
 export default starterDoc("starter-certificate", "Certificate of achievement", [
   page("certificate-p1", "Certificate", size, IVORY, [
-    b.bleedFill(size, IVORY),
     b.outline("Border", 10, 10, 277, 190, NAVY, 1.2),
     b.outline("Inner border", 14, 14, 269, 182, GOLD, 0.4),
     b.text("Kicker", X, 34, W, "CERTIFICATE OF ACHIEVEMENT", { family: "Montserrat", size: 12, weight: 600, letterSpacing: 1.5, align: "center", color: OCHRE }),

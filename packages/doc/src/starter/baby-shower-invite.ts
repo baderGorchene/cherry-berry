@@ -7,7 +7,6 @@ const X = 0.9, W = 3.2;
 
 export default starterDoc("starter-baby-shower-invite", "Baby shower invitation", [
   page("baby-shower-invite-p1", "Invitation", size, PEACH, [
-    b.bleedFill(size, PEACH),
     b.element("blob-arch", X, 0.8, W, BLUSH),
     b.element("blob-pebble", -0.125, 5.9, 1.4, SAGE),
     b.element("sparkle-four", 4.15, 0.45, 0.4, SAGE),

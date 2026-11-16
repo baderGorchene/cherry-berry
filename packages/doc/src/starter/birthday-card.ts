@@ -13,7 +13,6 @@ const confetti = [
 
 export default starterDoc("starter-birthday-card", "Birthday card", [
   page("birthday-card-p1", "Front", size, SKY, [
-    b.bleedFill(size, SKY),
     b.element("doodle-cloud", 0.35, 0.45, 1.6, WHITE),
     b.element("doodle-cloud", 3.1, 0.95, 1.4, WHITE),
     b.ellipse("Sun", 2.05, 0.5, 0.9, 0.9, SUN),

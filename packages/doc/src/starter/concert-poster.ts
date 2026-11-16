@@ -7,7 +7,6 @@ const X = 24, W = 249;
 
 export default starterDoc("starter-concert-poster", "Concert poster", [
   page("concert-poster-p1", "Poster", size, INDIGO, [
-    b.bleedFill(size, INDIGO),
     b.ellipse("Glow", 64, 24, 210, 210, GLOW),
     b.ellipse("Sun", 89, 49, 160, 160, ORANGE),
     b.element("sparkle-four", 248, 30, 22, CREAM),

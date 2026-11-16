@@ -13,7 +13,6 @@ const sections = [
 
 export default starterDoc("starter-cafe-menu", "Café menu", [
   page("cafe-menu-p1", "Menu", size, CREAM, [
-    b.bleedFill(size, CREAM),
     b.element("blob-halfmoon", 108, -3, 43, BISCUIT, { rotation: 180 }),
     b.element("blob-pebble", -3, 186, 30, BISCUIT),
     b.text("Kicker", X, 14, W, "THE LITTLE CORNER CAFÉ", { family: "Inter", size: 8, weight: 600, letterSpacing: 0.8, align: "center", color: RUST }),

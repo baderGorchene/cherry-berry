@@ -37,7 +37,7 @@ export default function DocPreview({ doc, pageId, width, height, highlight = [],
     <Stage key={fontsReady} width={page.width * scale} height={page.height * scale} listening={false}>
       <Layer listening={false}>
         <Group scaleX={scale} scaleY={scale}>
-          <Rect width={page.width} height={page.height} fill={paint(page.background)} />
+          <Rect x={-page.bleed} y={-page.bleed} width={page.width + 2 * page.bleed} height={page.height + 2 * page.bleed} fill={paint(page.background)} />
           {page.nodes.map(view)}
           {ghostPage && <Group opacity={0.4}>{ghostPage.nodes.map(view)}</Group>}
           {page.nodes.filter((n) => highlight.includes(n.id)).map((n) => {

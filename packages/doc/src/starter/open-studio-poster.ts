@@ -8,7 +8,6 @@ const X = 1;
 
 export default starterDoc("starter-open-studio-poster", "Open studio poster", [
   page("open-studio-poster-p1", "Poster", size, PAPER, [
-    b.bleedFill(size, PAPER),
     b.rect("Red block", -0.125, -0.125, 9.125, 12.125, RED),
     b.ellipse("Blue circle", 9.6, 1.4, 7.6, 7.6, BLUE),
     b.element("sparkle-four", 14.6, 9.6, 1.8, BLACK),

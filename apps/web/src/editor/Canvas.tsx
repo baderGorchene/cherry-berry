@@ -445,12 +445,13 @@ export default function Canvas({
         onMouseLeave={() => { pathInput.current?.hover(null); onCursor(null); }} onWheel={onWheel}>
         <Layer key={fontsVersion}>
           <Group ref={pageRef} x={origin.x} y={origin.y} scaleX={scale} scaleY={scale}>
+            <Rect x={-page.bleed} y={-page.bleed} width={page.width + 2 * page.bleed} height={page.height + 2 * page.bleed}
+              fill={paint(page.background)}
+              shadowColor="rgba(34,20,42,.22)" shadowBlur={50} shadowOffsetY={20} shadowForStrokeEnabled={false} />
             {page.bleed > 0 && (
               <Rect x={-page.bleed} y={-page.bleed} width={page.width + 2 * page.bleed} height={page.height + 2 * page.bleed}
                 stroke="#ED96D7" strokeWidth={1} strokeScaleEnabled={false} dash={[6, 4]} listening={false} />
             )}
-            <Rect width={page.width} height={page.height} fill={paint(page.background)}
-              shadowColor="rgba(34,20,42,.22)" shadowBlur={50} shadowOffsetY={20} shadowForStrokeEnabled={false} />
             <Group ref={nodesRef}>
               {page.nodes.map((n) => (
                 <NodeView key={n.id} n={edited?.id === n.id ? edited : n} unit={page.unit} top editing={editing}

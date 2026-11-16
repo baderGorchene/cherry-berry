@@ -12,7 +12,6 @@ const details = [
 
 export default starterDoc("starter-jazz-night-flyer", "Jazz night flyer", [
   page("jazz-night-flyer-p1", "Flyer", { width: 210, height: 297, unit: "mm", colorMode: "cmyk", bleed: 3 }, "#FFF4F9", [
-    b.bleedFill({ width: 210, height: 297, bleed: 3 }, "#FFF4F9"),
     b.rect("Band", -3, -3, 216, 186, BERRY),
     b.element("sparkle-burst", 128, 16, 66, BLUSH, { rotation: 12 }),
     b.element("sparkle-four", 168, 104, 14, PETAL),

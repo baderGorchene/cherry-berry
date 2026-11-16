@@ -245,6 +245,17 @@ test("on a print starter, clicking empty page shows the nothing-selected toolbar
   await page.mouse.click(c.x + c.width / 2, c.y + c.height / 2 + (266 - 297 / 2) * mm);
   await expect(bar.getByLabel("Page width")).toHaveValue("210");
   await expect(bar.getByRole("group", { name: "Page size" })).toBeVisible();
+
+  const sample = () => page.locator("[aria-label$=' canvas'] canvas").evaluate((el: HTMLCanvasElement, pt) => {
+    const r = el.getBoundingClientRect();
+    const dpr = el.width / r.width;
+    const p = el.getContext("2d")!.getImageData(Math.round((pt.x - r.left) * dpr), Math.round((pt.y - r.top) * dpr), 1, 1).data;
+    return [p[0], p[1], p[2]];
+  }, { x: c.x + c.width / 2, y: c.y + c.height / 2 + (266 - 297 / 2) * mm });
+  const before = await sample();
+  await bar.getByRole("button", { name: "Background colour" }).click();
+  await page.getByRole("dialog", { name: "Background colour" }).getByRole("group", { name: "Palette" }).getByRole("button", { name: "#8E1EA2" }).click();
+  await expect.poll(sample).not.toEqual(before);
 });
 
 test("viewers can't use built-in starters", async ({ page, browser }) => {

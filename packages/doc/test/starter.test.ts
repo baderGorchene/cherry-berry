@@ -127,20 +127,12 @@ describe("STARTER_TEMPLATES", () => {
       }
     });
 
-    // Ruling: a print page's background must reach the cut, so its bottom-most node is a visible, opaque rect in the page
-    // background's colour covering the whole bleed box. Locked, so empty-canvas clicks still reach the page.
-    it("covers the full bleed box with a locked background rect at the bottom of every page with bleed", () => {
+    // Page background paints all the way to the bleed edge, so print starters must not cover it with a locked Background shape.
+    it("uses an opaque page background with no locked full-page cover rect", () => {
       for (const p of t.doc.pages) {
-        if (p.bleed <= 0) continue;
-        const n = p.nodes[0], e = 1e-6;
-        expect(n?.kind, p.id).toBe("rect");
-        if (n?.kind !== "rect") continue;
-        expect(n.hidden || n.opacity !== 1 || n.rotation !== 0, p.id).toBe(false);
-        expect(n.locked, p.id).toBe(true);
-        expect(n.fill?.opacity, p.id).toBe(1);
-        expect(n.fill?.color.toUpperCase(), p.id).toBe(p.background.color.toUpperCase());
-        expect(n.x <= -p.bleed + e && n.y <= -p.bleed + e && n.x + n.width >= p.width + p.bleed - e
-          && n.y + n.height >= p.height + p.bleed - e, p.id).toBe(true);
+        expect(p.background.opacity, p.id).toBe(1);
+        const hasLockedBg = p.nodes.some((n) => n.kind === "rect" && n.locked && n.name === "Background");
+        expect(hasLockedBg, p.id).toBe(false);
       }
     });
 

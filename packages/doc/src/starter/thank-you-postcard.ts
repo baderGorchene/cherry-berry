@@ -6,7 +6,6 @@ const SAGE = "#DCE5D3", FOREST = "#2E4A33", CLAY = "#C4704F", CREAM = "#F7F4EC";
 
 export default starterDoc("starter-thank-you-postcard", "Thank-you postcard", [
   page("thank-you-postcard-p1", "Postcard", size, SAGE, [
-    b.bleedFill(size, SAGE),
     b.rect("Panel", -0.125, -0.125, 3.125, 4.25, FOREST),
     b.element("sparkle-flower", 1.95, 2.75, 0.8, CLAY),
     b.text("Headline", 0.35, 0.7, 2.4, "Thank\nyou", { family: "Lora", size: 48, weight: 700, lineHeight: 1, color: CREAM }),
