@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspace, signUp, unique, newDesign } from "./helpers";
+import { createWorkspace, newDesign, openAsViewer, signUp, unique } from "./helpers";
 
 test("new user creates a workspace and reaches home", async ({ page }) => {
   await signUp(page, unique("ada"));
@@ -132,4 +132,39 @@ test("a new user sees the welcome line with templates first, and a starter opens
   await page.getByRole("link", { name: "Cards & invites" }).click();
   await expect(page).toHaveURL(/\/templates\?category=cards$/);
   await expect(page.getByRole("button", { name: "Cards & invites", exact: true })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("recent previews load only for cards near the viewport", async ({ page }) => {
+  await signUp(page, unique("lazy"));
+  await createWorkspace(page, "Lazy Studio");
+  const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
+  for (let i = 0; i < 24; i++) {
+    const res = await page.request.post(`/api/workspaces/${workspaces[0].id}/designs`, { data: { title: `Lazy ${i}`, width: 1080, height: 1080, unit: "px", colorMode: "rgb" } });
+    expect(res.status()).toBe(201);
+  }
+  const fetched = new Set<string>();
+  page.on("request", (r) => { const m = new URL(r.url()).pathname.match(/^\/api\/designs\/([^/]+)$/); if (m) fetched.add(m[1]!); });
+  await page.goto("/");
+  await page.getByRole("button", { name: /^See all \(24\)/ }).click();
+  await expect(page.locator(".recent > li")).toHaveCount(24);
+  await expect.poll(() => fetched.size).toBeGreaterThan(0);
+  await page.waitForTimeout(500);
+  expect(fetched.size).toBeLessThan(24);
+  const near = fetched.size;
+  await page.locator(".recent > li").last().scrollIntoViewIfNeeded();
+  await expect.poll(() => fetched.size).toBeGreaterThan(near);
+});
+
+test("viewers get no shortcuts or create button on Home, and starters are disabled", async ({ page, browser }) => {
+  await signUp(page, unique("owner-v"));
+  await createWorkspace(page, "View Studio");
+  await newDesign(page, "Social post");
+  const viewer = await openAsViewer(browser, page);
+  await viewer.goto("/");
+  await expect(viewer.getByRole("heading", { name: "What are you making today?" })).toBeVisible();
+  await expect(viewer.getByRole("list", { name: "Create" })).toHaveCount(0);
+  await expect(viewer.getByRole("button", { name: /^(New design|Create a design)$/ })).toHaveCount(0);
+  const uses = viewer.getByRole("button", { name: /^Use / });
+  await expect(uses).toHaveCount(4);
+  for (const b of await uses.all()) await expect(b).toBeDisabled();
 });

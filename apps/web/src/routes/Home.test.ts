@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { contrast } from "@cherry/doc";
 import { expect, test } from "vitest";
 import type { Design } from "../api";
 import { edited, searchHome } from "./Home";
@@ -25,4 +27,11 @@ test("searchHome matches designs and templates separately, ignoring case", () =>
 
 test("searchHome finds nothing for an empty query", () => {
   expect(searchHome("  ", [design("1", "x")], [{ id: "a", name: "x" }])).toEqual({ designs: [], templates: [] });
+});
+
+test("white text on the hero gradient has at least 4.5:1 contrast at every stop", () => {
+  const css = readFileSync(new URL("../theme.css", import.meta.url), "utf8");
+  const stops = css.match(/\.home-hero \{[^}]*?linear-gradient\(([^)]*)\)/)![1]!.match(/#[0-9A-Fa-f]{6}/g)!;
+  expect(stops.length).toBeGreaterThanOrEqual(2);
+  for (const s of stops) expect(contrast(s, "#FFFFFF"), s).toBeGreaterThanOrEqual(4.5);
 });
