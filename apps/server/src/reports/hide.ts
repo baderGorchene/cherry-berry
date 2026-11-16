@@ -2,7 +2,7 @@ import { sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 /**
  * SQL predicate: false for a public item that open reports from 3+ users have hidden, unless `userId` uploaded it.
- * ponytail: fixed threshold of 3; the instance moderation queue in Phase 9 replaces this rule.
+ * ponytail: fixed threshold of 3; this rule stays as a safety net alongside the instance moderation queue.
  */
 export const notHidden = (
   targetType: "asset" | "shape" | "template", id: AnyColumn, visibility: AnyColumn, createdBy: AnyColumn, userId: string,

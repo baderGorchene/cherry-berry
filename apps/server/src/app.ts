@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { createAuth, createRequireAdmin, createRequireUser, isAdmin } from "./auth";
 import { registerAdminRoutes } from "./admin/routes";
-import { getSettings } from "./admin/settings";
+import { getSettings, unclaimedAdmins } from "./admin/settings";
 import type { Config } from "./config";
 import type { Db } from "./db/client";
 import type { Storage } from "./storage";
@@ -39,13 +39,18 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage;
   };
   const app = Fastify(options);
   const auth = createAuth(config, deps.db);
-  const requireUser = createRequireUser(auth);
-  const requireAdmin = createRequireAdmin(auth, config);
+  const requireUser = createRequireUser(auth, deps.db);
+  const requireAdmin = createRequireAdmin(auth, config, deps.db);
   const collab = createCollab(deps.db, auth, config.publicUrl);
   app.decorate("collab", collab);
   registerAutoVersions(deps.db, collab, deps.autoVersionMs ?? AUTO_VERSION_MS);
   // Stores every live document before the database closes.
   app.addHook("onClose", () => collab.close());
+  app.addHook("onReady", async () => {
+    for (const e of await unclaimedAdmins(deps.db, config.adminEmails)) {
+      app.log.warn(`ADMIN_EMAILS lists ${e} but no account exists: whoever first signs up with that email becomes instance admin. Create it now.`);
+    }
+  });
 
   app.setErrorHandler((err, _req, reply) => {
     if (err instanceof HttpError) return reply.status(err.statusCode).send({ error: err.code });

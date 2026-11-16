@@ -71,6 +71,19 @@ async function setup(app: App) {
   return { cookie: u.cookie, id: d, info };
 }
 
+describe("PRINT_URL with a path prefix", () => {
+  it("keeps the prefix", async () => {
+    seen.length = 0; behave = "ok";
+    const p = await setupTestApp({ printUrl: `${stubUrl}/print` });
+    try {
+      const s2 = await setup(p);
+      const ids = await firstPage(p, s2);
+      await p.app.inject({ method: "POST", url: `/api/designs/${s2.id}/export`, headers: { cookie: s2.cookie }, payload: { format: "pdf-x", pageIds: ids } });
+      expect(seen.map((x) => x.path)).toEqual(["/print/pdfx"]);
+    } finally { await p.close(); }
+  });
+});
+
 describe("print exports", () => {
   let s: Awaited<ReturnType<typeof setup>>;
   let pageIds: string[];

@@ -45,17 +45,20 @@ export type Auth = ReturnType<typeof createAuth>;
 export type SessionUser = { id: string; email: string; name: string };
 
 /** Returns the signed-in user or throws a 401 `unauthorized` HttpError. */
-export function createRequireUser(auth: Auth) {
+export function createRequireUser(auth: Auth, db: Db) {
   return async (request: FastifyRequest): Promise<SessionUser> => {
     const s = await auth.api.getSession({ headers: fromNodeHeaders(request.headers) });
     if (!s) throw new HttpError(401, "unauthorized");
+    // Catches a session created in the instant before a suspension deleted the user's sessions.
+    const [u] = await db.select({ at: schema.user.suspendedAt }).from(schema.user).where(eq(schema.user.id, s.user.id));
+    if (u?.at) throw new HttpError(403, "suspended");
     return { id: s.user.id, email: s.user.email, name: s.user.name };
   };
 }
 
 /** Like createRequireUser, then 403 `forbidden` unless the user's email is in ADMIN_EMAILS. */
-export function createRequireAdmin(auth: Auth, config: Config) {
-  const requireUser = createRequireUser(auth);
+export function createRequireAdmin(auth: Auth, config: Config, db: Db) {
+  const requireUser = createRequireUser(auth, db);
   return async (request: FastifyRequest): Promise<SessionUser> => {
     const user = await requireUser(request);
     if (!isAdmin(config, user.email)) throw new HttpError(403, "forbidden");

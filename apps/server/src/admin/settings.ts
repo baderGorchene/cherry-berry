@@ -1,7 +1,7 @@
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "../db/client";
-import { instanceSettings, invitations } from "../db/schema";
+import { instanceSettings, invitations, user } from "../db/schema";
 
 export type InstanceSettings = {
   registration: "open" | "invited" | "domains"; allowedDomains: string[];
@@ -34,6 +34,14 @@ export async function saveSettings(db: Db, s: InstanceSettings): Promise<Instanc
   await db.insert(instanceSettings).values({ id: 1, ...v })
     .onConflictDoUpdate({ target: instanceSettings.id, set: v });
   return getSettings(db);
+}
+
+/** ADMIN_EMAILS entries nobody has signed up with yet: whoever registers one first becomes instance admin. */
+export async function unclaimedAdmins(db: Db, adminEmails: string[]): Promise<string[]> {
+  if (!adminEmails.length) return [];
+  const rows = await db.select({ email: user.email }).from(user).where(inArray(sql`lower(${user.email})`, adminEmails));
+  const have = new Set(rows.map((r) => r.email.toLowerCase()));
+  return adminEmails.filter((e) => !have.has(e));
 }
 
 export async function mayRegister(db: Db, email: string, s: InstanceSettings, adminEmails: string[]): Promise<boolean> {

@@ -65,6 +65,9 @@ export default function Registration() {
                 <p className="muted adm-hint">One per line. Subdomains aren't included. Admins can always sign up.</p>
               </div>
             )}
+            {s.registration === "invited" && (
+              <p className="muted adm-hint">Anyone who can invite to a workspace can admit new accounts. Set workspace creation to admins to restrict this.</p>
+            )}
           </Radios>
           <Radios legend="Who can create workspaces" name="workspaceCreation" options={CREATORS} value={s.workspaceCreation} onChange={(workspaceCreation) => change({ workspaceCreation })} />
           <Radios legend="Max upload size" name="maxUploadMb" options={SIZES.map((n) => [n, `${n} MB`])} value={s.maxUploadMb} onChange={(maxUploadMb) => change({ maxUploadMb })} />

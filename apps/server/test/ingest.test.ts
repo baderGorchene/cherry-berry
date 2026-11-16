@@ -31,6 +31,16 @@ const HOSTILE = `<?xml version="1.0"?><svg xmlns="http://www.w3.org/2000/svg" xm
 <image HREF="http://example.invalid/e.png" width="10" height="10"/>
 <circle fill="#8E1EA2" cx="5" cy="5" r="5"/></svg>`;
 
+describe("ingest size cap", () => {
+  it("accepts a valid image over 50 MB (the route enforces max_upload_mb)", async () => {
+    const png = await solid(10, 10).png().toBuffer();
+    expect(await code(ingest(Buffer.concat([png, Buffer.alloc(51 * 1024 * 1024)])))).toBe("ok");
+  });
+  it("rejects over 100 MB", async () => {
+    expect(await code(ingest(Buffer.alloc(101 * 1024 * 1024, 1)))).toBe("too_large");
+  });
+});
+
 describe("ingest rasters", () => {
   it.each(["png", "jpeg", "webp"] as const)("%s ingests with size and a webp thumb no larger than 480", async (fmt) => {
     const r = await ingest(await solid(1000, 500)[fmt]().toBuffer());

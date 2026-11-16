@@ -317,6 +317,7 @@ const COPY: Record<string, string> = {
   unsupported_type: "That file type isn't supported. Use PNG, JPG, WEBP, GIF or SVG.",
   invalid_image: "That file couldn't be read as an image.",
   upload_too_large: "That file is too large for this server.",
+  storage_full: "This server is out of storage. Ask an admin to free space or raise the quota.",
   busy: "The server is busy. Try again in a moment.",
   library_not_found: "This visual is no longer available.",
   library_forbidden: "You don't have permission to change this visual.",

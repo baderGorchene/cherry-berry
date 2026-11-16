@@ -1,0 +1,3 @@
+*.test.ts
+src/fixture.ts
+node_modules

@@ -1,7 +1,8 @@
+import { eq } from "drizzle-orm";
 import sharp from "sharp";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { assets, brandFonts, brandKits, designs, memberships, user, workspaces } from "../src/db/schema";
-import { saveSettings, type InstanceSettings } from "../src/admin/settings";
+import { saveSettings, unclaimedAdmins, type InstanceSettings } from "../src/admin/settings";
 import { setupTestApp, signUp } from "./helpers";
 
 let t: Awaited<ReturnType<typeof setupTestApp>>;
@@ -109,6 +110,19 @@ describe("suspension", () => {
     expect((await get("/api/admin/users?q=bo@", a.cookie)).json().users[0].suspended).toBe(true);
     expect((await post(`/api/admin/users/${bo.userId}/unsuspend`, a.cookie)).statusCode).toBe(204);
     expect((await signIn("bo@example.com")).statusCode).toBe(200);
+  });
+
+  it("a session created in a race with a suspension is refused", async () => {
+    const bo = await signUp(t.app, "bo@example.com");
+    await t.db.update(user).set({ suspendedAt: new Date() }).where(eq(user.id, bo.userId)); // the session survives, as in the race
+    const res = await get("/api/workspaces/mine", bo.cookie);
+    expect(res.statusCode).toBe(403);
+    expect(res.json()).toEqual({ error: "suspended" });
+  });
+
+  it("lists admin emails with no account yet", async () => {
+    await signUp(t.app, "root@example.com");
+    expect(await unclaimedAdmins(t.db, ["root@example.com", "root2@example.com"])).toEqual(["root2@example.com"]);
   });
 });
 

@@ -41,6 +41,8 @@ services:
     environment:
       PRINT_ICC_PROFILE: ""
     init: true
+    # Ghostscript plus a 100-page plates job can use a lot of memory; keep it from starving the host.
+    mem_limit: 2g
     # No auth: keep it bound to localhost, or on a private network. Never expose it publicly.
     ports: ["127.0.0.1:8080:8080"]
 volumes:

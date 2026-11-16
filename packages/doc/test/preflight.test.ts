@@ -105,6 +105,15 @@ describe("preflight", () => {
     expect(c.detail).toBe("Exported as RGB. Choose PDF/X or Colour plates for CMYK.");
   });
 
+  it("rgb pages exported as pdf-x or plates also pass as converted", () => {
+    for (const format of ["pdf-x", "plates"] as const) {
+      const d = mk([]);
+      const c = get(preflight(d, { format, pageIds: [d.pages[0]!.id], scale: 1 }, { fonts: ["Inter"], assets: [], print: true }), "color")!;
+      expect(c.status).toBe("pass");
+      expect(c.detail).toBe("Converted to CMYK with the print service");
+    }
+  });
+
   it("cmyk pages pass with print for plates too", () => {
     const d = mk([]);
     d.pages[0]!.colorMode = "cmyk";

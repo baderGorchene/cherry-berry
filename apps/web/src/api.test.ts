@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, exportFile, saveFile } from "./api";
+import { api, ApiError, errorMessage, exportFile, saveFile } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -15,6 +15,12 @@ describe("api", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("<html>oops</html>", { status: 500 })));
     const err = await api("/api/health").catch((e) => e);
     expect(err).toMatchObject({ status: 500, code: "http_500" });
+  });
+});
+
+describe("errorMessage", () => {
+  it("explains a full server", () => {
+    expect(errorMessage(new ApiError(507, "storage_full"))).toBe("This server is out of storage. Ask an admin to free space or raise the quota.");
   });
 });
 

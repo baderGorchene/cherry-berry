@@ -7,6 +7,8 @@ Ghostscript CLI. It adds the `pdf-x` and `plates` export formats when the main s
 
     docker compose --profile print up --build print     # from the repo root, listens on :8080
 
+Set `PRINT_URL=http://localhost:8080` when the API runs on the host. Inside compose, `PRINT_URL=http://print:8080`.
+
 **The service has no authentication. Do not expose it to the public internet**; compose binds it to
 `127.0.0.1:8080`, and anything else that can reach it can burn CPU and disk.
 

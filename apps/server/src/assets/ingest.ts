@@ -19,7 +19,8 @@ export type Ingested = {
   sanitized: boolean; // the SVG sanitizer stripped something (always false for rasters)
 };
 
-const MAX_BYTES = 50 * 1024 * 1024;
+// Hard ceiling; the route enforces the instance max_upload_mb (20/50/100) before this.
+const MAX_BYTES = 100 * 1024 * 1024;
 const MAX_SVG_BYTES = 2 * 1024 * 1024;
 const MAX_PIXELS = 100_000_000;
 const THUMB = 480;
