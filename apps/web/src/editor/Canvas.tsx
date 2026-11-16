@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useRef, useState, type MutableRefObject, type ReactNode } from "react";
 import Konva from "konva";
 import { Ellipse, Group, Image as KImage, Layer, Line, Path, Rect, Stage, Text, Transformer } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
@@ -103,7 +103,7 @@ export function NodeView({ n, unit, top, editing, inert, ...events }: {
 
 export default function Canvas({
   ydoc, page, selected, readOnly, role, tool, zoom, pan, editingPath, anchors, pathKeys, snapRef, kit, fontsVersion, peers, onCursor,
-  act, onSelect, onTool, onPan, onZoom, onViewport, onAnchors, onEditPath,
+  act, onSelect, onTool, onPan, onZoom, onViewport, onAnchors, onEditPath, overlay,
 }: {
   ydoc: Y.Doc; page: Page; selected: string[]; readOnly: boolean; role: Role; tool: Tool; zoom: number; pan: Pt;
   editingPath: string | null; anchors: AnchorRef[]; pathKeys: PathKeys; snapRef: MutableRefObject<(() => string) | null>; kit: BrandKit | null; fontsVersion: number;
@@ -111,6 +111,8 @@ export default function Canvas({
   act(fn: () => void): void; onSelect(ids: string[]): void; onTool(t: Tool): void;
   onPan(p: Pt): void; onZoom(z: number): void; onViewport(v: { width: number; height: number }): void;
   onAnchors(a: AnchorRef[]): void; onEditPath(id: string): void;
+  /** Floats just above the selection (below it near the top edge), clear of the rotate handle; hidden while drawing, typing or pinching. */
+  overlay?: ReactNode;
 }) {
   const box = useRef<HTMLElement>(null);
   const nodesRef = useRef<Konva.Group>(null);
@@ -425,6 +427,15 @@ export default function Canvas({
   const selectedNodes = selected.map(top).filter((n): n is CherryNode => !!n);
   const canReorder = selectedNodes.length > 0 && selectedNodes.every((n) => canMove(n, role));
   const canDelSel = selectedNodes.length > 0 && selectedNodes.every((n) => canDelete(n, role));
+  const shown = selectedNodes.filter((n) => !n.hidden);
+  const overlayAt = (() => {
+    if (!overlay || !shown.length || editNode || pathMode || drag || pinching) return null;
+    const sx = (v: number) => origin.x + v * scale, sy = (v: number) => origin.y + v * scale;
+    const x0 = sx(Math.min(...shown.map((n) => n.x))), x1 = sx(Math.max(...shown.map((n) => n.x + n.width)));
+    const y0 = sy(Math.min(...shown.map((n) => n.y))), y1 = sy(Math.max(...shown.map((n) => n.y + n.height)));
+    const above = y0 - 66 - 48 > 0; // the rotate handle sits 50 px above the box
+    return { left: Math.min(Math.max((x0 + x1) / 2, 110), vp.width - 110), top: above ? y0 - 66 : y1 + 16, above };
+  })();
 
   return (
     <main ref={box} className="ed-stage" aria-label={`${page.name} canvas`}
@@ -512,6 +523,10 @@ export default function Canvas({
       {editNode?.kind === "text" && (
         <TextEditor key={editNode.id} node={editNode} origin={origin} scale={scale} zoom={zoom}
           onCommit={(t) => commitText(editNode, t)} />
+      )}
+      {overlayAt && (
+        <div className={`ed-overlay${overlayAt.above ? " ed-overlay-up" : ""}${overlayAt.top > vp.height / 2 ? " ed-overlay-low" : ""}`}
+          style={{ left: overlayAt.left, top: overlayAt.top }}>{overlay}</div>
       )}
       {menu && selectedNodes.length > 0 && (
         <div ref={menuRef} role="menu" className="ed-ctx" style={{ left: menu.x, top: menu.y }}>

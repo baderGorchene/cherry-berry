@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import { createWorkspace, newDesign, openPanel, panel, rail, railButton, signUp, unique } from "./helpers";
+import { createWorkspace, newDesign, openPanel, panel, popover, position, positionValue, rail, railButton, selectionMenu, signUp, toolbar, unique } from "./helpers";
 
 // msedge can't emulate isMobile, so phones are a 390×844 touch viewport.
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
@@ -18,14 +18,14 @@ const canvasCenter = async (page: Page) => {
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 };
 
-/** Picks a basic shape from the Elements sheet and taps it onto the canvas center; Properties opens for it. */
+/** Picks a basic shape from the Elements sheet and taps it onto the canvas center; the toolbar shows its styling. */
 async function placeRect(page: Page) {
   await openPanel(page, "Elements");
   await sheet(page, "Elements").getByRole("button", { name: "Rectangle", exact: true }).click();
   await expect(sheet(page, "Elements")).toBeHidden();
   const c = await canvasCenter(page);
   await page.touchscreen.tap(c.x, c.y);
-  await expect(sheet(page, "Properties")).toBeVisible();
+  await expect(toolbar(page).getByRole("button", { name: "Fill", exact: true })).toBeVisible();
 }
 
 const zoomLabel = async (page: Page) => Number((await page.getByTitle("Zoom level").innerText()).replace("%", ""));
@@ -45,7 +45,7 @@ test("phone editor shows the rail as a bottom bar and opens panels in sheets", a
   for (const name of ["Undo", "File", "Export", "More"]) await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
   for (const name of ["Templates", "Elements", "Text", "Uploads", "Brand", "Draw", "Layers"]) await expect(rail(page).getByRole("button", { name, exact: true })).toBeVisible();
   // no side panels on phones; the page header and the page strip stay
-  await expect(page.getByRole("complementary", { name: "Properties" })).toBeHidden();
+  await expect(page.getByRole("complementary", { name: "Properties" })).toHaveCount(0);
   await expect(page.getByRole("complementary", { name: / panel$/ })).toHaveCount(0);
   await expect(page.getByRole("textbox", { name: "Page name" })).toBeVisible();
   await expect(page.getByRole("navigation", { name: "Pages" })).toBeVisible();
@@ -102,40 +102,39 @@ test("phone editor shows the rail as a bottom bar and opens panels in sheets", a
   await page.keyboard.press("Escape");
 });
 
-test("selecting a layer opens properties in the sheet", async ({ page }) => {
+test("selecting a layer shows the context toolbar, which scrolls within itself", async ({ page }) => {
   await newPost(page);
   await placeRect(page);
-  await expect(sheet(page, "Properties").getByLabel("X", { exact: true })).toBeVisible();
-  await expect(sheet(page, "Properties").getByRole("tab")).toHaveCount(0);
+  await expect(page.getByRole("dialog")).toHaveCount(0); // no properties sheet any more
+  await expect((await position(page)).getByLabel("X", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(selectionMenu(page).getByRole("button", { name: "Delete" })).toBeVisible();
 
-  // a text layer from the Text sheet, then picked from Layers
+  // a text layer from the Text sheet
   await openPanel(page, "Text");
   await sheet(page, "Text").getByRole("button", { name: "Add a little body text" }).click();
-  await expect(sheet(page, "Properties")).toBeVisible();
+  await expect(sheet(page, "Text")).toBeHidden(); // the insert shows the canvas and its toolbar
+  const bar = toolbar(page);
+  await expect(bar.getByLabel("Size", { exact: true })).toBeVisible();
+  await expect((await popover(page, "Spacing", "Text spacing")).getByLabel("Line height", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
-  await (await layersSheet(page)).getByRole("button", { name: "Add a little bit of body text", exact: true }).click();
-  const props = sheet(page, "Properties");
-  await expect(props).toBeVisible();
-  await expect(props).toBeFocused(); // the sheet that replaced Layers takes focus
-  for (const name of ["Font", "Color", "Spacing", "Effects"]) await expect(props.getByRole("tab", { name })).toBeVisible();
-  await expect(props.getByRole("tab", { name: "Font" })).toHaveAttribute("aria-selected", "true");
-  await expect(props.getByLabel("Size", { exact: true })).toBeVisible();
-  await expect(props.getByLabel("Fill", { exact: true })).toBeHidden();
-  await props.getByRole("tab", { name: "Color" }).click();
-  await expect(props.getByLabel("Fill", { exact: true })).toBeVisible();
-  await expect(props.getByLabel("Size", { exact: true })).toBeHidden();
-  await props.getByRole("tab", { name: "Spacing" }).click();
-  await expect(props.getByLabel("Line height", { exact: true })).toBeVisible();
-  await props.getByRole("tab", { name: "Effects" }).click();
-  await expect(props.getByLabel("Opacity", { exact: true })).toBeVisible();
+  const tb = await bar.evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth, overflow: getComputedStyle(e).overflowX }));
+  expect(tb.scroll).toBeGreaterThan(tb.client);
+  expect(tb.overflow).toBe("auto");
+  await bar.evaluate((e) => { e.scrollLeft = e.scrollWidth; });
+  await expect(bar.getByLabel("Opacity", { exact: true })).toBeInViewport();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  for (const b of await bar.getByRole("button").all()) {
+    const r = (await b.boundingBox())!;
+    expect(Math.round(r.height)).toBeGreaterThanOrEqual(44);
+  }
 });
 
 test("pinch zooms without moving the layer", async ({ page }) => {
   await newPost(page);
   await placeRect(page);
-  const x0 = await sheet(page, "Properties").getByLabel("X", { exact: true }).inputValue();
-  const y0 = await sheet(page, "Properties").getByLabel("Y", { exact: true }).inputValue();
+  const x0 = await positionValue(page, "X");
+  const y0 = await positionValue(page, "Y");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const z0 = await zoomLabel(page);
@@ -150,15 +149,15 @@ test("pinch zooms without moving the layer", async ({ page }) => {
 
   expect(await zoomLabel(page)).toBeGreaterThan(z0 * 2);
   await (await layersSheet(page)).getByRole("button", { name: "Rectangle", exact: true }).click();
-  await expect(sheet(page, "Properties").getByLabel("X", { exact: true })).toHaveValue(x0);
-  await expect(sheet(page, "Properties").getByLabel("Y", { exact: true })).toHaveValue(y0);
+  expect(await positionValue(page, "X")).toBe(x0);
+  expect(await positionValue(page, "Y")).toBe(y0);
 });
 
 test("a second finger landing mid-drag pinches without moving the layer", async ({ page }) => {
   await newPost(page);
   await placeRect(page);
-  const x0 = await sheet(page, "Properties").getByLabel("X", { exact: true }).inputValue();
-  const y0 = await sheet(page, "Properties").getByLabel("Y", { exact: true }).inputValue();
+  const x0 = await positionValue(page, "X");
+  const y0 = await positionValue(page, "Y");
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const z0 = await zoomLabel(page);
@@ -175,8 +174,8 @@ test("a second finger landing mid-drag pinches without moving the layer", async 
 
   expect(await zoomLabel(page)).toBeGreaterThan(z0);
   await (await layersSheet(page)).getByRole("button", { name: "Rectangle", exact: true }).click();
-  await expect(sheet(page, "Properties").getByLabel("X", { exact: true })).toHaveValue(x0);
-  await expect(sheet(page, "Properties").getByLabel("Y", { exact: true })).toHaveValue(y0);
+  expect(await positionValue(page, "X")).toBe(x0);
+  expect(await positionValue(page, "Y")).toBe(y0);
 });
 
 test("pinching with the pen armed adds no anchors", async ({ page }) => {
@@ -216,7 +215,7 @@ async function tapTriangle(page: Page) {
   await togglePen(page);
   for (const p of pts) await page.touchscreen.tap(p.x, p.y);
   await page.touchscreen.tap(pts[0]!.x, pts[0]!.y); // back on the first point closes the path
-  await expect(sheet(page, "Properties")).toBeVisible(); // the new path is selected
+  await expect(toolbar(page).getByRole("button", { name: "Edit points" })).toBeVisible(); // the new path is selected
   return pts[0]!;
 }
 
@@ -238,9 +237,8 @@ test("a pen touch drag pulls a curve handle", async ({ page }) => {
   await touchDrag(page, { x: c.x, y: c.y }, { x: c.x, y: c.y + 50 });
   await page.touchscreen.tap(c.x + 90, c.y);
   await togglePen(page); // putting the pen down finishes the open path
-  const props = sheet(page, "Properties");
-  await expect(props).toBeVisible();
-  const h = Number(await props.getByLabel("H", { exact: true }).inputValue()), w = Number(await props.getByLabel("W", { exact: true }).inputValue());
+  await expect(toolbar(page).getByRole("button", { name: "Edit points" })).toBeVisible();
+  const h = Number(await positionValue(page, "H")), w = Number(await positionValue(page, "W"));
   // bent by the pulled handle, but only by about that pull (a drag left armed would follow the mouse to the tool bar)
   expect(h).toBeGreaterThan(0);
   expect(h).toBeLessThan(w / 2);
@@ -251,16 +249,16 @@ test("a pen touch drag pulls a curve handle", async ({ page }) => {
 test("a touch drag moves an anchor in point-edit mode", async ({ page }) => {
   await newPost(page);
   const first = await tapTriangle(page);
-  await page.keyboard.press("Escape");
   // Enter on a focused button activates that button, so start from no focus (as after a canvas tap).
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press("Enter"); // point-edit the selected path
   await expect(page.getByRole("button", { name: "Done" })).toBeVisible();
+  await expect(sheet(page, "Draw")).toBeVisible(); // point tools and point properties
   await page.keyboard.press("Escape"); // close the sheet that opened with it, stay in point edit
   await page.touchscreen.tap(first.x, first.y); // select the first anchor
   const pointX = async () => {
-    await (await pathLayer(page)).click();
-    const x = Number(await sheet(page, "Properties").getByRole("complementary", { name: "Path properties" }).getByLabel("X", { exact: true }).inputValue());
+    await openPanel(page, "Draw");
+    const x = Number(await sheet(page, "Draw").getByRole("complementary", { name: "Path properties" }).getByLabel("X", { exact: true }).inputValue());
     await page.keyboard.press("Escape");
     return x;
   };
@@ -324,6 +322,7 @@ test.describe("at 375 x 812", () => {
     await sheet(page, "Brand").getByLabel("Link a brand kit").selectOption({ label: "Kit" });
     await page.keyboard.press("Escape");
     await openPanel(page, "Text");
+    await expect(sheet(page, "Text").getByRole("button", { name: /^Text colour / }).first()).toBeVisible(); // once the kit has loaded
     await atLeast44(sheet(page, "Text").getByRole("button", { name: /^Text colour / }));
     await page.keyboard.press("Escape");
 

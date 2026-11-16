@@ -1,8 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addPage, addShape, createWorkspace, editorReady, newDesign, openAsEditor, openPanel, pageThumb, panel, signUp, unique, uniquePng } from "./helpers";
+import { addPage, addShape, createWorkspace, editorReady, newDesign, openAsEditor, openPanel, pageThumb, panel, popover, position, selectionMenu, signUp, toolbar, unique, uniquePng } from "./helpers";
 
 const layers = (page: Page) => panel(page, "Layers");
-const props = (page: Page) => page.getByRole("complementary", { name: "Properties" });
 const canvas = (page: Page) => page.getByLabel("Page 1 canvas");
 const showLayers = (page: Page) => openPanel(page, "Layers");
 
@@ -19,7 +18,7 @@ async function seedVisual(page: Page, title: string) {
 
 const setLock = async (page: Page, layer: string, value: string) => {
   await layers(page).getByRole("button", { name: layer, exact: true }).click();
-  await props(page).getByLabel("Brand lock").selectOption({ label: value });
+  await toolbar(page).getByLabel("Brand lock").selectOption({ label: value });
   await expect(page.getByRole("status")).toHaveText("Saved");
 };
 
@@ -31,7 +30,7 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await editorReady(page);
 
   await addShape(page, "Rectangle", -200, 0);
-  await addShape(page, "Text", 200, 150);
+  await addShape(page, "Text", 50, 150);
   await page.keyboard.type("Hello");
   await page.keyboard.press("Escape");
   await seedVisual(page, "Dot");
@@ -79,11 +78,12 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await layers(editor).getByRole("button", { name: "Hello", exact: true }).click();
   await editor.keyboard.press("Delete");
   await expect(layers(editor).getByRole("button", { name: "Hello", exact: true })).toBeVisible();
-  await expect(props(editor).getByLabel("X", { exact: true })).toBeDisabled();
-  await expect(props(editor).getByRole("button", { name: "Delete" })).toHaveCount(0);
+  await expect((await position(editor)).getByLabel("X", { exact: true })).toBeDisabled();
+  await editor.keyboard.press("Escape");
+  await expect(selectionMenu(editor).getByRole("button", { name: "Delete" })).toHaveCount(0);
 
   // Content text can still be edited by double-click.
-  await editor.mouse.dblclick(box.x + box.width / 2 + 200 + 5, box.y + box.height / 2 + 150 + 5);
+  await editor.mouse.dblclick(box.x + box.width / 2 + 50 + 5, box.y + box.height / 2 + 150 + 5);
   await editor.keyboard.press("Control+A");
   await editor.keyboard.type("Changed");
   await editor.keyboard.press("Escape");
@@ -99,5 +99,5 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await showLayers(editor);
   await expect(editor.getByRole("status")).toHaveText("Saved");
   await expect(layers(editor).getByRole("listitem")).toHaveCount(count);
-  await expect(props(editor).getByText("Dash", { exact: true })).toBeVisible();
+  await expect((await popover(editor, "Info", "Image info")).getByText("Dash", { exact: true })).toBeVisible();
 });

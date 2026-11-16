@@ -142,3 +142,31 @@ export async function fileMenu(page: Page, item: string) {
   await page.getByRole("button", { name: "File", exact: true }).click();
   await page.getByRole("menu", { name: "File" }).getByRole("menuitem", { name: item }).click();
 }
+
+/** The context toolbar above the canvas (above the page strip on phones). */
+export const toolbar = (page: Page) => page.getByRole("toolbar", { name: "Selection", exact: true });
+/** The small menu floating above the selection. */
+export const selectionMenu = (page: Page) => page.getByRole("toolbar", { name: "Selection actions" });
+
+/** Opens one of the toolbar's popovers by its button (a no-op when it is already open) and returns the dialog. */
+export async function popover(page: Page, button: string, name = button) {
+  const dialog = page.getByRole("dialog", { name, exact: true });
+  if (!(await dialog.isVisible())) await toolbar(page).getByRole("button", { name: button, exact: true }).click();
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+/** The Position popover (X, Y, W, H, rotation, align, distribute, arrange). */
+export const position = (page: Page) => popover(page, "Position");
+/** Reads one Position field of the selection, then closes the popover. */
+export async function positionValue(page: Page, label: string) {
+  const v = await (await position(page)).getByLabel(label, { exact: true }).inputValue();
+  await page.keyboard.press("Escape");
+  return v;
+}
+/** Commits one Position field (one undo step), then closes the popover. */
+export async function setPosition(page: Page, label: string, value: string) {
+  const field = (await position(page)).getByLabel(label, { exact: true });
+  await field.fill(value);
+  await field.press("Enter");
+  await page.keyboard.press("Escape");
+}

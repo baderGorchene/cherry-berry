@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import * as Y from "yjs";
 import type { AnchorRef, BoolOp } from "@cherry/vector";
 import {
-  brandIssues, duplicateNodes, fromPx, insertPages, removeNodes, reorderNode, setTitle, toPx, updateNode, yToDoc,
+  LOCAL, addNode, brandIssues, duplicateNodes, fromPx, insertPages, removeNodes, reorderNode, setTitle, toPx, updateNode, yToDoc,
   type CherryDocument, type CherryNode, type Page,
 } from "@cherry/doc";
 import { getKit, myWorkspaces, startFromTemplate, type BrandKit } from "../api";
@@ -16,9 +16,11 @@ import BrandPanel from "../editor/BrandPanel";
 import { IconBack, IconMore, IconRedo, IconUndo } from "../icons";
 import BottomBar from "../editor/BottomBar";
 import Canvas, { type Tool } from "../editor/Canvas";
+import ContextToolbar from "../editor/ContextToolbar";
+import { docColors, freshCopies, groupNodes, ungroupNode } from "../editor/selection";
 import { NUDGE, allIds, clampZoom, fitZoom } from "../editor/geometry";
 import ExportDialog from "../editor/ExportDialog";
-import FileMenu from "../editor/FileMenu";
+import FileMenu, { type FileItem } from "../editor/FileMenu";
 import Layers from "../editor/Layers";
 import PageHeader from "../editor/PageHeader";
 import PublishDialog from "../editor/PublishDialog";
@@ -30,9 +32,9 @@ import ShapesPanel from "../editor/ShapesPanel";
 import TemplatesPanel from "../editor/TemplatesPanel";
 import TextPanel from "../editor/TextPanel";
 import VisualsPanel from "../editor/VisualsPanel";
-import Properties from "../editor/Properties";
 import { Avatars, SharePopover } from "../editor/PresenceBar";
 import { colorFor, usePeers, type PresenceUser } from "../editor/presence";
+import SelectionMenu from "../editor/SelectionMenu";
 import Sheet from "../editor/Sheet";
 import DrawPanel from "../editor/Toolbar";
 import { useDesign, type DesignState } from "../editor/useDesign";
@@ -43,7 +45,8 @@ const TOOL_KEYS: Record<string, Tool> = { v: "select", t: "text", r: "rect", o: 
 // In path edit mode only the vector tools are armed by key; Shift+C (convert) is checked separately.
 const EDIT_KEYS: Record<string, Tool> = { a: "direct", p: "pen", "+": "add-anchor", "=": "add-anchor" };
 
-type SheetId = RailItem | "properties";
+/** Copy and Paste (selection menu): nodes copied in this tab, pasted into the same design on a page of the same unit. */
+let clipboard: { designId: string; unit: Page["unit"]; nodes: CherryNode[] } | null = null;
 const clamp = (v: number, hi: number) => Math.min(hi, Math.max(0, v));
 
 // The phone layout (bottom tool bar and sheets) follows the theme's phone breakpoint.
@@ -155,8 +158,8 @@ function Shell({ d }: { d: Ready }) {
   const [tool, setTool] = useState<Tool>("select");
   const [panel, setPanel] = useState<RailItem | null>("layers");
   const phone = usePhone();
-  const [sheet, setSheet] = useState<SheetId | null>(null);
-  const toggleSheet = (s: SheetId) => setSheet((cur) => (cur === s ? null : s));
+  const [sheet, setSheet] = useState<RailItem | null>(null);
+  const toggleSheet = (s: RailItem) => setSheet((cur) => (cur === s ? null : s));
   const [more, setMore] = useState(false);
   const moreRef = useRef<HTMLDivElement>(null);
   const moreBtn = useRef<HTMLButtonElement>(null);
@@ -188,6 +191,7 @@ function Shell({ d }: { d: Ready }) {
     setEditingPath(id);
     setAnchors([]);
     setTool("direct");
+    if (phone) setSheet("draw"); // the point tools and point properties
   };
   const exitEdit = () => { setEditingPath(null); setAnchors([]); setTool("select"); };
   // Leave edit mode when the node is gone (undo, remote delete, page switch) or can no longer be point-edited.
@@ -213,19 +217,8 @@ function Shell({ d }: { d: Ready }) {
     }
     else if (mod && key === "z") { stop(); if (e.shiftKey) undo.redo(); else undo.undo(); }
     else if (mod && key === "y") { stop(); undo.redo(); }
-    else if (mod && key === "d") {
-      stop();
-      let copies: string[] = [];
-      const dup = ids.filter((id) => canMove(findNode(page.nodes, id)!, role));
-      if (dup.length) { act(() => { copies = duplicateNodes(ydoc, page.id, dup, fromPx(10, page.unit), role !== "editor"); }); select(copies); }
-    }
-    else if (mod && (e.key === "]" || e.key === "[")) {
-      stop();
-      // Move the topmost first when going forward (bottom-most first going back) so neighbours don't swap back.
-      const order = page.nodes.filter((n) => ids.includes(n.id) && canMove(n, role)).map((n) => n.id);
-      const to = e.key === "]" ? "forward" : "backward";
-      if (order.length) act(() => (to === "forward" ? order.reverse() : order).forEach((id) => reorderNode(ydoc, page.id, id, to)));
-    }
+    else if (mod && key === "d") { stop(); duplicate(); }
+    else if (mod && (e.key === "]" || e.key === "[")) { stop(); reorder(e.key === "]" ? "forward" : "backward"); }
     else if (e.key in NUDGE) {
       const movable = selectedNodes.filter((n) => !n.locked && canMove(n, role));
       if (!movable.length) return;
@@ -233,11 +226,7 @@ function Shell({ d }: { d: Ready }) {
       const [dx, dy] = NUDGE[e.key]!.map((v) => v * (e.shiftKey ? 10 : 1));
       act(() => movable.forEach((n) => updateNode(ydoc, page.id, n.id, { x: n.x + dx!, y: n.y + dy! })));
     }
-    else if ((e.key === "Delete" || e.key === "Backspace") && ids.length) {
-      stop();
-      const del = selectedNodes.filter((n) => canDelete(n, role)).map((n) => n.id);
-      if (del.length) act(() => removeNodes(ydoc, page.id, del));
-    }
+    else if ((e.key === "Delete" || e.key === "Backspace") && ids.length) { stop(); remove(); }
     else if (mod || e.altKey) return;
     else if (editingPath) {
       if (key === "c" && e.shiftKey) setTool("convert-anchor");
@@ -254,8 +243,7 @@ function Shell({ d }: { d: Ready }) {
   const closeExport = useCallback(() => setExporting(false), []);
   const select = (selected: string[]) => {
     setSel({ pageId: page.id, selected });
-    // On phones, picking a layer shows its properties; clearing the selection closes them.
-    if (phone) setSheet((s) => (selected.length ? "properties" : s === "properties" ? null : s));
+    if (phone && selected.length) setSheet(null); // on phones a pick (or an insert) shows the canvas and its toolbar
   };
   /** One committed action = one undo step, even within captureTimeout of the last. */
   const act = (fn: () => void) => { undo.stopCapturing(); fn(); undo.stopCapturing(); };
@@ -266,6 +254,54 @@ function Shell({ d }: { d: Ready }) {
     if (canCombine) setMessage(combine(ydoc, page.id, op, operands, act, select) ?? "");
   };
   const runConvert = (n: CherryNode) => setMessage(convertToPath(ydoc, page.id, n, act) ?? "");
+
+  // Selection actions, shared by the keyboard, the selection menu and the toolbar.
+  const movable = selectedNodes.filter((n) => canMove(n, role));
+  const allMovable = selectedNodes.length > 0 && movable.length === selectedNodes.length;
+  const duplicate = () => {
+    let copies: string[] = [];
+    if (movable.length) { act(() => { copies = duplicateNodes(ydoc, page.id, movable.map((n) => n.id), fromPx(10, page.unit), role !== "editor"); }); select(copies); }
+  };
+  const reorder = (to: "forward" | "backward") => {
+    // Move the topmost first when going forward (bottom-most first going back) so neighbours don't swap back.
+    const order = page.nodes.filter((n) => sel.selected.includes(n.id) && canMove(n, role)).map((n) => n.id);
+    if (order.length) act(() => (to === "forward" ? order.reverse() : order).forEach((id) => reorderNode(ydoc, page.id, id, to)));
+  };
+  const remove = () => {
+    const del = selectedNodes.filter((n) => canDelete(n, role)).map((n) => n.id);
+    if (del.length) act(() => removeNodes(ydoc, page.id, del));
+  };
+  const toggleLock = () => {
+    const locked = !selectedNodes.every((n) => n.locked);
+    act(() => ydoc.transact(() => movable.forEach((n) => updateNode(ydoc, page.id, n.id, { locked })), LOCAL));
+  };
+  const tops = page.nodes.filter((n) => sel.selected.includes(n.id));
+  const canGroup = tops.length >= 2 && tops.length === sel.selected.length && allMovable;
+  const group = () => {
+    if (!canGroup) return;
+    const g = groupNodes(tops, "Group");
+    const at = page.nodes.indexOf(tops.at(-1)!) - (tops.length - 1); // where the topmost one was
+    act(() => ydoc.transact(() => { removeNodes(ydoc, page.id, tops.map((n) => n.id)); addNode(ydoc, page.id, g, at); }, LOCAL));
+    select([g.id]);
+  };
+  const groupNode = tops.length === 1 && sel.selected.length === 1 && tops[0]!.kind === "group" && allMovable ? tops[0]! : undefined;
+  const ungroup = () => {
+    if (!groupNode) return;
+    const kids = ungroupNode(groupNode);
+    const at = page.nodes.indexOf(groupNode);
+    act(() => ydoc.transact(() => { removeNodes(ydoc, page.id, [groupNode.id]); kids.forEach((k, i) => addNode(ydoc, page.id, k, at + i)); }, LOCAL));
+    select(kids.map((k) => k.id));
+  };
+  const [, setCopied] = useState(0); // re-render so Paste turns on
+  const copy = () => { clipboard = { designId: d.design.id, unit: page.unit, nodes: structuredClone(movable) }; setCopied((n) => n + 1); };
+  const canPaste = !!clipboard && clipboard.designId === d.design.id && clipboard.unit === page.unit;
+  const paste = () => {
+    if (!clipboard || !canPaste) return;
+    const nodes = freshCopies(clipboard.nodes, fromPx(10, page.unit), role !== "editor");
+    act(() => ydoc.transact(() => nodes.forEach((n) => addNode(ydoc, page.id, n)), LOCAL));
+    select(nodes.map((n) => n.id));
+  };
+  const colors = useMemo(() => docColors(doc), [doc]);
   const left: RailItem | null = editNode ? "draw" : panel; // path edit mode always shows Draw (its point tools)
   const status = d.status === "error" ? `Not saved: ${d.statusMessage ?? ""}` : STATUS[d.status];
   const navigate = useNavigate();
@@ -300,10 +336,10 @@ function Shell({ d }: { d: Ready }) {
     <FileMenu items={[
       ["Rename", () => { titleRef.current?.focus(); titleRef.current?.select(); }, readOnly],
       ["Page size and colour mode", () => {
+        // Page settings live in the context toolbar when nothing is selected.
         select([]);
-        if (phone) setSheet("properties");
-        // ponytail: finds the Properties page section by class; Task 7 moves page settings into the context toolbar.
-        else requestAnimationFrame(() => { const el = document.querySelector<HTMLElement>(".ed-props"); if (el) { el.tabIndex = -1; el.focus(); } });
+        setSheet(null);
+        requestAnimationFrame(() => document.querySelector<HTMLInputElement>('[role=toolbar][aria-label=Selection] input[aria-label="Page width"]')?.focus());
       }],
       ["History", () => navigate(`/d/${d.design.id}/history`)],
       ["Publish as template", () => setPublishing(true), role === "viewer" || !!editNode],
@@ -338,16 +374,34 @@ function Shell({ d }: { d: Ready }) {
       </aside>
     ),
   })[p];
-  const properties = (tabs: boolean) => editNode
-    ? <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />
-    : <Properties ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} kit={kit} onLinked={setKitId} nodes={selectedNodes} readOnly={readOnly} role={role} act={act}
-      combinable={canCombine} canConvert={selectedNodes.every((n) => page.nodes.includes(n))} message={message} onCombine={runCombine} onConvert={runConvert} tabs={tabs} />;
+  const convertible = selectedNodes.length === 1 && page.nodes.includes(selectedNodes[0]!) && ["rect", "ellipse"].includes(selectedNodes[0]!.kind);
+  const toolbar = (
+    <ContextToolbar ydoc={ydoc} page={page} nodes={selectedNodes} kit={kit} docColors={colors} role={role} readOnly={readOnly}
+      workspaceId={d.design.workspaceId} designId={d.design.id} act={act} onLinked={setKitId}
+      canCombine={canCombine} canConvert={convertible} message={message} onCombine={runCombine} onConvert={runConvert}
+      onGroup={group} onUngroup={ungroup} onEditPath={enterEdit} onLock={toggleLock} onReorder={reorder}
+      editing={editNode ? { node: editNode, anchors, onDone: exitEdit, panel: !phone } : null} />
+  );
+  const moreItems: FileItem[] = [
+    ["Bring forward", () => reorder("forward"), !allMovable],
+    ["Send backward", () => reorder("backward"), !allMovable],
+    ["Group", group, !canGroup],
+    ["Ungroup", ungroup, !groupNode],
+    ["Copy", copy, !movable.length],
+    ["Paste", paste, !canPaste],
+    ...(canCombine ? (["union", "subtract", "intersect", "exclude"] as const).map((op): FileItem => [op[0]!.toUpperCase() + op.slice(1), () => runCombine(op)]) : []),
+    ...(convertible && allMovable ? [["Convert to path", () => runConvert(selectedNodes[0]!)] as FileItem] : []),
+  ];
+  const selectionMenu = !readOnly && !editNode && (
+    <SelectionMenu canMove={allMovable} canDelete={selectedNodes.length > 0 && selectedNodes.every((n) => canDelete(n, role))}
+      locked={selectedNodes.every((n) => n.locked)} onDuplicate={duplicate} onDelete={remove} onLock={toggleLock} more={moreItems} />
+  );
   const canvas = (
     <Canvas ydoc={ydoc} page={page} selected={sel.selected} readOnly={readOnly} role={role} tool={tool} zoom={zoom} pan={pan}
       editingPath={editNode ? editNode.id : null} anchors={anchors} pathKeys={pathKeys} snapRef={snapRef}
       kit={kit} fontsVersion={fontsVersion} peers={peers} onCursor={onCursor}
       act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
-      onAnchors={setAnchors} onEditPath={enterEdit} />
+      onAnchors={setAnchors} onEditPath={enterEdit} overlay={selectionMenu} />
   );
   const pageHeader = <PageHeader ydoc={ydoc} pages={doc.pages} page={page} readOnly={readOnly} role={role} act={act} onSwitch={switchPage} />;
   const bottomBar = <BottomBar ydoc={ydoc} doc={doc} pageId={page.id} readOnly={readOnly} act={act} onSwitch={switchPage} zoom={zoom} onZoom={zoomTo} />;
@@ -370,7 +424,6 @@ function Shell({ d }: { d: Ready }) {
   );
 
   if (phone) {
-    const sheetBody = sheet === "properties" ? properties(true) : sheet && panelBody(sheet);
     return (
       <div className="ed ed-m">
         <header className="ed-head">
@@ -393,9 +446,10 @@ function Shell({ d }: { d: Ready }) {
         </header>
         {pageHeader}
         <div className="ed-body">{canvas}</div>
+        {toolbar}
         {bottomBar}
-        {sheet && <Sheet key={sheet} label={sheet === "properties" ? "Properties" : RAIL_LABEL[sheet]} onClose={() => setSheet(null)}>{sheetBody}</Sheet>}
-        {rail(sheet === "properties" ? null : sheet)}
+        {sheet && <Sheet key={sheet} label={RAIL_LABEL[sheet]} onClose={() => setSheet(null)}>{panelBody(sheet)}</Sheet>}
+        {rail(sheet)}
         {dialogs}
       </div>
     );
@@ -412,11 +466,10 @@ function Shell({ d }: { d: Ready }) {
         </div>
         {undoBtn}
         {redoBtn}
-        {editNode && <span className="ed-pill">Editing path</span>}
         <span style={{ flex: 1 }} />
         <Avatars people={people} />
         <SharePopover workspace={workspaceName} />
-        {done || <button className="btn btn-p" onClick={() => setExporting(true)}>Export</button>}
+        <button className="btn btn-p" onClick={() => setExporting(true)}>Export</button>
       </header>
       <div className="ed-body">
         {rail(left)}
@@ -430,11 +483,11 @@ function Shell({ d }: { d: Ready }) {
           </div>
         )}
         <div className="ed-center">
+          {toolbar}
           {pageHeader}
           {canvas}
           {bottomBar}
         </div>
-        {properties(false)}
       </div>
       {dialogs}
     </div>

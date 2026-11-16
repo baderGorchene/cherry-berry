@@ -5,7 +5,7 @@ import type { CherryNode } from "../src/schema";
 import { docToY, yToDoc, REMOTE } from "../src/y";
 import {
   addNode, addPage, createUndoManager, duplicateNodes, getPageIds, insertPages, movePage, nodeInfo,
-  removeNodes, removePage, replaceDocument, reorderNode, updateNode,
+  removeNodes, removePage, replaceDocument, reorderNode, updateNode, updatePage,
 } from "../src/ops";
 
 const base = { rotation: 0, opacity: 1, locked: false, hidden: false, brandLock: "none" as const };
@@ -88,6 +88,14 @@ describe("ops", () => {
     expect(removePage(y, p3)).toBe(true);
     expect(removePage(y, pid)).toBe(false);
     expect(doc().pages).toHaveLength(1);
+  });
+
+  it("updatePage changes a page's size, colour mode and background, and nothing else", () => {
+    const { y, doc, pid } = setup([rect("a")]);
+    updatePage(y, pid, { width: 300, colorMode: "cmyk", background: { type: "solid", color: "#FFC0DE", opacity: 1 } });
+    const p = doc().pages[0]!;
+    expect([p.width, p.height, p.colorMode, p.background.color, p.unit]).toEqual([300, 200, "cmyk", "#FFC0DE", "px"]);
+    expect(ids(p.nodes)).toEqual(["a"]);
   });
 
   it("undo groups one gesture", () => {

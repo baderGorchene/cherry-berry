@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, newDesign, openPanel, panel as railPanel, railButton, signUp, unique } from "./helpers";
+import { addShape, createWorkspace, editorReady, newDesign, openPanel, panel as railPanel, popover, railButton, signUp, toolbar, unique } from "./helpers";
 
 const content = (colors: [string, string, string, string][], rules: Record<string, boolean> = {}) => ({
   colors: colors.map(([id, name, role, hex]) => ({ id, name, role, hex })),
@@ -29,7 +29,6 @@ async function start(page: Page, colors: [string, string, string, string][], rul
 const brandTab = (page: Page) => railButton(page, "Brand");
 const showBrand = (page: Page) => openPanel(page, "Brand");
 const panel = (page: Page) => railPanel(page, "Brand");
-const props = (page: Page) => page.getByRole("complementary", { name: "Properties" });
 const layers = (page: Page) => railPanel(page, "Layers");
 
 async function link(page: Page) {
@@ -53,7 +52,7 @@ test("links a kit and applies its styles", async ({ page }) => {
   await addShape(page, "Rectangle");
   await showBrand(page);
   await panel(page).getByRole("button", { name: "Ink" }).click();
-  await expect(props(page).getByText("#22142A", { exact: true })).toBeVisible();
+  await expect(toolbar(page).getByRole("button", { name: "Fill", exact: true })).toHaveAttribute("title", "Fill: #22142A");
 });
 
 test("flags low contrast and off-brand fonts", async ({ page }) => {
@@ -67,11 +66,11 @@ test("flags low contrast and off-brand fonts", async ({ page }) => {
   await expect(issue).toBeVisible();
 
   await page.keyboard.press("Escape");
-  await expect(props(page).getByRole("heading", { name: "Page", exact: true })).toBeVisible();
+  await expect(toolbar(page).getByRole("button", { name: "Background colour" })).toBeVisible();
   await issue.click();
-  await expect(props(page).getByRole("heading", { name: "Text", exact: true })).toBeVisible();
+  await expect(toolbar(page).getByRole("combobox", { name: "Font" })).toBeVisible();
 
-  await props(page).getByRole("combobox", { name: "Font" }).selectOption("Georgia");
+  await toolbar(page).getByRole("combobox", { name: "Font" }).selectOption("Georgia");
   await expect(panel(page).getByRole("button", { name: /Georgia is not a brand font/ })).toBeVisible();
   await expect(brandTab(page)).toHaveAccessibleName("Brand, 2 issues");
 });
@@ -80,8 +79,10 @@ test("kit colors only replaces the picker", async ({ page }) => {
   await start(page, COLORS);
   await link(page);
   await addShape(page, "Rectangle");
-  await expect(props(page).getByRole("button", { name: "Berry" }).first()).toBeVisible();
-  await expect(props(page).locator("input[type=color]")).toHaveCount(0);
+  const fill = await popover(page, "Fill", "Fill colour");
+  await expect(fill.getByRole("group", { name: "Brand kit" }).getByRole("button", { name: "Berry" })).toBeVisible();
+  await expect(fill.getByRole("group", { name: "Palette" })).toHaveCount(0);
+  await expect(fill.locator("input[type=color]")).toHaveCount(0);
 });
 
 test("kit deleted while linked", async ({ page }) => {

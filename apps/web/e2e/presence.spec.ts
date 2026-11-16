@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, openAsEditor, signUp, unique, newDesign } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, signUp, toolbar, unique, newDesign } from "./helpers";
 
 async function newPost(page: Page) {
   await signUp(page, unique("pr"));
@@ -38,7 +38,7 @@ test("a remote delete clears my selection", async ({ page: owner, browser }) => 
   const errors: Error[] = [];
   editor.on("pageerror", (e) => errors.push(e));
   await layer(editor).click();
-  const empty = editor.getByText("Select a layer to edit it", { exact: false });
+  const empty = toolbar(editor).getByLabel("Page width"); // the nothing-selected toolbar
   await expect(empty).toHaveCount(0);
   await layer(owner).click();
   await owner.keyboard.press("Delete");

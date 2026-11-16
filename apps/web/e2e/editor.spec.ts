@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
-  addPage, addShape, createWorkspace, editorReady, newDesign, openAsViewer, openPanel, pageStrip, pageThumb, panel, rail, railButton, signUp, unique, uniquePng,
-  type PanelName,
+  addPage, addShape, createWorkspace, editorReady, newDesign, openAsViewer, openPanel, pageStrip, pageThumb, panel, popover, position, positionValue,
+  railButton, selectionMenu, setPosition, signUp, toolbar, unique, uniquePng, type PanelName,
 } from "./helpers";
 
 async function newSocialPost(page: Page, size: "Social post" | "Presentation" = "Social post") {
@@ -35,40 +35,33 @@ test("create from preset, add a shape, edit it, reload", async ({ page }) => {
   await addShape(page, "Rectangle");
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
 
-  const x = page.getByLabel("X", { exact: true });
-  await x.fill("100");
-  await x.press("Enter");
+  await setPosition(page, "X", "100");
   await expect(status(page)).toHaveText("Saved");
 
   await page.reload();
   await layers(page).getByRole("button", { name: "Rectangle", exact: true }).click();
-  await expect(page.getByLabel("X", { exact: true })).toHaveValue("100");
+  expect(await positionValue(page, "X")).toBe("100");
 });
 
 test("each committed field is one undo step", async ({ page }) => {
   await newSocialPost(page);
   await addShape(page, "Rectangle");
-  const x = page.getByLabel("X", { exact: true });
-  const y = page.getByLabel("Y", { exact: true });
-  const [x0, y0] = [await x.inputValue(), await y.inputValue()];
-  await x.fill("100");
-  await x.press("Enter");
-  await y.fill("50");
-  await y.press("Enter");
+  const [x0, y0] = [await positionValue(page, "X"), await positionValue(page, "Y")];
+  await setPosition(page, "X", "100");
+  await setPosition(page, "Y", "50");
   await layers(page).getByRole("button", { name: "Rectangle", exact: true }).click();
   await page.keyboard.press("Control+Z");
-  await expect(y).toHaveValue(y0);
-  await expect(x).toHaveValue("100");
+  expect(await positionValue(page, "Y")).toBe(y0);
+  expect(await positionValue(page, "X")).toBe("100");
   await page.keyboard.press("Control+Z");
-  await expect(x).toHaveValue(x0);
+  expect(await positionValue(page, "X")).toBe(x0);
   await expect(layers(page).getByRole("button", { name: "Hide Rectangle" })).toBeVisible();
 });
 
 test("drag moves a shape", async ({ page }) => {
   await newSocialPost(page);
   await addShape(page, "Rectangle");
-  const x = page.getByLabel("X", { exact: true });
-  const x0 = Number(await x.inputValue());
+  const x0 = Number(await positionValue(page, "X"));
   // The new rectangle is centered on the canvas center.
   const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2;
@@ -77,7 +70,7 @@ test("drag moves a shape", async ({ page }) => {
   await page.mouse.move(cx + 25, cy, { steps: 5 });
   await page.mouse.move(cx + 50, cy, { steps: 5 });
   await page.mouse.up();
-  await expect.poll(async () => Number(await x.inputValue())).toBeGreaterThan(x0 + 50);
+  await expect.poll(async () => Number(await positionValue(page, "X"))).toBeGreaterThan(x0 + 50);
 });
 
 test("text tool", async ({ page }) => {
@@ -138,16 +131,14 @@ test("pages", async ({ page }) => {
   await expect(pageAction(page, "Delete page")).toBeDisabled();
 });
 
-test("properties show page info when nothing is selected", async ({ page }) => {
+test("the toolbar shows page settings when nothing is selected, and the selection menu deletes", async ({ page }) => {
   await newSocialPost(page);
-  const props = page.getByRole("complementary", { name: "Properties" });
-  await expect(props.getByRole("heading", { name: "Page", exact: true })).toBeVisible();
-  await expect(props.getByText("1080 × 1080 px")).toBeVisible();
+  await expect(toolbar(page).getByLabel("Page width")).toHaveValue("1080");
   await addShape(page, "Rectangle");
-  await expect(props.getByRole("heading", { name: "Layout", exact: true })).toBeVisible();
-  await props.getByRole("button", { name: "Delete" }).click();
+  await expect(toolbar(page).getByLabel("Page width")).toHaveCount(0);
+  await selectionMenu(page).getByRole("button", { name: "Delete" }).click();
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(0);
-  await expect(props.getByRole("heading", { name: "Page", exact: true })).toBeVisible();
+  await expect(toolbar(page).getByLabel("Page width")).toHaveValue("1080");
 });
 
 test("the page header renames, duplicates and moves the current page", async ({ page }) => {
@@ -242,19 +233,21 @@ test("the old single-key shortcuts still work", async ({ page }) => {
   await expect(panel(page, "Draw").getByRole("button", { name: "Pen (P)" })).toHaveAttribute("aria-pressed", "false");
 });
 
-/** X, Y, W and H of the selected layer, from Properties. */
+/** X, Y, W and H of the selected layer, from the Position popover. */
 const box = async (page: Page) => {
-  const v = async (l: string) => Number(await page.getByRole("complementary", { name: "Properties" }).getByLabel(l, { exact: true }).inputValue());
-  return { x: await v("X"), y: await v("Y"), w: await v("W"), h: await v("H") };
+  const pos = await position(page);
+  const v = async (l: string) => Number(await pos.getByLabel(l, { exact: true }).inputValue());
+  const out = { x: await v("X"), y: await v("Y"), w: await v("W"), h: await v("H") };
+  await page.keyboard.press("Escape");
+  return out;
 };
 
 test("Add a heading inserts a page-sized heading fully inside the page", async ({ page }) => {
   await newSocialPost(page);
   await openPanel(page, "Text");
   await panel(page, "Text").getByRole("button", { name: "Add a heading" }).click();
-  await expect(page.getByRole("complementary", { name: "Properties" }).getByLabel("Size", { exact: true })).toBeVisible();
   // 8% of a 1080 px page is 86.4 px, stored in points (x 72/96).
-  await expect(page.getByLabel("Size", { exact: true })).toHaveValue("64.8");
+  await expect(toolbar(page).getByLabel("Size", { exact: true })).toHaveValue("64.8");
   const b = await box(page);
   expect(b.x).toBeGreaterThanOrEqual(0);
   expect(b.y).toBeGreaterThanOrEqual(0);
@@ -433,7 +426,7 @@ test("viewer cannot edit paths", async ({ browser }) => {
 test("the first point edit flattens a rectangle in the same undo step", async ({ page }) => {
   await newSocialPost(page);
   await addShape(page, "Rectangle");
-  const half = Number(await page.getByLabel("W", { exact: true }).inputValue()) / 2;
+  const half = Number(await positionValue(page, "W")) / 2;
   const zoom = Number((await page.getByTitle("Zoom level").innerText()).replace("%", "")) / 100;
   const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
   const cx = box.x + box.width / 2, cy = box.y + box.height / 2; // the new rectangle is centered here
@@ -555,13 +548,15 @@ test("long-label fields are visible and fillable", async ({ page }) => {
   await page.keyboard.type("Hi");
   await page.keyboard.press("Escape");
   await layers(page).getByRole("button", { name: "Hi", exact: true }).click();
+  const spacing = await popover(page, "Spacing", "Text spacing");
   for (const label of ["Line height", "Letter spacing"]) {
-    await expect(page.getByLabel(label)).toBeVisible();
-    expect((await page.getByLabel(label).boundingBox())!.width).toBeGreaterThanOrEqual(40);
-    await page.getByLabel(label).fill("2");
-    await page.getByLabel(label).press("Enter");
-    await expect(page.getByLabel(label)).toHaveValue("2");
+    await expect(spacing.getByLabel(label)).toBeVisible();
+    expect((await spacing.getByLabel(label).boundingBox())!.width).toBeGreaterThanOrEqual(40);
+    await spacing.getByLabel(label).fill("2");
+    await spacing.getByLabel(label).press("Enter");
+    await expect(spacing.getByLabel(label)).toHaveValue("2");
   }
+  await page.keyboard.press("Escape");
   await page.waitForTimeout(450);
   await addShape(page, "Rectangle", 200, 150);
   const sw = page.getByLabel("Stroke width");
@@ -625,7 +620,7 @@ test("import keeps the SVG's transforms", async ({ page }) => {
   await showLayers(page);
   const width = async (name: string) => {
     await layers(page).getByRole("button", { name, exact: true }).click();
-    return Number(await page.getByLabel("W", { exact: true }).inputValue());
+    return Number(await positionValue(page, "W"));
   };
   const w1 = await width("Imported 1");
   expect((await width("Imported 2")) / w1).toBeCloseTo(3, 1);
@@ -684,7 +679,11 @@ test("insert a visual into a design", async ({ page }) => {
   expect((await loaded).status()).toBe(200);
   await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toBeVisible();
-  await expect(page.getByRole("complementary", { name: "Properties" }).getByText("CC0", { exact: true })).toBeVisible();
+  const info = await popover(page, "Info", "Image info");
+  await expect(info.getByText("CC0", { exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(info).toHaveCount(0);
+  await expect(toolbar(page).getByRole("button", { name: "Info" })).toBeFocused();
   await expect(status(page)).toHaveText("Saved");
 
   await page.keyboard.press("Control+Z");
@@ -744,7 +743,7 @@ test("a missing visual shows a placeholder, not a crash", async ({ page }) => {
   await page.reload();
   const layer = layers(page).getByRole("button", { name: "Gone dot", exact: true });
   await layer.click();
-  await expect(page.getByRole("complementary", { name: "Properties" }).getByRole("heading", { name: "Visual" })).toBeVisible();
+  await expect((await popover(page, "Info", "Image info")).getByRole("heading", { name: "Image" })).toBeVisible();
 });
 
 test("upload from the editor", async ({ page }) => {
@@ -759,4 +758,208 @@ test("upload from the editor", async ({ page }) => {
   await dialog.getByRole("button", { name: "Add 1 visual" }).click();
   await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Dot2", exact: true })).toBeVisible();
+});
+
+/** Places a text layer saying `text` at the canvas centre and leaves it selected. */
+async function placeText(page: Page, text: string) {
+  await addShape(page, "Text");
+  await page.keyboard.type(text);
+  await page.keyboard.press("Escape");
+  await layers(page).getByRole("button", { name: text, exact: true }).click();
+}
+
+test("the toolbar edits a selected text, and undo reverts each change", async ({ page }) => {
+  await newSocialPost(page);
+  await placeText(page, "Hello");
+  const bar = toolbar(page);
+  for (const name of ["Bold", "Text colour", "Align text left", "Align text center", "Align text right", "Position", "Spacing"]) {
+    await expect(bar.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  const font = bar.getByRole("combobox", { name: "Font" });
+  const size = bar.getByLabel("Size", { exact: true });
+  const bold = bar.getByRole("button", { name: "Bold" });
+  const center = bar.getByRole("button", { name: "Align text center" });
+  const colour = bar.getByRole("button", { name: "Text colour" });
+  const size0 = await size.inputValue();
+  const colour0 = await colour.getAttribute("title");
+
+  await font.selectOption("Lora");
+  await bar.getByRole("button", { name: "Increase font size" }).click();
+  await expect(size).toHaveValue(String(Number(size0) + 1));
+  await bold.click();
+  await expect(bold).toHaveAttribute("aria-pressed", "true");
+  await center.click();
+  await expect(center).toHaveAttribute("aria-pressed", "true");
+  const pop = await popover(page, "Text colour");
+  await pop.getByRole("group", { name: "Palette" }).getByRole("button", { name: "#C654C3" }).click();
+  await page.keyboard.press("Escape");
+  await expect(colour).toHaveAttribute("title", "Text colour: #C654C3");
+  await expect(status(page)).toHaveText("Saved");
+
+  await page.keyboard.press("Control+Z");
+  await expect(colour).toHaveAttribute("title", colour0!);
+  await page.keyboard.press("Control+Z");
+  await expect(center).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("Control+Z");
+  await expect(bold).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("Control+Z");
+  await expect(size).toHaveValue(size0);
+  await page.keyboard.press("Control+Z");
+  await expect(font).toHaveValue("Inter");
+
+  // Bold uses the weights the family has: Pacifico has only 400.
+  await font.selectOption("Pacifico");
+  await expect(bold).toBeDisabled();
+});
+
+test("typing in the Size field does not trigger tool shortcuts", async ({ page }) => {
+  await newSocialPost(page);
+  await placeText(page, "Hi");
+  const size = toolbar(page).getByLabel("Size", { exact: true });
+  await size.fill("");
+  await page.keyboard.type("r");
+  await expect(size).toHaveValue("r");
+  await page.keyboard.press("Escape"); // drops the draft
+  await expect(size).not.toHaveValue("r");
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  await page.mouse.click(box.x + 40, box.y + 40); // an armed rectangle tool would draw here
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(0);
+});
+
+test("shape, multi-selection and nothing-selected toolbars", async ({ page }) => {
+  await newSocialPost(page);
+  const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
+  expect((await page.request.post(`/api/workspaces/${workspaces[0].id}/brand-kits`, { data: { name: "Bar kit", content: {
+    colors: [{ id: "a", name: "Berry", role: "primary", hex: "#8E1EA2" }],
+    typography: {
+      heading: { fontFamily: "Space Grotesk", fontWeight: 700, fontSize: 32, lineHeight: 1.1 },
+      subheading: { fontFamily: "Space Grotesk", fontWeight: 500, fontSize: 20, lineHeight: 1.2 },
+      body: { fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: 1.5 },
+    },
+    logos: { primary: null, onDark: null, mark: null, wordmark: null },
+    rules: { kitColorsOnly: false, warnOffBrandFonts: false, lockLogos: false, flagContrast: false, requireApproval: false },
+  } } })).status()).toBe(201);
+  await page.reload();
+  await editorReady(page);
+  const bar = toolbar(page);
+  const header = page.locator(".ed-phead");
+
+  // Nothing selected: background, page size, colour mode and the brand kit.
+  await expect(bar.getByRole("button", { name: "Background colour" })).toBeVisible();
+  await expect(bar.getByRole("combobox", { name: "Colour mode" })).toHaveValue("rgb");
+  await expect(bar.getByRole("combobox", { name: "Brand kit" })).toBeVisible();
+  const width = bar.getByLabel("Page width");
+  await width.fill("1200");
+  await width.press("Enter");
+  await expect(header).toContainText("1200 × 1080 px");
+  const mode = bar.getByRole("combobox", { name: "Colour mode" });
+  await mode.selectOption("cmyk");
+  await expect(status(page)).toHaveText("Saved");
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur()); // so undo is the editor's
+  await page.keyboard.press("Control+Z");
+  await expect(mode).toHaveValue("rgb");
+  await page.keyboard.press("Control+Z");
+  await expect(header).toContainText("1080 × 1080 px");
+
+  // File > Page size and colour mode clears the selection and focuses the page size.
+  await addShape(page, "Rectangle", -60);
+  await page.getByRole("button", { name: "File", exact: true }).click();
+  await page.getByRole("menu", { name: "File" }).getByRole("menuitem", { name: "Page size and colour mode" }).click();
+  await expect(bar.getByLabel("Page width")).toBeFocused();
+
+  // A rectangle: fill, stroke and corner radius.
+  await layers(page).getByRole("button", { name: "Rectangle", exact: true }).click();
+  for (const name of ["Fill", "Stroke"]) await expect(bar.getByRole("button", { name, exact: true })).toBeVisible();
+  await expect(bar.getByLabel("Corner radius")).toBeVisible();
+  await expect(selectionMenu(page).getByRole("button", { name: "Duplicate" })).toBeVisible();
+
+  // Two shapes: combine, group, and distribute in Position.
+  await page.waitForTimeout(450);
+  await addShape(page, "Rectangle", 60);
+  await page.keyboard.press("Control+A");
+  await expect(bar.getByRole("button", { name: "Union" })).toBeVisible();
+  const pos = await position(page);
+  await expect(pos.getByRole("button", { name: "Distribute H" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await bar.getByRole("button", { name: "Group", exact: true }).click();
+  await expect(layers(page).getByRole("button", { name: "Group", exact: true })).toBeVisible();
+  await expect(bar.getByRole("button", { name: "Ungroup" })).toBeVisible();
+  await selectionMenu(page).getByRole("button", { name: "More" }).click();
+  await page.getByRole("menu", { name: "More" }).getByRole("menuitem", { name: "Ungroup" }).click();
+  await expect(layers(page).getByRole("button", { name: "Group", exact: true })).toHaveCount(0);
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(2);
+
+  // Copy and Paste from the selection menu.
+  await layers(page).getByRole("button", { name: "Rectangle", exact: true }).first().click();
+  await selectionMenu(page).getByRole("button", { name: "More" }).click();
+  await page.getByRole("menu", { name: "More" }).getByRole("menuitem", { name: "Copy" }).click();
+  await selectionMenu(page).getByRole("button", { name: "More" }).click();
+  await page.getByRole("menu", { name: "More" }).getByRole("menuitem", { name: "Paste" }).click();
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(3);
+});
+
+test("the colour popover offers swatches, a picker and a hex field, and rejects a bad hex", async ({ page }) => {
+  await newSocialPost(page);
+  await addShape(page, "Rectangle");
+  const fill = toolbar(page).getByRole("button", { name: "Fill", exact: true });
+  const pop = await popover(page, "Fill", "Fill colour");
+  for (const name of ["Document", "Palette"]) await expect(pop.getByRole("group", { name })).toBeVisible();
+  await expect(pop.getByRole("group", { name: "Palette" }).getByRole("button")).toHaveCount(9);
+  await expect(pop.getByLabel("Custom colour")).toHaveAttribute("type", "color");
+  const hex = pop.getByLabel("Hex");
+  const before = await fill.getAttribute("title");
+  await hex.fill("#12345");
+  await hex.press("Enter");
+  await expect(pop.getByRole("alert")).toHaveText("Use six hex digits, like #8E1EA2.");
+  await expect(fill).toHaveAttribute("title", before!);
+  await hex.fill("ffc0de");
+  await hex.press("Enter");
+  await expect(fill).toHaveAttribute("title", "Fill: #FFC0DE");
+  await expect(pop.getByRole("alert")).toHaveCount(0);
+  const swatch = pop.getByRole("group", { name: "Palette" }).getByRole("button").first();
+  expect((await swatch.boundingBox())!.width).toBeGreaterThanOrEqual(34);
+});
+
+test("every toolbar popover opens with Enter, closes with Escape and returns focus", async ({ page }) => {
+  await newSocialPost(page);
+  const check = async (button: string, dialog: string) => {
+    const b = toolbar(page).getByRole("button", { name: button, exact: true });
+    await b.focus();
+    await page.keyboard.press("Enter");
+    const d = page.getByRole("dialog", { name: dialog, exact: true });
+    await expect(d).toBeVisible();
+    await expect(d.locator(":focus")).toHaveCount(1); // focus moved in
+    await page.keyboard.press("Escape");
+    await expect(d).toHaveCount(0);
+    await expect(b).toBeFocused();
+  };
+  await check("Background colour", "Background colour");
+  await placeText(page, "Pop");
+  for (const [b, d] of [["Text colour", "Text colour"], ["Spacing", "Text spacing"], ["Position", "Position"]]) await check(b!, d!);
+  await page.keyboard.press("Escape"); // deselect
+  await page.waitForTimeout(450);
+  await addShape(page, "Rectangle", 0, 150);
+  for (const [b, d] of [["Fill", "Fill colour"], ["Stroke", "Stroke colour"], ["Position", "Position"]]) await check(b!, d!);
+  await expect(page.getByRole("complementary", { name: "Properties" })).toHaveCount(0);
+});
+
+test("the canvas takes the old properties column's width", async ({ page }) => {
+  await newSocialPost(page);
+  const vw = page.viewportSize()!.width;
+  const stage = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  expect(stage.width).toBeGreaterThanOrEqual(vw - 72 - 320 - 40);
+});
+
+test("a viewer gets no editing controls in the toolbar or a selection menu", async ({ browser }) => {
+  const owner = await (await browser.newContext()).newPage();
+  await newSocialPost(owner);
+  await placeText(owner, "Look");
+  await expect(status(owner)).toHaveText("Saved");
+  const viewer = await openAsViewer(browser, owner);
+  await expect(toolbar(viewer)).toContainText("1080 × 1080 px · RGB");
+  await layers(viewer).getByRole("button", { name: "Look", exact: true }).click();
+  await expect(toolbar(viewer).getByRole("combobox")).toHaveCount(0);
+  await expect(toolbar(viewer).getByRole("textbox")).toHaveCount(0);
+  await expect(toolbar(viewer).getByRole("button")).toHaveCount(0);
+  await expect(selectionMenu(viewer)).toHaveCount(0);
 });

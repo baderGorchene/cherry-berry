@@ -42,17 +42,16 @@ function Dialog({ node, workspaceId, viewer, onClose, onSaved }: {
   );
 }
 
-/** Properties box for a single rect, ellipse or path. Open to viewers: saving to the library doesn't edit the design. */
+/** "Save as custom shape" for a single rect, ellipse or path. Open to viewers: saving to the library doesn't edit the design. */
 export default function ReuseShape({ node, workspaceId, viewer }: { node: CherryNode; workspaceId: string; viewer: boolean }) {
   const [open, setOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   return (
-    <section className="ed-sec">
-      <h2 className="ed-ph">Reuse this shape</h2>
-      <button className="ed-mini" onClick={() => { setSaved(false); setOpen(true); }}>Save as custom shape</button>
-      {saved && <p role="status" className="muted" style={{ fontSize: 13 }}>Saved to your shapes</p>}
+    <>
+      <button type="button" className="ed-tbb" onClick={() => { setSaved(false); setOpen(true); }}>Save as custom shape</button>
+      {saved && <span role="status" className="muted ed-note">Saved to your shapes</span>}
       {open && <Dialog node={node} workspaceId={workspaceId} viewer={viewer} onClose={() => setOpen(false)}
         onSaved={() => { setOpen(false); setSaved(true); }} />}
-    </section>
+    </>
   );
 }

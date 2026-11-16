@@ -33,7 +33,7 @@ test("choosing Social post opens the editor at 1080 × 1080 px and search filter
   await dialog(page).getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\//);
   await expect(dialog(page)).toBeHidden();
-  await expect(page.getByRole("complementary", { name: "Properties" }).getByText("1080 × 1080 px")).toBeVisible();
+  await expect(page.locator(".ed-phead")).toContainText("1080 × 1080 px");
   // the size is now remembered under For you
   await page.goto("/new");
   await expect(dialog(page).getByRole("heading", { name: "Recent" })).toBeVisible();
@@ -62,7 +62,7 @@ test("Open a .cherry file imports it; a broken file shows a plain message", asyn
   await pick.setInputFiles({ name: "ok.cherry", mimeType: "application/json", buffer: Buffer.from(serializeCherry(doc)) });
   await expect(page).toHaveURL(/\/d\//);
   await expect(dialog(page)).toBeHidden();
-  await expect(page.getByRole("complementary", { name: "Properties" }).getByText(/210 × 297 mm/)).toBeVisible();
+  await expect(page.locator(".ed-phead")).toContainText("210 × 297 mm");
 });
 
 test("viewers see disabled size cards and Open file", async ({ page, browser }) => {

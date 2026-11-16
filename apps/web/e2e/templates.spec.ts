@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { addShape, createWorkspace, editorReady, fileMenu, openAsEditor, openAsViewer, openPanel, panel, signUp, unique, uniquePng, newDesign } from "./helpers";
 
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers panel" });
-const props = (page: Page) => page.getByRole("complementary", { name: "Properties" });
+const props = (page: Page) => page.getByRole("toolbar", { name: "Selection", exact: true });
 const canvas = (page: Page) => page.getByLabel("Page 1 canvas");
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Publish as a template" });
 

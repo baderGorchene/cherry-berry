@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 export type FileItem = [label: string, run: () => void, disabled?: boolean];
 
-/** The top bar's File menu: Enter or click opens it on the first item, arrows move, Escape or a click outside closes it and focus returns to File. */
-export default function FileMenu({ items }: { items: FileItem[] }) {
+/** A menu button (the top bar's File menu by default): Enter or click opens it on the first item, arrows move, Escape or a click outside closes it and focus returns to the button. */
+export default function FileMenu({ items, label = "File", button = label, className = "btn ed-file" }: {
+  items: FileItem[]; label?: string; button?: ReactNode; className?: string;
+}) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
@@ -19,9 +21,10 @@ export default function FileMenu({ items }: { items: FileItem[] }) {
   const close = () => { setOpen(false); btn.current?.focus(); };
   return (
     <div className="ed-more-w" ref={wrap}>
-      <button ref={btn} type="button" className="btn ed-file" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>File</button>
+      <button ref={btn} type="button" className={className} aria-label={typeof button === "string" ? undefined : label} title={typeof button === "string" ? undefined : label}
+        aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{button}</button>
       {open && (
-        <div ref={menu} role="menu" aria-label="File" className="ed-ctx ed-menu"
+        <div ref={menu} role="menu" aria-label={label} className="ed-ctx ed-menu"
           // Keys here belong to the menu, not to the editor's shortcuts.
           onKeyDown={(e) => {
             e.stopPropagation();

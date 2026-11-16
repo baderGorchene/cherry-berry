@@ -119,7 +119,7 @@ test("show on page selects the offending layer", async ({ page }) => {
   const layer = layers(page).getByRole("button", { name: "Hello", exact: true });
   await expect(layer).toBeVisible();
   await layer.click();
-  await page.getByRole("complementary", { name: "Properties" }).getByRole("combobox", { name: "Font" }).selectOption("Georgia");
+  await page.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("combobox", { name: "Font" }).selectOption("Georgia");
   await saved(page);
   await page.keyboard.press("Escape");
   await expect(layer).toHaveAttribute("aria-pressed", "false");

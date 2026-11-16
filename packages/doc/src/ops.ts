@@ -188,6 +188,11 @@ export function renamePage(ydoc: Y.Doc, pageId: string, name: string): void {
   withPage(ydoc, pageId, (page) => page.set("name", name));
 }
 
+/** Page size, colour mode and background; the unit stays, so nodes keep their page-unit geometry. */
+export function updatePage(ydoc: Y.Doc, pageId: string, patch: Partial<Pick<Page, "width" | "height" | "colorMode" | "background">>): void {
+  withPage(ydoc, pageId, (page) => { for (const [k, v] of Object.entries(patch)) if (v !== undefined) page.set(k, v); });
+}
+
 export function movePage(ydoc: Y.Doc, pageId: string, toIndex: number): void {
   ydoc.transact(() => moveTo(pagesOf(ydoc), pageId, toIndex), LOCAL);
 }
