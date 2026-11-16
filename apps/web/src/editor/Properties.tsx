@@ -266,7 +266,7 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
           <h2 className="ed-ph">Text</h2>
           {on("Font") && <label className="ed-f"><b>Font</b>
             <select value={n.fontFamily} disabled={ro} onChange={(e) => set(n, { fontFamily: e.target.value })}>
-              {(fonts.includes(n.fontFamily) ? fonts : [n.fontFamily, ...fonts]).map((f) => <option key={f}>{f}</option>)}
+              {(fonts.includes(n.fontFamily) ? fonts : [n.fontFamily, ...fonts]).map((f) => <option key={f} style={{ fontFamily: `"${f}"` }}>{f}</option>)}
             </select>
           </label>}
           <div className="ed-grid">
