@@ -12,6 +12,7 @@ import type { Storage } from "../storage";
 import { WorkspaceError } from "../workspaces/errors";
 import { EXPORT_PIXEL_BUDGET, exportPixels, rasterOk, rasterSize, writeGif, writePdf, writePptx, writeRaster, writeSvg, type Out } from "./formats";
 import { availableFamilies, useKitFonts } from "./fonts";
+import { toPdfx, toPlates, zipPlates } from "./print";
 import { loadImages } from "./render";
 
 const MAX_PAGES = 100;
@@ -51,12 +52,12 @@ async function kitFonts(db: Db, userId: string, kitId: string | null) {
   return kitId ? (await getKit(db, userId, kitId)).fonts : [];
 }
 
-export async function exportInfo(db: Db, _storage: Storage, collab: Collab, userId: string, designId: string): Promise<{ fonts: string[]; assets: ExportAsset[] }> {
+export async function exportInfo(db: Db, _storage: Storage, collab: Collab, userId: string, designId: string, print = false): Promise<{ fonts: string[]; assets: ExportAsset[]; print: boolean }> {
   const { design } = await loadWithRole(db, designId, userId);
   const doc = await currentDoc(db, collab, design.id);
   const assets = await resolveAssets(db, userId, usedAssetIds(doc.pages));
   const fonts = availableFamilies((await kitFonts(db, userId, design.kitId)).map((f) => f.family));
-  return { fonts, assets: assets.map((a) => a.info) };
+  return { fonts, assets: assets.map((a) => a.info), print };
 }
 
 /**
@@ -74,16 +75,17 @@ let running = 0;
 
 /** At most MAX_EXPORTS at once in this process; one more is refused with 429 rate_limited. */
 export async function exportDesign(
-  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody,
+  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody, printUrl?: string,
 ): Promise<Out & { filename: string }> {
   if (running >= MAX_EXPORTS) throw new HttpError(429, "rate_limited");
   running++;
-  try { return await renderExport(db, storage, collab, userId, designId, body); } finally { running--; }
+  try { return await renderExport(db, storage, collab, userId, designId, body, printUrl); } finally { running--; }
 }
 
 async function renderExport(
-  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody,
+  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody, printUrl?: string,
 ): Promise<Out & { filename: string }> {
+  if ((body.format === "pdf-x" || body.format === "plates") && !printUrl) throw new HttpError(400, "invalid_body");
   const { design } = await loadWithRole(db, designId, userId);
   const doc = await currentDoc(db, collab, design.id);
   if (body.pageIds.length > MAX_PAGES) throw new HttpError(400, "export_too_large");
@@ -114,6 +116,13 @@ async function renderExport(
   switch (body.format) {
     case "pdf": out = await writePdf(pages, images, false, false, fonts); break;
     case "pdf-print": out = await writePdf(pages, images, true, body.cropMarks ?? true, fonts); break;
+    case "pdf-x": case "plates": {
+      const pdf = (await writePdf(pages, images, true, body.cropMarks ?? true, fonts)).bytes;
+      out = body.format === "pdf-x"
+        ? { bytes: await toPdfx(printUrl!, pdf), mime: "application/pdf", ext: "pdf" }
+        : { bytes: zipPlates(await toPlates(printUrl!, pdf)), mime: "application/zip", ext: "zip" };
+      return { ...out, filename: body.format === "plates" ? `${base}-plates.zip` : `${base}.pdf` };
+    }
     case "png": case "jpg": out = await writeRaster(pages, images, body.format, scale, body.transparent ?? false, base, fonts); break;
     case "svg": out = await writeSvg(pages, images, base, fonts); break;
     case "gif": out = await writeGif(pages, images, scale, body.secondsPerPage ?? 2, fonts); break;

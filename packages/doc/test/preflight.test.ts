@@ -89,6 +89,22 @@ describe("preflight", () => {
     expect(get(cs, "color")).toBeDefined();
   });
 
+  it("cmyk pages pass with print", () => {
+    const d = mk([]);
+    d.pages[0]!.colorMode = "cmyk";
+    const c = get(preflight(d, { format: "pdf-x", pageIds: [d.pages[0]!.id], scale: 1 }, { fonts: ["Inter"], assets: [], print: true }), "color")!;
+    expect(c.status).toBe("pass");
+    expect(c.detail).toBe("Converted to CMYK with the print service");
+  });
+
+  it("cmyk copy mentions spot swatches without print", () => {
+    const d = mk([]);
+    d.pages[0]!.colorMode = "cmyk";
+    const c = get(run(d, "pdf-print"), "color")!;
+    expect(c.status).toBe("warn");
+    expect(c.detail).toBe("CMYK and PDF/X come with the print service; spot swatches aren't supported yet.");
+  });
+
   it("usedAssetIds finds nested images once", () => {
     const d = mk([image("i", "a"), group("g", [image("j", "b"), image("k", "a"), image("h", "z", 1, { hidden: true })])]);
     expect(usedAssetIds(d.pages)).toEqual(["a", "b"]);

@@ -4,12 +4,12 @@ import {
 } from "@cherry/doc";
 import { errorMessage, exportFile, exportInfo, saveFile } from "../api";
 import Modal from "../Modal";
-import { FORMATS, downloadName, parsePageRange } from "./exportOptions";
+import { FORMATS, downloadName, formatsFor, parsePageRange } from "./exportOptions";
 import type { DesignState } from "./useDesign";
 
 type Status = Extract<DesignState, { state: "ready" }>["status"];
 type Pages = "all" | "current" | "custom";
-const PRINT_NOTE = "CMYK, PDF/X and spot colors come with the print service.";
+const PRINT_NOTE = "CMYK and PDF/X come with the print service; spot swatches aren't supported yet.";
 
 export default function ExportDialog({ designId, doc, pageId, status, onShow, onClose }: {
   designId: string; doc: CherryDocument; pageId: string; status: Status;
@@ -22,7 +22,7 @@ export default function ExportDialog({ designId, doc, pageId, status, onShow, on
   const [transparent, setTransparent] = useState(false);
   const [cropMarks, setCropMarks] = useState(true);
   const [seconds, setSeconds] = useState(2);
-  const [info, setInfo] = useState<{ fonts: string[]; assets: ExportAsset[] } | "loading" | "failed">("loading");
+  const [info, setInfo] = useState<{ fonts: string[]; assets: ExportAsset[]; print: boolean } | "loading" | "failed">("loading");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
@@ -30,6 +30,7 @@ export default function ExportDialog({ designId, doc, pageId, status, onShow, on
   const credits = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { exportInfo(designId).then(setInfo, () => setInfo("failed")); }, [designId]);
 
+  const print = typeof info === "object" && info.print;
   const label = FORMATS.find((f) => f.id === format)!.label;
   const cherry = format === "cherry";
   const picked = parsePageRange(range, doc.pages.length);
@@ -67,7 +68,7 @@ export default function ExportDialog({ designId, doc, pageId, status, onShow, on
           format, pageIds,
           ...(raster ? { scale } : {}),
           ...(format === "png" ? { transparent } : {}),
-          ...(format === "pdf-print" ? { cropMarks } : {}),
+          ...(format === "pdf-print" || format === "pdf-x" || format === "plates" ? { cropMarks } : {}),
           ...(format === "gif" ? { secondsPerPage: seconds } : {}),
         });
         await saveFile(blob, filename);
@@ -86,7 +87,7 @@ export default function ExportDialog({ designId, doc, pageId, status, onShow, on
           <fieldset className="exp-set">
             <legend className="lbl">Format</legend>
             <div className="exp-cards">
-              {FORMATS.map((f) => (
+              {formatsFor(print).map((f) => (
                 <label key={f.id} className="exp-card">
                   <input type="radio" name="format" checked={format === f.id} onChange={() => setFormat(f.id)} />
                   <b>{f.label}</b><span className="muted">{f.hint}</span>
@@ -122,10 +123,10 @@ export default function ExportDialog({ designId, doc, pageId, status, onShow, on
           {format === "png" && (
             <label className="exp-opt"><input type="checkbox" checked={transparent} onChange={(e) => setTransparent(e.target.checked)} /> Transparent background</label>
           )}
-          {format === "pdf-print" && (
+          {(format === "pdf-print" || format === "pdf-x" || format === "plates") && (
             <>
               <label className="exp-opt"><input type="checkbox" checked={cropMarks} onChange={(e) => setCropMarks(e.target.checked)} /> Crop marks</label>
-              <p className="muted">{PRINT_NOTE}</p>
+              {format === "pdf-print" && !print && <p className="muted">{PRINT_NOTE}</p>}
             </>
           )}
           {format === "gif" && (

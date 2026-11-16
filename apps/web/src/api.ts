@@ -248,7 +248,7 @@ export const restoreVersion = (id: string) => api<{ design: Design }>(`/api/vers
 export const branchVersion = (id: string, name: string) =>
   api<{ design: Design }>(`/api/versions/${enc(id)}/branch`, { body: { name } }).then((r) => r.design);
 
-export const exportInfo = (designId: string) => api<{ fonts: string[]; assets: ExportAsset[] }>(`/api/designs/${enc(designId)}/export/info`);
+export const exportInfo = (designId: string) => api<{ fonts: string[]; assets: ExportAsset[]; print: boolean }>(`/api/designs/${enc(designId)}/export/info`);
 /** The rendered file; the name comes from `Content-Disposition`, preferring its UTF-8 `filename*`. */
 export async function exportFile(designId: string, body: ExportBody): Promise<{ blob: Blob; filename: string }> {
   const res = await fetch(`/api/designs/${enc(designId)}/export`, {
@@ -329,6 +329,7 @@ const COPY: Record<string, string> = {
   template_private_assets: "Every visual in a public template must be public. Make them public or publish to this workspace.",
   invalid_document: "This change couldn't be saved because the design became invalid.",
   not_saved: "Couldn't save just now. Your changes are kept, try again.",
+  print_unavailable: "The print service isn't reachable right now. Try again, or export a regular PDF.",
   export_too_large: "This export is too large. Try a smaller scale or fewer pages.",
 };
 

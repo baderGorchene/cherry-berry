@@ -48,7 +48,7 @@ test("exports a print pdf with a bleed warning", async ({ page }) => {
   await saved(page);
   await exportAs(page, "PDF · Print");
   await expect(dialog(page).getByText("No bleed", { exact: true })).toBeVisible();
-  await expect(dialog(page).getByText("CMYK, PDF/X and spot colors come with the print service.").first()).toBeVisible();
+  await expect(dialog(page).getByText("CMYK and PDF/X come with the print service; spot swatches aren't supported yet.").first()).toBeVisible();
   const file = await download(page, "PDF · Print");
   expect((await bytes(file)).subarray(0, 5).toString()).toBe("%PDF-");
 });
@@ -136,4 +136,16 @@ test("show on page selects the offending layer", async ({ page }) => {
   await dialog(page).getByRole("button", { name: "Show on page" }).click();
   await expect(dialog(page)).toHaveCount(0);
   await expect(layer).toHaveAttribute("aria-pressed", "true");
+});
+
+test("export dialog offers PDF/X and plates when the server has print", async ({ page }) => {
+  await page.route("**/api/designs/*/export/info", async (route) => {
+    const res = await route.fetch();
+    await route.fulfill({ response: res, json: { ...(await res.json()), print: true } });
+  });
+  await newSocialPost(page);
+  await saved(page);
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await expect(dialog(page).getByRole("radio", { name: /^PDF\/X \(CMYK, for print\)/ })).toBeVisible();
+  await expect(dialog(page).getByRole("radio", { name: /^Colour plates \(PNG per ink\)/ })).toBeVisible();
 });

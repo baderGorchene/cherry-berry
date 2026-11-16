@@ -9,7 +9,7 @@ import * as svc from "./service";
 
 const IdParams = z.object({ id: z.string() });
 const Body = z.object({
-  format: z.enum(["pdf-print", "pdf", "png", "jpg", "svg", "gif", "pptx"]),
+  format: z.enum(["pdf-print", "pdf-x", "plates", "pdf", "png", "jpg", "svg", "gif", "pptx"]),
   pageIds: z.array(z.string().max(100)).min(1), // more than 100 pages is export_too_large (service)
   scale: z.union([z.literal(1), z.literal(2), z.literal(3)]).optional(),
   transparent: z.boolean().optional(),
@@ -25,7 +25,7 @@ export const contentDisposition = (name: string) => {
 };
 
 export function registerExportRoutes(
-  app: FastifyInstance, db: Db, storage: Storage, collab: Collab, requireUser: (req: FastifyRequest) => Promise<SessionUser>,
+  app: FastifyInstance, db: Db, storage: Storage, collab: Collab, printUrl: string | undefined, requireUser: (req: FastifyRequest) => Promise<SessionUser>,
 ) {
   // Keyed by the authenticated user id (IP only when there is no session).
   const limit = {
@@ -37,13 +37,13 @@ export function registerExportRoutes(
 
   app.get("/api/designs/:id/export/info", async (req) => {
     const user = await requireUser(req);
-    return svc.exportInfo(db, storage, collab, user.id, parse(IdParams, req.params).id);
+    return svc.exportInfo(db, storage, collab, user.id, parse(IdParams, req.params).id, !!printUrl);
   });
 
   app.post("/api/designs/:id/export", { config: { rateLimit: limit } }, async (req, reply) => {
     const user = await requireUser(req);
     const id = parse(IdParams, req.params).id;
-    const out = await svc.exportDesign(db, storage, collab, user.id, id, parse(Body, req.body));
+    const out = await svc.exportDesign(db, storage, collab, user.id, id, parse(Body, req.body), printUrl);
     return reply.header("content-type", out.mime).header("content-disposition", contentDisposition(out.filename))
       .send(Buffer.from(out.bytes.buffer, out.bytes.byteOffset, out.bytes.byteLength));
   });

@@ -11,6 +11,14 @@ export const FORMATS: { id: ExportFormat; label: string; hint: string }[] = [
   { id: "cherry", label: ".cherry", hint: "Open source file" },
 ];
 
+const PRINT_FORMATS: typeof FORMATS = [
+  { id: "pdf-x", label: "PDF/X (CMYK, for print)", hint: "Print service" },
+  { id: "plates", label: "Colour plates (PNG per ink)", hint: "Print service" },
+];
+
+/** The formats to offer; PDF/X and plates follow "PDF · Print" and only exist when the server has a print service. */
+export const formatsFor = (print: boolean) => (print ? [FORMATS[0]!, ...PRINT_FORMATS, ...FORMATS.slice(1)] : FORMATS);
+
 /** "1-3, 5" → [0, 1, 2, 4] (zero-based, sorted, once each); anything out of 1..count or unreadable → null. */
 export function parsePageRange(text: string, count: number): number[] | null {
   const out = new Set<number>();

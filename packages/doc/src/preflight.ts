@@ -1,7 +1,7 @@
 import type { CherryDocument, CherryNode, Page } from "./schema";
 import { toPx } from "./units";
 
-export type ExportFormat = "pdf-print" | "pdf" | "png" | "jpg" | "svg" | "gif" | "pptx" | "cherry";
+export type ExportFormat = "pdf-print" | "pdf-x" | "plates" | "pdf" | "png" | "jpg" | "svg" | "gif" | "pptx" | "cherry";
 export type ExportAsset = {
   id: string; title: string; license: "cc0" | "cc-by" | "own" | "workspace-only"; attribution: string;
   width: number; height: number; kind: "image" | "gif" | "svg"; available: boolean;
@@ -38,9 +38,10 @@ const hasText = (n: CherryNode): boolean => n.kind === "text" || (n.kind === "gr
 export function preflight(
   doc: CherryDocument,
   opts: { format: ExportFormat; pageIds: string[]; scale: number },
-  env: { fonts: string[]; assets: ExportAsset[] },
+  env: { fonts: string[]; assets: ExportAsset[]; print?: boolean },
 ): PreflightCheck[] {
   const { format } = opts;
+  const printed = format === "pdf-print" || format === "pdf-x" || format === "plates";
   const pages = doc.pages.filter((p) => opts.pageIds.includes(p.id));
   const hits = pages.flatMap((p) => [...walk(p.id, p.nodes)]);
   const out: PreflightCheck[] = [];
@@ -57,7 +58,7 @@ export function preflight(
       `${fam.join(", ")} ${one ? "isn't" : "aren't"} on this server, so ${one ? "it" : "they"} will be replaced.`);
   }
 
-  if (format === "pdf-print") {
+  if (printed) {
     const noBleed = pages.filter((p) => p.bleed === 0);
     out.push({
       id: "bleed", status: noBleed.length ? "warn" : "pass", title: noBleed.length ? "No bleed" : "Bleed covered",
@@ -76,7 +77,7 @@ export function preflight(
 
   const byId = new Map(env.assets.map((a) => [a.id, a]));
   if (format !== "cherry") {
-    const need = format === "pdf-print" ? 300 : format === "pdf" ? 150 : ["png", "jpg", "gif"].includes(format) ? 96 * opts.scale : 96;
+    const need = printed ? 300 : format === "pdf" ? 150 : ["png", "jpg", "gif"].includes(format) ? 96 * opts.scale : 96;
     const low: { hit: Hit; asset: ExportAsset; ppi: number }[] = [];
     for (const h of hits) {
       if (h.node.kind !== "image") continue;
@@ -113,9 +114,12 @@ export function preflight(
 
   if (format !== "cherry") {
     const cmyk = pages.some((p) => p.colorMode === "cmyk");
+    const done = cmyk && env.print;
     out.push({
-      id: "color", status: cmyk ? "warn" : "pass", title: cmyk ? "Exported as RGB" : "Colors",
-      detail: cmyk ? "CMYK, PDF/X and spot colors come with the print service." : "Colors export as RGB.", nodes: [],
+      id: "color", status: cmyk && !done ? "warn" : "pass", title: done ? "Converted to CMYK" : cmyk ? "Exported as RGB" : "Colors",
+      detail: done ? "Converted to CMYK with the print service"
+        : cmyk ? "CMYK and PDF/X come with the print service; spot swatches aren't supported yet." : "Colors export as RGB.",
+      nodes: [],
     });
   }
   return out;

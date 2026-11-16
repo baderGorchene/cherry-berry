@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FORMATS, downloadName, parsePageRange } from "./exportOptions";
+import { FORMATS, formatsFor, downloadName, parsePageRange } from "./exportOptions";
 
 describe("parsePageRange", () => {
   it("reads ranges and single pages, zero-based", () => {
@@ -32,6 +32,14 @@ describe("downloadName", () => {
   it("cuts to 100 code points without splitting emoji", () => {
     expect(downloadName("🍒".repeat(150), "cherry")).toBe(`${"🍒".repeat(100)}.cherry`);
   });
+});
+
+it("print formats only when info.print", () => {
+  const ids = (print: boolean) => formatsFor(print).map((f) => f.id);
+  expect(ids(false)).toEqual(FORMATS.map((f) => f.id));
+  expect(ids(true)).toEqual(["pdf-print", "pdf-x", "plates", "pdf", "png", "jpg", "svg", "gif", "pptx", "cherry"]);
+  expect(formatsFor(true).filter((f) => f.id === "pdf-x" || f.id === "plates").map((f) => f.label))
+    .toEqual(["PDF/X (CMYK, for print)", "Colour plates (PNG per ink)"]);
 });
 
 it("lists formats in mock order", () => {

@@ -107,7 +107,7 @@ export async function buildApp(config: Config, deps: { db: Db; storage: Storage;
   registerReportRoutes(app, deps.db, deps.storage, requireUser);
   registerTemplateRoutes(app, deps.db, deps.storage, collab, requireUser);
   registerBuiltInFonts();
-  registerExportRoutes(app, deps.db, deps.storage, collab, requireUser);
+  registerExportRoutes(app, deps.db, deps.storage, collab, config.printUrl, requireUser);
   if (config.webDist) {
     const root = resolve(config.webDist);
     await app.register(fastifyStatic, {
