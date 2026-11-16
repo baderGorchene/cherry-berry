@@ -3,15 +3,17 @@ import { Link } from "react-router";
 import { ApiError, instanceInfo, myWorkspaces, signOut, type Workspace } from "./api";
 import { currentWorkspace, useSession } from "./App";
 import { switchServerUrl } from "./native";
-import { IconBrand, IconChevron, IconHome, IconImage, IconShapes, IconTemplate } from "./icons";
+import { IconBrand, IconChevron, IconHome, IconImage, IconPlus, IconShapes, IconTemplate } from "./icons";
 import { initials } from "./routes/Workspaces";
 
 const ROLE: Record<string, string> = { owner: "Owner", admin: "Admin", editor: "Editor", viewer: "Viewer" };
-// [id, path, label, phone tab label (null: not a phone tab, it sits in the menu instead), icon]
+// [id, path, label, phone tab label (null: not a phone tab, it sits in the menu instead), icon, group]
 const LINKS = [
-  ["home", "/", "Home", "Home", IconHome], ["templates", "/templates", "Templates", "Templates", IconTemplate],
-  ["library", "/library", "Visual library", "Library", IconImage], ["shapes", "/shapes", "Shapes", null, IconShapes],
-  ["brand", "/brand", "Brand kits", "Brand", IconBrand],
+  ["home", "/", "Home", "Home", IconHome, "Studio"],
+  ["templates", "/templates", "Templates", "Templates", IconTemplate, "Studio"],
+  ["library", "/library", "Visual library", "Library", IconImage, "Assets"],
+  ["shapes", "/shapes", "Shapes", null, IconShapes, "Assets"],
+  ["brand", "/brand", "Brand kits", "Brand", IconBrand, "Assets"],
 ] as const;
 
 /** Page frame: brand, workspace switcher, page links and sign out (top bar + bottom tab bar on phones). `onSwitch` lets the page follow a workspace change; `bleed` drops the page padding so the page can run a flush side panel. */
@@ -78,14 +80,29 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
           )}
         </div>
         <span className="me only-m" role="img" aria-label={`Signed in as ${user?.name}`} title={user?.email}>{initials(user?.name ?? "")}</span>
-        {LINKS.map(([id, to, label, short, Icon]) => (
+        {current?.role !== "viewer" && (
+          <Link to="/new" className="btn btn-p side-cta only-d"><IconPlus /> Create a design</Link>
+        )}
+        <span className="nav-group only-d" aria-hidden="true">Studio</span>
+        {LINKS.filter((l) => l[5] === "Studio").map(([id, to, label, short, Icon]) => (
+          <Link key={id} to={to} className={`nav${active === id ? " nav-on" : ""}${short ? "" : " only-d"}`} aria-current={active === id ? "page" : undefined}
+            aria-label={label}>
+            <Icon /><span className="only-d">{label}</span><span className="only-m" aria-hidden="true">{short}</span>
+          </Link>
+        ))}
+        <span className="nav-group only-d" aria-hidden="true">Assets</span>
+        {LINKS.filter((l) => l[5] === "Assets").map(([id, to, label, short, Icon]) => (
           <Link key={id} to={to} className={`nav${active === id ? " nav-on" : ""}${short ? "" : " only-d"}`} aria-current={active === id ? "page" : undefined}
             aria-label={label}>
             <Icon /><span className="only-d">{label}</span><span className="only-m" aria-hidden="true">{short}</span>
           </Link>
         ))}
         <span style={{ flex: 1 }} className="only-d" />
-        <button type="button" className="nav only-d" onClick={out}>Sign out</button>
+        <div className="side-foot only-d">
+          {admin && <Link to="/admin" className="nav">Instance admin</Link>}
+          <Link to="/workspaces" className="nav">Workspaces</Link>
+          <button type="button" className="nav" onClick={out}>Sign out</button>
+        </div>
       </nav>
       <main className={bleed ? "page bleed" : "page"}>{children}</main>
     </div>
