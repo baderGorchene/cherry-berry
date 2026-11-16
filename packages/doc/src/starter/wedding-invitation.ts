@@ -6,6 +6,7 @@ const X = 0.5, W = 4;
 
 export default starterDoc("starter-wedding-invitation", "Wedding invitation", [
   page("wedding-invitation-p1", "Invitation", { width: 5, height: 7, unit: "in", colorMode: "cmyk", bleed: 0.125 }, "#FFF8FB", [
+    b.bleedFill({ width: 5, height: 7, bleed: 0.125 }, "#FFF8FB"),
     b.element("blob-organic", -0.125, -0.125, 2.1, PETAL),
     b.element("blob-pebble", 3.325, 5.613, 1.8, BLUSH),
     b.outline("Border", 0.3, 0.3, 4.4, 6.4, BERRY, 0.012),

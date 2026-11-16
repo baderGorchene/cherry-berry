@@ -122,7 +122,7 @@ test("a new user sees the welcome line with templates first, and a starter opens
   const tpl = page.getByRole("region", { name: "Start from a template" });
   const cat = page.getByRole("region", { name: "Browse by category" });
   expect((await tpl.boundingBox())!.y).toBeLessThan((await cat.boundingBox())!.y);
-  await expect(tpl.getByRole("button")).toHaveCount(4);
+  await expect(tpl.getByRole("button")).toHaveCount(24); // every built-in starter
   await tpl.getByRole("button", { name: /^Use / }).first().click();
   await expect(page).toHaveURL(/\/d\//);
   await expect(page.getByRole("main", { name: "Post canvas" })).toBeVisible();
@@ -165,6 +165,6 @@ test("viewers get no shortcuts or create button on Home, and starters are disabl
   await expect(viewer.getByRole("list", { name: "Create" })).toHaveCount(0);
   await expect(viewer.getByRole("button", { name: /^(New design|Create a design)$/ })).toHaveCount(0);
   const uses = viewer.getByRole("button", { name: /^Use / });
-  await expect(uses).toHaveCount(4);
+  await expect(uses).toHaveCount(24);
   for (const b of await uses.all()) await expect(b).toBeDisabled();
 });

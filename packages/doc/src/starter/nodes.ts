@@ -34,9 +34,13 @@ export function builder(slug: string, unit: Unit) {
     id: `${slug}-${++n}`, name, x: round(x), y: round(y), width: round(width), height: round(height),
     rotation: look.rotation ?? 0, opacity: look.opacity ?? 1, locked: false, hidden: false, brandLock: "none" as const,
   });
+  const rect = (name: string, x: number, y: number, w: number, h: number, color: string, radius = 0, look?: Look): CherryNode =>
+    ({ ...base(name, x, y, w, h, look), kind: "rect", fill: solid(color), cornerRadius: radius });
   return {
-    rect: (name: string, x: number, y: number, w: number, h: number, color: string, radius = 0, look?: Look): CherryNode =>
-      ({ ...base(name, x, y, w, h, look), kind: "rect", fill: solid(color), cornerRadius: radius }),
+    rect,
+    /** A background rect reaching the cut: the trim plus its bleed on every side. */
+    bleedFill: (p: { width: number; height: number; bleed: number }, color: string): CherryNode =>
+      rect("Background", -p.bleed, -p.bleed, p.width + 2 * p.bleed, p.height + 2 * p.bleed, color),
     outline: (name: string, x: number, y: number, w: number, h: number, color: string, width: number): CherryNode =>
       ({ ...base(name, x, y, w, h), kind: "rect", stroke: { paint: solid(color), width }, cornerRadius: 0 }),
     ellipse: (name: string, x: number, y: number, w: number, h: number, color: string, look?: Look): CherryNode =>
