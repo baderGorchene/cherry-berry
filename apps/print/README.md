@@ -7,8 +7,14 @@ Ghostscript CLI. It adds the `pdf-x` and `plates` export formats when the main s
 
     docker compose --profile print up --build print     # from the repo root, listens on :8080
 
+**The service has no authentication. Do not expose it to the public internet**; compose binds it to
+`127.0.0.1:8080`, and anything else that can reach it can burn CPU and disk.
+
 Environment: `PORT` (default 8080), `PRINT_ICC_PROFILE` (path inside the container to the output ICC
-profile; unset uses Ghostscript's bundled default CMYK profile).
+profile). Unset, it uses Debian's Ghostscript CMYK profile at
+`/usr/share/color/icc/ghostscript/default_cmyk.icc` (the `DEFAULT_ICC` constant in `src/gs.ts`; confirm that
+path in the built image). A profile is always passed to gs, because `PDFX_def.ps` builds the PDF/X
+OutputIntent from it (pdfwrite adds no output intent by itself).
 
 ## API
 
@@ -21,9 +27,7 @@ profile; unset uses Ghostscript's bundled default CMYK profile).
 
 ## Ghostscript commands
 
-    gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=pdfwrite -dPDFX=3 -sColorConversionStrategy=CMYK \
-       -sProcessColorModel=DeviceCMYK [--permit-file-read=$ICC -sOutputICCProfile=$ICC] \
-       -sOutputFile=out.pdf in.pdf
+    gs -dSAFER -dBATCH -dNOPAUSE -dPDFX -sDEVICE=pdfwrite -sColorConversionStrategy=CMYK        -sProcessColorModel=DeviceCMYK --permit-file-read=$ICC -sOutputICCProfile=$ICC -sICCProfile=$ICC        -sOutputFile=out.pdf PDFX_def.ps in.pdf
 
     gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=tiffsep -sCompression=none -r150 -sOutputFile=<dir>/p%d.tif in.pdf
 

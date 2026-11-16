@@ -1,0 +1,22 @@
+%!
+% PDF/X definitions for Cherry Berry's print service (modelled on Ghostscript's lib/PDFX_def.ps).
+% The ICC profile path comes from -sICCProfile=<path> on the command line.
+
+[ /Title (Cherry Berry print export)
+  /DOCINFO pdfmark
+
+[/_objdef {icc_PDFX} /type /stream /OBJ pdfmark
+[{icc_PDFX} << /N 4 >> /PUT pdfmark
+[{icc_PDFX} ICCProfile (r) file /PUT pdfmark
+
+[/_objdef {OutputIntent_PDFX} /type /dict /OBJ pdfmark
+[{OutputIntent_PDFX} <<
+  /Type /OutputIntent
+  /S /GTS_PDFX
+  /DestOutputProfile {icc_PDFX}
+  /OutputConditionIdentifier (Custom)
+  /Info (Custom CMYK output profile)
+  /RegistryName (http://www.color.org)
+>> /PUT pdfmark
+
+[{Catalog} << /OutputIntents [ {OutputIntent_PDFX} ] >> /PUT pdfmark

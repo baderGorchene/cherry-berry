@@ -1,27 +1,29 @@
 import { describe, expect, it } from "vitest";
-import { pdfxArgs, platesArgs, plateFiles } from "./gs.ts";
+import { DEFAULT_ICC, pdfxArgs, platesArgs, plateFiles } from "./gs.ts";
 
 describe("gs args", () => {
-  it("pdfxArgs asks for CMYK PDF/X-3 with the profile", () => {
-    const a = pdfxArgs("in.pdf", "out.pdf", "/icc/fogra39.icc");
+  it("pdfxArgs asks for CMYK PDF/X with the profile and the def file", () => {
+    const a = pdfxArgs("in.pdf", "out.pdf", "/icc/fogra39.icc", "/app/PDFX_def.ps");
     for (const f of [
-      "-dPDFX=3",
+      "-dPDFX",
       "-sColorConversionStrategy=CMYK",
       "-sProcessColorModel=DeviceCMYK",
       "-dNOPAUSE",
       "-dBATCH",
       "-dSAFER",
+      "-sDEVICE=pdfwrite",
       "-sOutputICCProfile=/icc/fogra39.icc",
+      "-sICCProfile=/icc/fogra39.icc",
       "--permit-file-read=/icc/fogra39.icc",
       "-sOutputFile=out.pdf",
     ]) {
       expect(a).toContain(f);
     }
-    expect(a.at(-1)).toBe("in.pdf");
+    expect(a.slice(-2)).toEqual(["/app/PDFX_def.ps", "in.pdf"]);
   });
 
-  it("pdfxArgs without a profile uses the bundled default", () => {
-    expect(pdfxArgs("in.pdf", "out.pdf", undefined).some((x) => x.includes("ICC"))).toBe(false);
+  it("the default profile is the Debian ghostscript CMYK profile", () => {
+    expect(DEFAULT_ICC).toBe("/usr/share/color/icc/ghostscript/default_cmyk.icc");
   });
 
   it("platesArgs clamps dpi to 72..300", () => {

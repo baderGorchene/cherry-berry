@@ -1,7 +1,12 @@
 import { deflateSync } from "node:zlib";
 
 // Minimal decoder for what Ghostscript's tiffsep writes with -sCompression=none (8-bit grey, striped),
-// and a PNG encoder, so the service needs no image library.
+// and a PNG encoder, so the service needs no image library. Only the tags below are read; real libtiff
+// output also carries ASCII (Software, DateTime) and RATIONAL (resolution) tags, which are skipped.
+
+export class TiffError extends Error {}
+
+const MAX_PIXELS = 600_000_000;
 
 const CRC = (() => {
   const t = new Uint32Array(256);
@@ -28,38 +33,66 @@ function chunk(type: string, data: Buffer): Buffer {
   return out;
 }
 
+const WANTED = new Set([256, 257, 258, 259, 262, 273, 277, 278, 279]);
+
 export function tiffGrayToPng(tif: Buffer): Buffer {
+  try {
+    return decode(tif);
+  } catch (e) {
+    if (e instanceof TiffError) throw e;
+    throw new TiffError(e instanceof Error ? e.message : "bad TIFF");
+  }
+}
+
+function decode(tif: Buffer): Buffer {
   const head = tif.subarray(0, 2).toString("latin1");
-  if (tif.length < 8 || (head !== "II" && head !== "MM")) throw new Error("not a TIFF");
+  if (tif.length < 8 || (head !== "II" && head !== "MM")) throw new TiffError("not a TIFF");
   const le = head === "II";
-  const u16 = (o: number) => (le ? tif.readUInt16LE(o) : tif.readUInt16BE(o));
-  const u32 = (o: number) => (le ? tif.readUInt32LE(o) : tif.readUInt32BE(o));
-  if (u16(2) !== 42) throw new Error("not a TIFF");
+  const need = (o: number, n: number) => {
+    if (!Number.isInteger(o) || o < 0 || n < 0 || o + n > tif.length) throw new TiffError("TIFF offset out of range");
+  };
+  const u16 = (o: number) => (need(o, 2), le ? tif.readUInt16LE(o) : tif.readUInt16BE(o));
+  const u32 = (o: number) => (need(o, 4), le ? tif.readUInt32LE(o) : tif.readUInt32BE(o));
+  if (u16(2) !== 42) throw new TiffError("not a TIFF");
   const ifd = u32(4);
+  const n = u16(ifd);
   const tags = new Map<number, number[]>();
-  for (let i = 0, n = u16(ifd); i < n; i++) {
+  for (let i = 0; i < n; i++) {
     const o = ifd + 2 + i * 12;
+    const tag = u16(o);
+    if (!WANTED.has(tag)) continue;
     const type = u16(o + 2);
     const count = u32(o + 4);
-    const size = type === 3 ? 2 : 4; // SHORT or LONG; other types aren't used by tags we read
+    const size = type === 3 ? 2 : type === 4 ? 4 : 0;
+    if (!size) throw new TiffError(`TIFF tag ${tag} has unsupported type ${type}`);
+    if (count > tif.length) throw new TiffError("TIFF tag count too large");
     const base = size * count <= 4 ? o + 8 : u32(o + 8);
+    need(base, size * count);
     const vals: number[] = [];
     for (let k = 0; k < count; k++) vals.push(size === 2 ? u16(base + k * 2) : u32(base + k * 4));
-    tags.set(u16(o), vals);
+    tags.set(tag, vals);
   }
   const one = (t: number, d?: number) => {
     const v = tags.get(t)?.[0] ?? d;
-    if (v === undefined) throw new Error(`TIFF tag ${t} missing`);
+    if (v === undefined) throw new TiffError(`TIFF tag ${t} missing`);
     return v;
   };
   const w = one(256);
   const h = one(257);
-  if (one(258, 8) !== 8 || one(277, 1) !== 1 || one(259, 1) !== 1) throw new Error("unsupported TIFF (need 8-bit grey, uncompressed)");
+  if (w < 1 || h < 1 || w * h > MAX_PIXELS) throw new TiffError("bad TIFF size");
+  if (one(258, 8) !== 8 || one(277, 1) !== 1 || one(259, 1) !== 1) {
+    throw new TiffError("unsupported TIFF (need 8-bit grey, uncompressed)");
+  }
   const invert = one(262, 1) === 0; // MinIsWhite
   const offsets = tags.get(273) ?? [];
   const counts = tags.get(279) ?? [];
-  const pixels = Buffer.concat(offsets.map((off, i) => tif.subarray(off, off + (counts[i] ?? 0))));
-  if (pixels.length < w * h) throw new Error("TIFF pixel data is short");
+  if (!offsets.length || offsets.length !== counts.length) throw new TiffError("TIFF strips missing");
+  const parts = offsets.map((off, i) => {
+    need(off, counts[i]!);
+    return tif.subarray(off, off + counts[i]!);
+  });
+  const pixels = Buffer.concat(parts);
+  if (pixels.length < w * h) throw new TiffError("TIFF pixel data is short");
   const raw = Buffer.alloc(h * (w + 1)); // each row: filter byte 0 + w samples
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {

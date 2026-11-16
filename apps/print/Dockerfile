@@ -6,6 +6,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json ./
+COPY PDFX_def.ps ./
 COPY src ./src
 ENV NODE_ENV=production PORT=8080
 USER node

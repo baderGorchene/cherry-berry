@@ -1,17 +1,39 @@
 // Pure Ghostscript argument builders. Ghostscript (AGPL) is only ever run as a CLI process.
 
-/** RGB PDF -> CMYK PDF/X-3. `icc` is the output intent profile; without it gs uses its bundled default CMYK profile. */
-export function pdfxArgs(input: string, output: string, icc: string | undefined): string[] {
+/** Ghostscript's default CMYK profile in the Debian `ghostscript` package (confirm in the image). */
+export const DEFAULT_ICC = "/usr/share/color/icc/ghostscript/default_cmyk.icc";
+
+/** Gs failed, or exited 0 without producing usable output, or the input was not a PDF. */
+export class GsError extends Error {}
+export class TimeoutError extends Error {
+  constructor() {
+    super("timeout");
+  }
+}
+export class AbortedError extends Error {
+  constructor() {
+    super("aborted");
+  }
+}
+
+/**
+ * RGB PDF -> CMYK PDF/X. `pdfxDef` is PDFX_def.ps, which builds the OutputIntent from `-sICCProfile`;
+ * pdfwrite adds no output intent on its own. The profile is always passed.
+ */
+export function pdfxArgs(input: string, output: string, icc: string, pdfxDef: string): string[] {
   return [
     "-dSAFER",
     "-dBATCH",
     "-dNOPAUSE",
+    "-dPDFX",
     "-sDEVICE=pdfwrite",
-    "-dPDFX=3",
     "-sColorConversionStrategy=CMYK",
     "-sProcessColorModel=DeviceCMYK",
-    ...(icc ? [`--permit-file-read=${icc}`, `-sOutputICCProfile=${icc}`] : []),
+    `--permit-file-read=${icc}`,
+    `-sOutputICCProfile=${icc}`,
+    `-sICCProfile=${icc}`,
     `-sOutputFile=${output}`,
+    pdfxDef,
     input,
   ];
 }

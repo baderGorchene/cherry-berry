@@ -40,7 +40,9 @@ services:
     build: ./apps/print
     environment:
       PRINT_ICC_PROFILE: ""
-    ports: ["8080:8080"]
+    init: true
+    # No auth: keep it bound to localhost, or on a private network. Never expose it publicly.
+    ports: ["127.0.0.1:8080:8080"]
 volumes:
   pgdata:
   rustfsdata:
