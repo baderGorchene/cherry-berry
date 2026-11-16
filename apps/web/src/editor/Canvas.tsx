@@ -1,20 +1,21 @@
 import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import Konva from "konva";
-import { Ellipse, Group, Image as KImage, Layer, Path, Rect, Stage, Text, Transformer } from "react-konva";
+import { Ellipse, Group, Image as KImage, Layer, Line, Path, Rect, Stage, Text, Transformer } from "react-konva";
 import type { KonvaEventObject } from "konva/lib/Node";
 import * as Y from "yjs";
 import type { AnchorRef } from "@cherry/vector";
 import {
-  PT_PX, UNIT_PX, addNode, createShape, createText, removeNodes, toPx, updateNode,
+  PT_PX, UNIT_PX, addNode, createShape, createText, duplicateNodes, removeNodes, reorderNode, toPx, updateNode,
   type BasicShape, type CherryNode, type Page,
 } from "@cherry/doc";
 import { fromKonvaTransform, toKonvaAttrs } from "./geometry";
+import { snapBox, type Guides } from "./layout";
 import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
 import TextEditor from "./TextEditor";
 import type { BrandKit, Role } from "../api";
 import { useAssetImage } from "./useAssetImage";
 import { pinch } from "./gestures";
-import { canEditContent, canMove } from "./brandLock";
+import { canDelete, canEditContent, canMove } from "./brandLock";
 import type { Peer } from "./presence";
 
 export type Tool = "select" | "text" | "pen" | "direct" | "add-anchor" | "convert-anchor" | BasicShape;
@@ -62,7 +63,7 @@ function ImageView({ n, common }: { n: Extract<CherryNode, { kind: "image" }>; c
 /** Plain render of one node; Konva ids are only set on top-level (selectable) nodes. */
 export function NodeView({ n, unit, top, editing, inert, ...events }: {
   n: CherryNode; unit: Unit; top: boolean; editing: string | null; inert?: boolean;
-  draggable?: boolean; onDragEnd?(e: KonvaEventObject<DragEvent>): void; onDblClick?(): void;
+  draggable?: boolean; onDragMove?(e: KonvaEventObject<DragEvent>): void; onDragEnd?(e: KonvaEventObject<DragEvent>): void; onDblClick?(): void;
 }) {
   if (n.hidden) return null;
   const common = {
@@ -114,6 +115,9 @@ export default function Canvas({
   const [draft, setDraft] = useState<TextNode | null>(null);
   // The edited path as it follows an anchor or handle drag, drawn in place of the stored node.
   const [edited, setEdited] = useState<CherryNode | null>(null);
+  const [guides, setGuides] = useState<Guides>({});
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   // Fingers on the canvas (px from its centre) and what the gesture is doing; `last` is the latest touch time.
   const touch = useRef({
     pts: new Map<number, Pt>(), last: 0, start: { x: 0, y: 0 }, moved: false,
@@ -347,6 +351,15 @@ export default function Canvas({
     return () => types.forEach((type) => el.removeEventListener(type, h));
   }, []);
 
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(null); };
+    const onDownOutside = (e: PointerEvent) => { if (!menuRef.current?.contains(e.target as Node)) setMenu(null); };
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("pointerdown", onDownOutside);
+    return () => { window.removeEventListener("keydown", onKey); window.removeEventListener("pointerdown", onDownOutside); };
+  }, [menu]);
+
   // Page-unit rect → stage (screen) rect, the space getClientRect() reports in.
   const rectOnScreen = (r: { x: number; y: number; width: number; height: number }) =>
     ({ x: origin.x + r.x * scale, y: origin.y + r.y * scale, width: r.width * scale, height: r.height * scale });
@@ -386,10 +399,28 @@ export default function Canvas({
     width: Math.abs(drag.to.x - drag.from.x), height: Math.abs(drag.to.y - drag.from.y),
   };
 
+  const onContextMenu = (e: KonvaEventObject<PointerEvent>) => {
+    e.evt.preventDefault();
+    if (readOnly || pathMode || editing) return;
+    const hit = hitOf(e.target);
+    if (!hit) { setMenu(null); return; }
+    if (hit !== "tr" && !selected.includes(hit)) {
+      const n = top(hit);
+      if (!n || !selectable(n)) return;
+      onSelect([hit]);
+    }
+    setMenu({ x: Math.min(e.evt.clientX, window.innerWidth - 190), y: Math.min(e.evt.clientY, window.innerHeight - 260) });
+  };
+
+  const selectedNodes = selected.map(top).filter((n): n is CherryNode => !!n);
+  const canReorder = selectedNodes.length > 0 && selectedNodes.every((n) => canMove(n, role));
+  const canDelSel = selectedNodes.length > 0 && selectedNodes.every((n) => canDelete(n, role));
+
   return (
     <main ref={box} className="ed-stage" aria-label={`${page.name} canvas`}
       style={{ cursor: tool === "select" || tool === "direct" || readOnly ? "default" : "crosshair" }}>
       <Stage ref={stageRef} width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove}
+        onContextMenu={onContextMenu}
         onMouseLeave={() => { pathInput.current?.hover(null); onCursor(null); }} onWheel={onWheel}>
         <Layer key={fontsVersion}>
           <Group ref={pageRef} x={origin.x} y={origin.y} scaleX={scale} scaleY={scale}>
@@ -404,7 +435,17 @@ export default function Canvas({
                 <NodeView key={n.id} n={edited?.id === n.id ? edited : n} unit={page.unit} top editing={editing}
                   inert={!canEditContent(n, role)}
                   draggable={!readOnly && tool === "select" && !n.locked && canMove(n, role) && !pinching}
-                  onDragEnd={(e) => commitKonva([...new Set([e.target, ...(trRef.current?.nodes() ?? [])])])}
+                  onDragMove={(e) => {
+                    if (e.evt.altKey || selected.length > 1) { setGuides({}); return; }
+                    const k = e.target;
+                    const moving = { x: k.x() - n.width / 2, y: k.y() - n.height / 2, width: n.width, height: n.height };
+                    const others = page.nodes.filter((o) => o.id !== n.id && !o.hidden);
+                    const snap = snapBox(moving, others, page, 5 / scale);
+                    k.x(k.x() + snap.dx);
+                    k.y(k.y() + snap.dy);
+                    setGuides(snap.guides);
+                  }}
+                  onDragEnd={(e) => { setGuides({}); commitKonva([...new Set([e.target, ...(trRef.current?.nodes() ?? [])])]); }}
                   onDblClick={() => {
                     if (readOnly || pathMode) return;
                     if (n.kind !== "text") return onEditPath(n.id);
@@ -413,6 +454,12 @@ export default function Canvas({
                   }} />
               ))}
             </Group>
+            {guides.vertical !== undefined && (
+              <Line points={[guides.vertical, 0, guides.vertical, page.height]} stroke="#C654C3" strokeWidth={1} strokeScaleEnabled={false} dash={[4, 4]} listening={false} />
+            )}
+            {guides.horizontal !== undefined && (
+              <Line points={[0, guides.horizontal, page.width, guides.horizontal]} stroke="#C654C3" strokeWidth={1} strokeScaleEnabled={false} dash={[4, 4]} listening={false} />
+            )}
             {pathMode && (
               <PathEditor key={pathNode?.id ?? "new"} ydoc={ydoc} page={page} node={pathNode} tool={tool} scale={scale}
                 anchors={anchors} act={act} keys={pathKeys} input={pathInput} onAnchors={onAnchors} onCreated={(id) => onSelect([id])}
@@ -455,6 +502,42 @@ export default function Canvas({
       {editNode?.kind === "text" && (
         <TextEditor key={editNode.id} node={editNode} origin={origin} scale={scale} zoom={zoom}
           onCommit={(t) => commitText(editNode, t)} />
+      )}
+      {menu && selectedNodes.length > 0 && (
+        <div ref={menuRef} role="menu" className="ed-ctx" style={{ left: menu.x, top: menu.y }}>
+          {canReorder && (
+            <>
+              <button type="button" role="menuitem" onClick={() => {
+                let copies: string[] = [];
+                act(() => { copies = duplicateNodes(ydoc, page.id, selected, 10, role !== "editor"); });
+                onSelect(copies);
+                setMenu(null);
+              }}>Duplicate</button>
+              <hr />
+              {(["forward", "backward", "front", "back"] as const).map((to) => (
+                <button key={to} type="button" role="menuitem" onClick={() => {
+                  const ids = page.nodes.filter((n) => selected.includes(n.id)).map((n) => n.id);
+                  const ordered = to === "forward" || to === "front" ? [...ids].reverse() : ids;
+                  act(() => ordered.forEach((id) => reorderNode(ydoc, page.id, id, to)));
+                  setMenu(null);
+                }}>{{ forward: "Bring forward", backward: "Send backward", front: "Bring to front", back: "Send to back" }[to]}</button>
+              ))}
+              <hr />
+              <button type="button" role="menuitem" onClick={() => {
+                const locked = !selectedNodes.every((n) => n.locked);
+                act(() => selectedNodes.forEach((n) => updateNode(ydoc, page.id, n.id, { locked })));
+                setMenu(null);
+              }}>{selectedNodes.every((n) => n.locked) ? "Unlock" : "Lock"}</button>
+            </>
+          )}
+          {canDelSel && (
+            <button type="button" role="menuitem" className="ed-del" onClick={() => {
+              act(() => removeNodes(ydoc, page.id, selectedNodes.map((n) => n.id)));
+              onSelect([]);
+              setMenu(null);
+            }}>Delete</button>
+          )}
+        </div>
       )}
     </main>
   );

@@ -245,3 +245,16 @@
 }
 .ed-pill-t[aria-selected="true"] { background: var(--berry); border-color: var(--berry); color: #fff; }
 .ed-pill-t:focus-visible { outline: 3px solid var(--blush); outline-offset: 1px; }
+
+.ed-align { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.ed-ctx {
+  position: fixed; z-index: 60; min-width: 170px; padding: 6px; display: flex; flex-direction: column; gap: 2px;
+  background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(34, 20, 42, .14);
+}
+.ed-ctx button {
+  text-align: left; padding: 7px 10px; border: 0; border-radius: 6px; background: transparent;
+  font: 500 13px Inter, sans-serif; color: var(--ink); cursor: pointer;
+}
+.ed-ctx button:hover { background: var(--tint); color: var(--berry); }
+.ed-ctx button.ed-del:hover { background: #fdecec; color: var(--error, #b3261e); }
+.ed-ctx hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }

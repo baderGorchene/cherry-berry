@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import * as Y from "yjs";
 import { LOCAL, removeNodes, updateNode, type CherryNode, type Page } from "@cherry/doc";
 import { scalePath, type BoolOp } from "@cherry/vector";
+import { alignBoxes, distributeBoxes, type AlignOp } from "./layout";
 import ReuseShape from "./SaveShapeDialog";
 import { withTextHeight } from "./Canvas";
 import { getAsset, type Asset, type BrandKit, type Role } from "../api";
@@ -127,6 +128,32 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
   const update = (n: CherryNode, patch: Patch) =>
     updateNode(ydoc, pageId, n.id, withTextHeight(n, patch as Partial<CherryNode>, unit));
   const set = (n: CherryNode, patch: Patch) => act(() => update(n, patch));
+  const ALIGNS: [AlignOp, string][] = [["left", "Left"], ["center", "Center"], ["right", "Right"], ["top", "Top"], ["middle", "Middle"], ["bottom", "Bottom"]];
+  const alignSection = !readOnly && nodes.every((n) => canMove(n, role)) && (
+    <section className="ed-sec">
+      <h2 className="ed-ph">{nodes.length === 1 ? "Align to page" : "Align"}</h2>
+      <div className="ed-align">
+        {ALIGNS.map(([op, label]) => (
+          <button key={op} type="button" className="ed-mini" onClick={() => {
+            const patches = alignBoxes(nodes, op, page);
+            act(() => ydoc.transact(() => patches.forEach(({ id, ...p }) => updateNode(ydoc, pageId, id, p)), LOCAL));
+          }}>{label}</button>
+        ))}
+      </div>
+      {nodes.length >= 3 && (
+        <div className="ed-align" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
+          <button type="button" className="ed-mini" onClick={() => {
+            const patches = distributeBoxes(nodes, "x");
+            act(() => ydoc.transact(() => patches.forEach(({ id, ...p }) => updateNode(ydoc, pageId, id, p)), LOCAL));
+          }}>Distribute H</button>
+          <button type="button" className="ed-mini" onClick={() => {
+            const patches = distributeBoxes(nodes, "y");
+            act(() => ydoc.transact(() => patches.forEach(({ id, ...p }) => updateNode(ydoc, pageId, id, p)), LOCAL));
+          }}>Distribute V</button>
+        </div>
+      )}
+    </section>
+  );
   const LOCKS = [["none", "Off"], ["content", "Content editable"], ["fixed", "Fixed"]] as const;
   const lock = nodes.every((n) => n.brandLock === nodes[0]!.brandLock) ? nodes[0]!.brandLock : "";
   const brandLock = (role === "owner" || role === "admin") && (
@@ -155,6 +182,7 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
             <Num label="Y" unit={unit} value={minY} disabled={frozen} onCommit={(v) => move(0, v - minY)} />
           </div>
         </section>
+        {alignSection}
         {combinable && !frozen && (
           <section className="ed-sec">
             <h2 className="ed-ph">Combine</h2>
@@ -229,6 +257,7 @@ export default function Properties({ ydoc, page, workspaceId, designId, kit, onL
           )}
         </div>
       </section>}
+      {on("Spacing") && alignSection}
       {tabbed && tab === "Effects" && <section className="ed-sec"><h2 className="ed-ph">Effects</h2>{opacity}</section>}
 
       {n.kind === "image" && <VisualInfo assetId={n.assetId} />}
