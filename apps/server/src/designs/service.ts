@@ -1,10 +1,13 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import * as Y from "yjs";
-import { brandLockViolation, createDocument, docToY, yToDoc } from "@cherry/doc";
+import { brandLockViolation, createDocument, docToY, yToDoc, type CherryDocument } from "@cherry/doc";
+import { usableInDesign } from "../assets/service";
 import type { Collab } from "../collab/server";
 import type { Db } from "../db/client";
-import { brandKits, designs } from "../db/schema";
+import { assetUses, assets, brandKits, designs } from "../db/schema";
 import { HttpError } from "../errors";
+import { imageAssetIds } from "../templates/service";
 import { WorkspaceError } from "../workspaces/errors";
 import { getRole, UUID, type Role } from "../workspaces/service";
 
@@ -49,6 +52,25 @@ export async function createDesign(
     unit: input.unit, colorMode: input.colorMode, state, createdBy: userId,
   }).returning(summaryColumns);
   return summary(d!);
+}
+
+/** Stores a parsed .cherry document as a new design with a fresh document id. Unknown or unusable image assets show as missing layers. */
+export async function importDesign(db: Db, userId: string, workspaceId: string, doc: CherryDocument): Promise<DesignSummary> {
+  if ((await memberRole(db, workspaceId, userId)) === "viewer") throw new WorkspaceError("forbidden");
+  const page = doc.pages[0]!;
+  const state = Y.encodeStateAsUpdate(docToY({ ...doc, id: randomUUID() }));
+  const ids = [...new Set(doc.pages.flatMap((p) => [...imageAssetIds(p.nodes)]))].filter((i) => UUID.test(i));
+  return db.transaction(async (tx) => {
+    const [d] = await tx.insert(designs).values({
+      workspaceId, title: doc.title, width: page.width, height: page.height, unit: page.unit, colorMode: page.colorMode,
+      state, createdBy: userId,
+    }).returning(summaryColumns);
+    if (ids.length) {
+      const live = await tx.select({ id: assets.id }).from(assets).where(and(inArray(assets.id, ids), usableInDesign(userId, workspaceId)));
+      if (live.length) await tx.insert(assetUses).values(live.map((a) => ({ designId: d!.id, assetId: a.id }))).onConflictDoNothing();
+    }
+    return summary(d!);
+  });
 }
 
 export async function listDesigns(db: Db, userId: string, workspaceId: string): Promise<DesignSummary[]> {

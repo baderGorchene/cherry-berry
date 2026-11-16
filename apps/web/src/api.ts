@@ -56,6 +56,14 @@ export type NewDesign = { title: string; width: number; height: number; unit: st
 
 export const createDesign = (workspaceId: string, body: NewDesign) =>
   api<{ design: Design }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/designs`, { body });
+export const importDesign = async (workspaceId: string, text: string): Promise<Design> => {
+  try {
+    return (await api<{ design: Design }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/designs/import`, { body: { text } })).design;
+  } catch (e) {
+    // `invalid_document` already means "a save was rejected" in COPY; for a file it has its own copy.
+    throw e instanceof ApiError && e.code === "invalid_document" ? new ApiError(e.status, "invalid_cherry_file") : e;
+  }
+};
 export const listDesigns = (workspaceId: string) =>
   api<{ designs: Design[] }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/designs`);
 export const getDesign = (id: string) =>
@@ -298,6 +306,8 @@ export function fromBase64(s: string): Uint8Array {
 }
 
 const COPY: Record<string, string> = {
+  invalid_json: "That file isn't a .cherry file.",
+  newer_version: "This file was made with a newer Cherry Berry. Update this server to open it.",
   wrong_password: "That password doesn't match this workspace.",
   not_found: "No workspace with that ID.",
   http_429: "Too many tries. Wait a minute and try again.",
@@ -328,6 +338,7 @@ const COPY: Record<string, string> = {
   invalid_logo: "That logo isn't available to this workspace.",
   invalid_font: "That file isn't a font we can use. Choose WOFF2, WOFF, TTF or OTF.",
   template_private_assets: "Every visual in a public template must be public. Make them public or publish to this workspace.",
+  invalid_cherry_file: "This .cherry file is damaged and can't be opened.",
   invalid_document: "This change couldn't be saved because the design became invalid.",
   not_saved: "Couldn't save just now. Your changes are kept, try again.",
   print_unavailable: "The print service isn't reachable right now. Try again, or export a regular PDF.",
