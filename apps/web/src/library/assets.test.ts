@@ -5,6 +5,7 @@ test("formatBytes", () => {
   expect(formatBytes(900)).toBe("900 B");
   expect(formatBytes(1536)).toBe("1.5 KB");
   expect(formatBytes(5_242_880)).toBe("5 MB");
+  expect(formatBytes(1.5 * 1024 ** 3)).toBe("1.5 GB");
 });
 
 test("every license has both labels, every kind a badge", () => {

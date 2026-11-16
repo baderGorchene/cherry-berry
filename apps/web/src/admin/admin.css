@@ -1,0 +1,83 @@
+/* Instance admin. Selectors start with .adm: theme.css loads after this file. */
+.adm { min-height: 100vh; display: flex; }
+.adm .adm-side {
+  flex: 0 0 240px; width: 240px; background: #fff; border-right: 1px solid var(--line); padding: 20px 14px;
+  position: sticky; top: 0; height: 100vh; align-self: flex-start; box-sizing: border-box;
+}
+.adm .adm-side .brand { margin: 0 0 16px 12px; }
+.adm .adm-nav { display: flex; flex-direction: column; gap: 4px; }
+.adm .adm-ph { margin: 16px 12px 4px; }
+.adm .adm-main { gap: 24px; }
+.adm .adm-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 16px; }
+.adm .adm-head .search { max-width: 320px; }
+.adm .adm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 22px; align-items: start; }
+.adm .kv { display: grid; grid-template-columns: auto 1fr; margin: 0; font-size: 14px; }
+.adm .kv dt, .adm .kv dd { padding: 8px 0; border-bottom: 1px solid #F1E8F3; }
+.adm .kv dt { color: var(--muted); }
+.adm .kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.adm .adm-bar { height: 8px; border-radius: 4px; background: #F1E8F3; overflow: hidden; }
+.adm .adm-bar span { display: block; height: 100%; background: var(--berry); }
+.adm .adm-big { font: 600 22px "Space Grotesk", sans-serif; }
+.adm .adm-form { display: flex; flex-direction: column; gap: 20px; }
+.adm .adm-set { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.adm .adm-opts { display: flex; gap: 10px; flex-wrap: wrap; }
+.adm .adm-opts .opt { flex: 0 1 auto; min-height: 44px; align-items: center; }
+.adm .adm-opts .opt input { margin-top: 0; }
+.adm .adm-area { min-height: 96px; padding: 10px 14px; resize: vertical; font: 14px/1.5 Inter, sans-serif; max-width: 420px; }
+.adm .adm-hint { font-size: 13px; margin-top: 6px; }
+.adm .adm-save { display: flex; align-items: center; gap: 14px; }
+.adm .adm-ok { color: var(--success); font-weight: 600; font-size: 14px; }
+.adm .btn-danger { color: var(--error); border-color: #F2C4C0; }
+
+.adm .adm-scroll { overflow-x: auto; }
+.adm .adm-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.adm .adm-table th {
+  text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap;
+  font: 600 12px Inter, sans-serif; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+}
+.adm .adm-table td { padding: 10px 12px; border-bottom: 1px solid #F1E8F3; vertical-align: middle; overflow-wrap: anywhere; }
+.adm .adm-table tr:last-child td { border-bottom: 0; }
+.adm .adm-act { white-space: nowrap; text-align: right; }
+.adm .adm-act .rs { margin-right: 8px; }
+
+.adm .rs { display: inline-block; padding: 3px 8px; border-radius: 6px; font: 600 12px Inter, sans-serif; background: #F1E8F3; color: var(--muted); }
+.adm .rs-err { background: #FDECEA; color: var(--error); }
+.adm .rs-warn { background: #FFF4E5; color: #8A4B0B; }
+.adm .rs-on { background: var(--tint); color: var(--berry); }
+.adm .rep-list { display: flex; flex-direction: column; gap: 12px; }
+.adm .rep { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }
+.adm .rep-th {
+  width: 64px; height: 64px; flex: none; border-radius: 10px; border: 1px solid var(--line); background: var(--tint); object-fit: contain;
+  display: flex; align-items: center; justify-content: center; font: 700 12px Inter, sans-serif; color: var(--muted);
+}
+.adm .rep-body { flex: 1 1 240px; min-width: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.adm .rep-title { font: 600 15px Inter, sans-serif; overflow-wrap: anywhere; }
+.adm .rep-why { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.adm .rep-act { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Phones: the nav becomes a scrolling row of chips, tables become stacked cards. */
+@media (max-width: 759px) {
+  .adm { flex-direction: column; }
+  .adm .adm-side {
+    position: sticky; z-index: 10; top: 0; width: auto; height: auto; flex: none; align-self: stretch; min-width: 0; border-right: 0; border-bottom: 1px solid var(--line);
+    padding: calc(10px + env(safe-area-inset-top)) 0 10px;
+  }
+  .adm .adm-side .brand, .adm .adm-ph { display: none; }
+  .adm .adm-nav { flex-direction: row; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 0 16px; }
+  .adm .adm-nav .nav {
+    flex: none; min-height: 44px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: #fff;
+    color: var(--ink); font-weight: 600; white-space: nowrap;
+  }
+  .adm .adm-nav .nav[aria-current] { background: var(--berry); border-color: var(--berry); color: #fff; }
+  .adm .adm-main { padding: 20px 16px calc(48px + env(safe-area-inset-bottom)); gap: 18px; }
+  .adm .card { padding: 16px; }
+  .adm .adm-head .search { max-width: none; }
+  .adm .adm-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .adm .adm-table, .adm .adm-table tbody, .adm .adm-table tr, .adm .adm-table td { display: block; }
+  .adm .adm-table tr { border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px; margin-bottom: 10px; }
+  .adm .adm-table td, .adm .adm-table tr:last-child td { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 6px 0; border: 0; text-align: right; }
+  .adm .adm-table td[data-label]::before { content: attr(data-label); color: var(--muted); font-weight: 600; text-align: left; flex: none; }
+  .adm .adm-act { justify-content: flex-end; }
+  .adm .rep-act { width: 100%; }
+  .adm .rep-act .btn { flex: 1 1 auto; }
+}

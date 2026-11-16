@@ -12,7 +12,7 @@ export const KIND_BADGE: Record<AssetKind, string> = { image: "IMG", gif: "GIF",
 
 export function formatBytes(n: number): string {
   if (n < 1024) return `${n} B`;
-  const [v, unit] = n < 1024 ** 2 ? [n / 1024, "KB"] : [n / 1024 ** 2, "MB"];
+  const [v, unit] = n < 1024 ** 2 ? [n / 1024, "KB"] : n < 1024 ** 3 ? [n / 1024 ** 2, "MB"] : [n / 1024 ** 3, "GB"];
   return `${+v.toFixed(1)} ${unit}`;
 }
 

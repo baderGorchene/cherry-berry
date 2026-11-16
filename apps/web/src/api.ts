@@ -140,6 +140,47 @@ export const assetUrl = (id: string, kind: "file" | "thumb") => `/api/assets/${e
 export type ReportBody = { targetType: "asset" | "shape" | "template"; targetId: string; reason: "copyright" | "inappropriate" | "spam" | "other"; note?: string };
 export const reportItem = (body: ReportBody) => lib(api<{ report: { id: string } }>("/api/reports", { body }));
 
+export type InstanceInfo = { admin: boolean; canCreateWorkspace: boolean; maxUploadMb: number };
+export const instanceInfo = () => api<InstanceInfo>("/api/instance");
+
+export type InstanceSettings = {
+  registration: "open" | "invited" | "domains"; allowedDomains: string[];
+  workspaceCreation: "anyone" | "admins"; maxUploadMb: 20 | 50 | 100; storageQuotaGb: number | null;
+};
+export type AdminOverview = {
+  version: string; database: string; storage: string; usedBytes: number; quotaBytes: number | null;
+  users: number; workspaces: number; designs: number; queue: number;
+};
+export type AdminUser = { id: string; name: string; email: string; createdAt: string; suspended: boolean; admin: boolean; workspaces: number; usedBytes: number };
+export type AdminWorkspace = { id: string; name: string; joinMode: AccessMode; members: number; designs: number; usedBytes: number };
+export type StorageReport = { usedBytes: number; quotaBytes: number | null; byWorkspace: { id: string; name: string; usedBytes: number }[]; personalBytes: number };
+type Uploader = { id: string; name: string };
+export type QueueItem =
+  | { kind: "report"; targetType: "asset" | "shape" | "template"; targetId: string; title: string; uploader: Uploader;
+      visibility: "public"; license: string; reason: ReportBody["reason"]; note: string; count: number; createdAt: string }
+  | { kind: "sanitized"; targetType: "asset"; targetId: string; title: string; uploader: Uploader; createdAt: string };
+export type QueueAction = "keep" | "remove" | "suspend" | "approve";
+
+const query = (cursor?: string | null, q?: string) => {
+  const qs = new URLSearchParams();
+  if (q) qs.set("q", q);
+  if (cursor) qs.set("cursor", cursor);
+  const s = qs.toString();
+  return s ? `?${s}` : "";
+};
+export const adminOverview = () => api<AdminOverview>("/api/admin/overview");
+export const adminSettings = () => api<{ settings: InstanceSettings }>("/api/admin/settings").then((r) => r.settings);
+export const saveAdminSettings = (settings: InstanceSettings) =>
+  api<{ settings: InstanceSettings }>("/api/admin/settings", { method: "PUT", body: settings }).then((r) => r.settings);
+export const adminUsers = (q = "", cursor?: string | null) => api<{ users: AdminUser[]; next: string | null }>(`/api/admin/users${query(cursor, q)}`);
+export const suspendUser = (id: string) => api<void>(`/api/admin/users/${enc(id)}/suspend`, { method: "POST" });
+export const unsuspendUser = (id: string) => api<void>(`/api/admin/users/${enc(id)}/unsuspend`, { method: "POST" });
+export const adminWorkspaces = (cursor?: string | null) => api<{ workspaces: AdminWorkspace[]; next: string | null }>(`/api/admin/workspaces${query(cursor)}`);
+export const adminStorage = () => api<StorageReport>("/api/admin/storage");
+export const moderationQueue = () => api<{ items: QueueItem[] }>("/api/admin/moderation").then((r) => r.items);
+export const moderate = (item: Pick<QueueItem, "targetType" | "targetId">, action: QueueAction) =>
+  api<void>(`/api/admin/moderation/${item.targetType}/${enc(item.targetId)}`, { body: { action } });
+
 export type Font = { id: string; kitId: string; family: string; weight: number; style: "normal" | "italic"; format: "woff2" | "woff" | "ttf" | "otf"; bytes: number };
 export type BrandKit = { id: string; workspaceId: string; name: string; content: BrandKitContent; fonts: Font[]; updatedAt: string };
 
@@ -268,12 +309,14 @@ const COPY: Record<string, string> = {
   invitation_wrong_email: "That invitation was sent to a different email address.",
   invalid_shape: "That shape couldn't be read. Try simplifying it.",
   invalid_body: "Please check the fields and try again.",
+  registration_closed: "This server isn't taking new sign-ups. Ask an admin to invite you.",
+  suspended: "This account is suspended. Contact the server's admin.",
   INVALID_EMAIL_OR_PASSWORD: "Wrong email or password.",
   USER_ALREADY_EXISTS: "An account with that email already exists. Sign in instead.",
   PASSWORD_TOO_SHORT: "Use a password of at least 8 characters.",
   unsupported_type: "That file type isn't supported. Use PNG, JPG, WEBP, GIF or SVG.",
   invalid_image: "That file couldn't be read as an image.",
-  upload_too_large: "That file is too large (50 MB max, 2 MB for SVG).",
+  upload_too_large: "That file is too large for this server (2 MB max for SVG).",
   busy: "The server is busy. Try again in a moment.",
   library_not_found: "This visual is no longer available.",
   library_forbidden: "You don't have permission to change this visual.",

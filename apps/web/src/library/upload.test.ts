@@ -11,6 +11,8 @@ describe("precheck", () => {
     expect(precheck(f("notes.txt"))).toBe("unsupported_type");
     expect(precheck(f("a.JPG"))).toBe("ok");
     expect(precheck(f("a.svg", 1 * MB))).toBe("ok");
+    expect(precheck(f("a.png", 60 * MB), 100)).toBe("ok");
+    expect(precheck(f("a.png", 21 * MB), 20)).toBe("too_large");
   });
 });
 

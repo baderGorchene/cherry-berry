@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router";
 import { getSession, type User, type Workspace } from "./api";
+import Admin from "./routes/Admin";
 import Brand from "./routes/Brand";
 import StyleGuide from "./routes/StyleGuide";
 import Editor from "./routes/Editor";
@@ -50,6 +51,8 @@ export default function App() {
         <Route path="/new" element={<RequireUser><NewDesign /></RequireUser>} />
         <Route path="/d/:id" element={<RequireUser><Editor /></RequireUser>} />
         <Route path="/d/:id/history" element={<RequireUser><History /></RequireUser>} />
+        <Route path="/admin" element={<RequireUser><Admin /></RequireUser>} />
+        <Route path="/admin/:section" element={<RequireUser><Admin /></RequireUser>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Session.Provider>

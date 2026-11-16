@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { ApiError, myWorkspaces, signOut, type Workspace } from "./api";
+import { ApiError, instanceInfo, myWorkspaces, signOut, type Workspace } from "./api";
 import { currentWorkspace, useSession } from "./App";
 import { switchServerUrl } from "./native";
 import { IconBrand, IconChevron, IconHome, IconImage, IconShapes, IconTemplate } from "./icons";
@@ -20,10 +20,12 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
   const [list, setList] = useState<Workspace[]>([]);
   const [currentId, setCurrentId] = useState(currentWorkspace.get());
   const [open, setOpen] = useState(false);
+  const [admin, setAdmin] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     myWorkspaces().then((r) => setList(r.workspaces), (e) => { if (e instanceof ApiError && e.status === 401) setUser(null); });
+    instanceInfo().then((i) => setAdmin(i.admin), () => {});
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -69,6 +71,7 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
               <p className="muted ws-id">{ROLE[current.role ?? "viewer"]} · ID <code data-testid="workspace-public-id">{current.publicId}</code></p>
               <Link to="/shapes" className="nav only-m" aria-current={active === "shapes" ? "page" : undefined}>Shapes</Link>
               <Link to="/workspaces" className="nav">Join or create another workspace</Link>
+              {admin && <Link to="/admin" className="nav">Instance admin</Link>}
               {switchServerUrl(null) && <button type="button" className="nav" onClick={() => { location.href = switchServerUrl(null)!; }}>Switch server</button>}
               <button type="button" className="nav only-m" onClick={out}>Sign out</button>
             </div>

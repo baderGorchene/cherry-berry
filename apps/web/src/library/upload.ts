@@ -9,11 +9,11 @@ export async function sha256Hex(bytes: ArrayBuffer): Promise<string> {
   return Array.from(d, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Courtesy check before reading the file; the server decides. */
-export function precheck(file: { name: string; size: number; type: string }): "ok" | "too_large" | "unsupported_type" {
+/** Courtesy check before reading the file against the server's upload limit (`maxMb`); the server decides. */
+export function precheck(file: { name: string; size: number; type: string }, maxMb = 50): "ok" | "too_large" | "unsupported_type" {
   const e = ext(file.name);
   if (!EXT.includes(e)) return "unsupported_type";
-  return file.size > 50 * MB || (e === "svg" && file.size > 2 * MB) ? "too_large" : "ok";
+  return file.size > maxMb * MB || (e === "svg" && file.size > 2 * MB) ? "too_large" : "ok";
 }
 
 export function titleFromName(name: string): string {

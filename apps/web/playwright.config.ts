@@ -22,6 +22,7 @@ export default defineConfig({
         PUBLIC_URL: `http://localhost:${WEB}`,
         PORT: String(API),
         S3_ENDPOINT: "memory:",
+        ADMIN_EMAILS: "admin@e2e.test",
       },
     },
     {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, assetByHash, errorMessage, uploadAsset, type Asset, type License, type Visibility } from "../api";
+import { ApiError, assetByHash, errorMessage, instanceInfo, uploadAsset, type Asset, type License, type Visibility } from "../api";
 import { LICENSES, VISIBILITY } from "./assets";
 import { precheck, sha256Hex, titleFromName, validate, type Details } from "./upload";
 
@@ -18,15 +18,17 @@ export default function UploadDialog({ workspaceId, viewer, onClose, onDone }: {
   const [rows, setRows] = useState<Row[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [maxMb, setMaxMb] = useState(50);
   const dialogRef = useRef<HTMLDivElement>(null);
   useEffect(() => dialogRef.current?.focus(), []);
+  useEffect(() => { instanceInfo().then((i) => setMaxMb(i.maxUploadMb), () => {}); }, []);
 
   const patch = (id: number, p: Partial<Row>) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...p } : r)));
   const setDetails = (id: number, d: Partial<Details>) =>
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, details: { ...r.details, ...d } } : r)));
 
   const check = async (row: Row) => {
-    const pre = precheck(row.file);
+    const pre = precheck(row.file, maxMb);
     if (pre !== "ok") return patch(row.id, { status: "error", error: errorMessage(new ApiError(400, pre === "too_large" ? "upload_too_large" : pre)) });
     try {
       const existing = await assetByHash(await sha256Hex(await row.file.arrayBuffer()), workspaceId);
@@ -99,7 +101,7 @@ export default function UploadDialog({ workspaceId, viewer, onClose, onDone }: {
         <label className="drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); addFiles(e.dataTransfer.files); }}>
           <input type="file" multiple accept={ACCEPT} className="sr-only" onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
           <strong>Drop files or click to browse</strong>
-          <span className="muted" style={{ fontSize: 13 }}>PNG, JPG, WEBP, GIF, SVG · up to 50 MB each</span>
+          <span className="muted" style={{ fontSize: 13 }}>PNG, JPG, WEBP, GIF, SVG · Up to {maxMb} MB each</span>
         </label>
 
         {rows.length > 0 && (

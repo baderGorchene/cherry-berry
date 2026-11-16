@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import {
-  acceptInvitation, createWorkspace, errorMessage, joinOpen, joinWithPassword, openWorkspaces,
+  acceptInvitation, createWorkspace, errorMessage, instanceInfo, joinOpen, joinWithPassword, openWorkspaces,
   type AccessMode, type Workspace,
 } from "../api";
 import { currentWorkspace, useSession } from "../App";
@@ -26,6 +26,8 @@ export default function Workspaces() {
   const [mode, setMode] = useState<AccessMode>("invite");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Workspace[]>([]);
+  const [canCreate, setCanCreate] = useState(true);
+  useEffect(() => { instanceInfo().then((i) => setCanCreate(i.canCreateWorkspace), () => {}); }, []);
 
   useEffect(() => {
     const t = setTimeout(() => openWorkspaces(q).then((r) => setOpen(r.workspaces), () => setOpen([])), 200);
@@ -108,7 +110,7 @@ export default function Workspaces() {
           </section>
         </div>
 
-        <form className="card" style={{ gap: 20 }} onSubmit={(e) => {
+        {canCreate && <form className="card" style={{ gap: 20 }} onSubmit={(e) => {
           const f = fields(e);
           run("create", () => createWorkspace({
             name: String(f.get("name")), accessMode: mode,
@@ -140,7 +142,7 @@ export default function Workspaces() {
           )}
           {errors.create && <p role="alert" className="field-error">{errors.create}</p>}
           <div><button className="btn btn-p" type="submit" disabled={busy}>Create workspace</button></div>
-        </form>
+        </form>}
       </div>
     </div>
   );
