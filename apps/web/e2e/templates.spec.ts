@@ -229,6 +229,24 @@ test("built-in starters are grouped by category; See all and ?category filter; U
   await editorReady(page);
 });
 
+test("on a print starter, clicking empty page shows the nothing-selected toolbar (the bleed background doesn't take the click)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signUp(page, unique("tsb"));
+  await createWorkspace(page, "Bleed Lab");
+  await page.goto("/templates?category=print");
+  await page.getByRole("button", { name: "Use Jazz night flyer" }).click();
+  await editorReady(page);
+  const bar = page.getByRole("toolbar", { name: "Selection", exact: true });
+  await page.getByRole("button", { name: "Fit", exact: true }).click();
+  const zoom = parseFloat(await page.getByTitle("Zoom level").innerText()) / 100;
+  const c = (await page.getByLabel(/ canvas$/).boundingBox())!;
+  // 266 mm down, mid-width: between the body copy and the footer, where only the background rect lies. Fit centres the page.
+  const mm = (96 / 25.4) * zoom;
+  await page.mouse.click(c.x + c.width / 2, c.y + c.height / 2 + (266 - 297 / 2) * mm);
+  await expect(bar.getByLabel("Page width")).toHaveValue("210");
+  await expect(bar.getByRole("group", { name: "Page size" })).toBeVisible();
+});
+
 test("viewers can't use built-in starters", async ({ page, browser }) => {
   await signUp(page, unique("tsv"));
   await createWorkspace(page, "Starter Viewers");

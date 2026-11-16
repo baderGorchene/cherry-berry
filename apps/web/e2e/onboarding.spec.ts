@@ -122,7 +122,8 @@ test("a new user sees the welcome line with templates first, and a starter opens
   const tpl = page.getByRole("region", { name: "Start from a template" });
   const cat = page.getByRole("region", { name: "Browse by category" });
   expect((await tpl.boundingBox())!.y).toBeLessThan((await cat.boundingBox())!.y);
-  await expect(tpl.getByRole("button")).toHaveCount(24); // every built-in starter
+  // every built-in starter, plus any public template another spec has published meanwhile
+  await expect.poll(() => tpl.getByRole("button").count()).toBeGreaterThanOrEqual(24);
   await tpl.getByRole("button", { name: /^Use / }).first().click();
   await expect(page).toHaveURL(/\/d\//);
   await expect(page.getByRole("main", { name: "Post canvas" })).toBeVisible();
@@ -132,6 +133,20 @@ test("a new user sees the welcome line with templates first, and a starter opens
   await page.getByRole("link", { name: "Cards & invites" }).click();
   await expect(page).toHaveURL(/\/templates\?category=cards$/);
   await expect(page.getByRole("button", { name: "Cards & invites", exact: true })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("starter previews mount only for tiles scrolled near", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signUp(page, unique("rowlazy"));
+  await createWorkspace(page, "Row Studio");
+  const tpl = page.getByRole("region", { name: "Start from a template" });
+  await expect.poll(() => tpl.getByRole("button", { name: /^Use / }).count()).toBeGreaterThanOrEqual(24);
+  const canvases = tpl.locator("canvas");
+  await expect.poll(() => canvases.count()).toBeGreaterThan(0);
+  const first = await canvases.count();
+  expect(first).toBeLessThan(24);
+  await tpl.locator(".tpl-row").evaluate((el) => { el.scrollLeft = el.scrollWidth; });
+  await expect.poll(() => canvases.count()).toBeGreaterThan(first);
 });
 
 test("recent previews load only for cards near the viewport", async ({ page }) => {
@@ -165,6 +180,6 @@ test("viewers get no shortcuts or create button on Home, and starters are disabl
   await expect(viewer.getByRole("list", { name: "Create" })).toHaveCount(0);
   await expect(viewer.getByRole("button", { name: /^(New design|Create a design)$/ })).toHaveCount(0);
   const uses = viewer.getByRole("button", { name: /^Use / });
-  await expect(uses).toHaveCount(24);
+  await expect.poll(() => uses.count()).toBeGreaterThanOrEqual(24); // starters, plus public templates from other specs
   for (const b of await uses.all()) await expect(b).toBeDisabled();
 });

@@ -38,9 +38,12 @@ export function builder(slug: string, unit: Unit) {
     ({ ...base(name, x, y, w, h, look), kind: "rect", fill: solid(color), cornerRadius: radius });
   return {
     rect,
-    /** A background rect reaching the cut: the trim plus its bleed on every side. */
+    /**
+     * A background rect reaching the cut: the trim plus its bleed on every side. Locked, so the editor doesn't listen to it
+     * and an empty-canvas click still selects nothing (page settings in the toolbar).
+     */
     bleedFill: (p: { width: number; height: number; bleed: number }, color: string): CherryNode =>
-      rect("Background", -p.bleed, -p.bleed, p.width + 2 * p.bleed, p.height + 2 * p.bleed, color),
+      ({ ...rect("Background", -p.bleed, -p.bleed, p.width + 2 * p.bleed, p.height + 2 * p.bleed, color), locked: true }),
     outline: (name: string, x: number, y: number, w: number, h: number, color: string, width: number): CherryNode =>
       ({ ...base(name, x, y, w, h), kind: "rect", stroke: { paint: solid(color), width }, cornerRadius: 0 }),
     ellipse: (name: string, x: number, y: number, w: number, h: number, color: string, look?: Look): CherryNode =>
