@@ -1,18 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, openAsEditor, signUp, unique } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, signUp, unique } from "./helpers";
 
 async function newPost(page: Page) {
   await signUp(page, unique("pr"));
   await createWorkspace(page, "Presence Lab");
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
 }
 
 async function addRect(page: Page) {
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await addShape(page, "Rectangle");
 }
 
 const layer = (page: Page) => page.getByRole("complementary", { name: "Layers" }).getByRole("button", { name: "Rectangle", exact: true });

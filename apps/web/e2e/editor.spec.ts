@@ -1,19 +1,12 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, openAsViewer, signUp, unique, uniquePng } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsViewer, signUp, unique, uniquePng } from "./helpers";
 
 async function newSocialPost(page: Page) {
   await signUp(page, unique("ed"));
   await createWorkspace(page, "Editor Lab");
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
-}
-
-/** Arms a tool from the toolbar and clicks the canvas center (the page center at fit zoom). */
-async function place(page: Page, tool: string) {
-  await page.getByRole("button", { name: tool }).click();
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await editorReady(page);
 }
 
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
@@ -35,7 +28,7 @@ async function drawTriangle(page: Page) {
 
 test("create from preset, add a shape, edit it, reload", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
 
   const x = page.getByLabel("X", { exact: true });
@@ -50,7 +43,7 @@ test("create from preset, add a shape, edit it, reload", async ({ page }) => {
 
 test("each committed field is one undo step", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   const x = page.getByLabel("X", { exact: true });
   const y = page.getByLabel("Y", { exact: true });
   const [x0, y0] = [await x.inputValue(), await y.inputValue()];
@@ -69,7 +62,7 @@ test("each committed field is one undo step", async ({ page }) => {
 
 test("drag moves a shape", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   const x = page.getByLabel("X", { exact: true });
   const x0 = Number(await x.inputValue());
   // The new rectangle is centered on the canvas center.
@@ -100,7 +93,7 @@ test("text tool", async ({ page }) => {
 
 test("empty new text leaves nothing behind", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Text (T)");
+  await addShape(page, "Text");
   await expect(page.getByLabel("Edit text")).toBeFocused();
   await page.keyboard.press("Backspace");
   await page.keyboard.press("Escape");
@@ -122,7 +115,7 @@ test("recent designs load error offers retry", async ({ page }) => {
 
 test("undo and redo", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Ellipse (O)");
+  await addShape(page, "Ellipse");
   const layer = layers(page).getByRole("button", { name: "Ellipse", exact: true });
   await expect(layer).toBeVisible();
   await page.keyboard.press("Control+Z");
@@ -134,11 +127,11 @@ test("undo and redo", async ({ page }) => {
 test("pages", async ({ page }) => {
   await newSocialPost(page);
   await page.getByRole("button", { name: "+ Add page" }).click();
-  const page2 = page.getByRole("listitem").filter({ hasText: "2 · Page 2" });
+  const page2 = page.getByRole("listitem").filter({ hasText: "Page 2" });
   await expect(page2).toBeVisible();
   await page2.getByRole("button", { name: "Delete" }).click();
   await expect(page2).toHaveCount(0);
-  const page1 = page.getByRole("listitem").filter({ hasText: "1 · Page 1" });
+  const page1 = page.getByRole("listitem").filter({ hasText: "Page 1" });
   await expect(page1.getByRole("button", { name: "Delete" })).toBeDisabled();
 });
 
@@ -147,7 +140,7 @@ test("properties show page info when nothing is selected", async ({ page }) => {
   const props = page.getByRole("complementary", { name: "Properties" });
   await expect(props.getByRole("heading", { name: "Page", exact: true })).toBeVisible();
   await expect(props.getByText("1080 × 1080 px")).toBeVisible();
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await expect(props.getByRole("heading", { name: "Layout", exact: true })).toBeVisible();
   await props.getByRole("button", { name: "Delete" }).click();
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(0);
@@ -157,7 +150,7 @@ test("properties show page info when nothing is selected", async ({ page }) => {
 test("page actions show only on the current page", async ({ page }) => {
   await newSocialPost(page);
   await page.getByRole("button", { name: "+ Add page" }).click();
-  await expect(page.getByRole("listitem").filter({ hasText: "2 · Page 2" })).toBeVisible();
+  await expect(page.getByRole("listitem").filter({ hasText: "Page 2" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Duplicate" })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Duplicate" })).toBeVisible();
 });
@@ -166,7 +159,7 @@ test("viewer is read-only", async ({ browser }) => {
   const owner = await (await browser.newContext()).newPage();
   await newSocialPost(owner);
   const viewer = await openAsViewer(browser, owner);
-  await expect(viewer.getByRole("button", { name: "Rectangle (R)" })).toBeDisabled();
+  await expect(viewer.getByRole("button", { name: "Select (V)" })).toBeDisabled();
   await viewer.getByRole("tab", { name: "Shapes", exact: true }).click();
   await expect(viewer.getByRole("button", { name: "Import SVG…" })).toBeDisabled();
 });
@@ -183,7 +176,7 @@ test("left panel tabs switch between layers, shapes and visuals", async ({ page 
   await expect(page.getByRole("complementary", { name: "Visuals panel" })).toBeVisible();
   await tab("Layers").click();
   await page.keyboard.press("r");
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Select (V)" })).toHaveAttribute("aria-pressed", "false");
   // Keyboard activation keeps focus on the tab.
   await tab("Visuals").focus();
   await page.keyboard.press("Enter");
@@ -238,7 +231,7 @@ test("viewer cannot edit paths", async ({ browser }) => {
 
 test("the first point edit flattens a rectangle in the same undo step", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   const half = Number(await page.getByLabel("W", { exact: true }).inputValue()) / 2;
   const zoom = Number((await page.getByTitle("Zoom level").innerText()).replace("%", "")) / 100;
   const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
@@ -289,8 +282,8 @@ test("a save rejected as invalid offers a reload to the latest version", async (
 
   // Each tab deletes a different page; merged, the design would have no pages.
   // Page actions only show on the current page, so switch to it first.
-  await row(page, "Page 1").getByRole("button", { name: "1 · Page 1" }).click();
-  await row(other, "Page 2").getByRole("button", { name: "2 · Page 2" }).click();
+  await row(page, "Page 1").getByRole("button", { name: "Page 1" }).click();
+  await row(other, "Page 2").getByRole("button", { name: "Page 2" }).click();
   await ctx2.setOffline(true);
   await expect(status(other)).toHaveText(/^Offline/, { timeout: 15_000 });
   await row(page, "Page 1").getByRole("button", { name: "Delete" }).click();
@@ -308,15 +301,13 @@ test("a save rejected as invalid offers a reload to the latest version", async (
 
 /** Places a rectangle `dx` px right of the canvas center and waits out Konva's double-click window. */
 async function placeAt(page: Page, dx: number) {
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2);
+  await addShape(page, "Rectangle", dx);
   await page.waitForTimeout(450);
 }
 
 test("a selected rectangle shows a usable Corner radius field", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await expect(page.getByLabel("Corner radius")).toBeVisible();
 });
 
@@ -344,7 +335,7 @@ test("disjoint intersect explains itself", async ({ page }) => {
 
 test("convert to path keeps the layer", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await page.getByRole("button", { name: "Convert to path" }).click();
   await expect(page.getByLabel("Corner radius")).toHaveCount(0);
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(1);
@@ -371,8 +362,7 @@ test("long-label fields are visible and fillable", async ({ page }) => {
     await expect(page.getByLabel(label)).toHaveValue("2");
   }
   await page.waitForTimeout(450);
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  await page.mouse.click(cx + 200, cy + 150);
+  await addShape(page, "Rectangle", 200, 150);
   const sw = page.getByLabel("Stroke width");
   await expect(sw).toBeVisible();
   expect((await sw.boundingBox())!.width).toBeGreaterThanOrEqual(40);

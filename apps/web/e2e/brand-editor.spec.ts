@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, signUp, unique } from "./helpers";
+import { addShape, createWorkspace, editorReady, signUp, unique } from "./helpers";
 
 const content = (colors: [string, string, string, string][], rules: Record<string, boolean> = {}) => ({
   colors: colors.map(([id, name, role, hex]) => ({ id, name, role, hex })),
@@ -22,7 +22,7 @@ async function start(page: Page, colors: [string, string, string, string][], rul
   const { kit } = await res.json();
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
   return kit.id as string;
 }
 
@@ -37,12 +37,6 @@ async function link(page: Page) {
   await expect(panel(page).getByRole("heading", { name: "Colors" })).toBeVisible();
 }
 
-async function place(page: Page, tool: string) {
-  await page.getByRole("button", { name: tool }).click();
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-}
-
 const COLORS: [string, string, string, string][] = [["a", "Berry", "primary", "#8E1EA2"], ["b", "Ink", "text", "#22142A"], ["c", "Petal", "surface", "#FFC0DE"]];
 
 test("links a kit and applies its styles", async ({ page }) => {
@@ -55,7 +49,7 @@ test("links a kit and applies its styles", async ({ page }) => {
   await page.getByRole("tab", { name: "Layers", exact: true }).click();
   await expect(layers(page).getByRole("button", { name: "Heading", exact: true })).toBeVisible();
 
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await brandTab(page).click();
   await panel(page).getByRole("button", { name: "Ink" }).click();
   await expect(props(page).getByText("#22142A", { exact: true })).toBeVisible();
@@ -84,7 +78,7 @@ test("flags low contrast and off-brand fonts", async ({ page }) => {
 test("kit colors only replaces the picker", async ({ page }) => {
   await start(page, COLORS);
   await link(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await expect(props(page).getByRole("button", { name: "Berry" }).first()).toBeVisible();
   await expect(props(page).locator("input[type=color]")).toHaveCount(0);
 });
@@ -96,7 +90,7 @@ test("kit deleted while linked", async ({ page }) => {
   await page.request.post(`/api/workspaces/${workspaces[0].id}/brand-kits`, { data: { name: "Other kit", content: content([]) } });
   expect((await page.request.delete(`/api/brand-kits/${kitId}`)).ok()).toBe(true);
   await page.reload();
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
   await brandTab(page).click();
   await expect(panel(page).getByText("This design isn't linked to a brand kit.")).toBeVisible();
   await expect(panel(page).getByLabel("Link a brand kit")).toHaveValue("");

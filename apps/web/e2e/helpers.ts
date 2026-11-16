@@ -86,3 +86,19 @@ export async function openAsEditor(browser: Browser, owner: Page): Promise<Page>
   await expect(editor).toHaveURL(/\/$/);
   return editor;
 }
+
+/** Waits until the editor is loaded and editable (its Select tool is enabled). */
+export async function editorReady(page: Page) {
+  await expect(page.getByRole("button", { name: "Select (V)" })).toBeEnabled();
+}
+
+const SHAPE_KEYS = { Rectangle: "r", Ellipse: "o", Line: "l", Text: "t" } as const;
+
+/** Adds a shape the way a user does: arms it with its keyboard shortcut, then clicks the canvas centre (offset by dx, dy px).
+ *  The only place that knows how shapes are added; the Shapes panel is not needed (and Layers stays visible). */
+export async function addShape(page: Page, shape: keyof typeof SHAPE_KEYS, dx = 0, dy = 0) {
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur()); // shortcuts are ignored while a field has focus
+  await page.keyboard.press(SHAPE_KEYS[shape]);
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
+}

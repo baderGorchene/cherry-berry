@@ -45,7 +45,7 @@ test("phone editor shows tool bar and opens sheets", async ({ page }) => {
   for (const name of ["Undo", "Layers", "Export", "More"]) await expect(header.getByRole("button", { name, exact: true })).toBeVisible();
   for (const name of ["Text", "Shapes", "Visuals", "Draw", "Brand"]) await expect(tools(page).getByRole("button", { name, exact: true })).toBeVisible();
   // the desktop rail, side panels and header extras are gone
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeHidden();
+  await expect(page.getByRole("button", { name: "Select (V)" })).toBeHidden();
   await expect(page.getByRole("complementary", { name: "Properties" })).toBeHidden();
   await expect(page.getByRole("link", { name: "History" })).toBeHidden();
   const bar = (await tools(page).boundingBox())!;

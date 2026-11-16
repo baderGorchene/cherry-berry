@@ -1,19 +1,13 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Download, type Page } from "@playwright/test";
-import { createWorkspace, signUp, unique, uniquePng } from "./helpers";
+import { addShape, createWorkspace, editorReady, signUp, unique, uniquePng } from "./helpers";
 
 async function newSocialPost(page: Page) {
   await signUp(page, unique("exp"));
   await createWorkspace(page, "Export Lab");
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
-}
-
-async function place(page: Page, tool: string) {
-  await page.getByRole("button", { name: tool }).click();
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await editorReady(page);
 }
 
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
@@ -34,7 +28,7 @@ async function download(page: Page, label: string) {
 
 test("exports a png", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
   await saved(page);
   await exportAs(page, "PNG");
@@ -55,7 +49,7 @@ test("exports a print pdf with a bleed warning", async ({ page }) => {
 
 test("exports .cherry offline", async ({ page, context }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await saved(page);
   await context.setOffline(true);
   await expect(page.getByText("Offline — retrying")).toBeVisible();
@@ -118,7 +112,7 @@ test("credits for a cc-by visual", async ({ page }) => {
 
 test("show on page selects the offending layer", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Text (T)");
+  await addShape(page, "Text");
   await expect(page.getByLabel("Edit text")).toBeFocused();
   await page.keyboard.type("Hello");
   await page.keyboard.press("Escape");

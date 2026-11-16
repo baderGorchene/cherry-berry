@@ -1,16 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, openAsEditor, signUp, unique, uniquePng } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, signUp, unique, uniquePng } from "./helpers";
 
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
 const props = (page: Page) => page.getByRole("complementary", { name: "Properties" });
 const canvas = (page: Page) => page.getByLabel("Page 1 canvas");
 const showLayers = (page: Page) => page.getByRole("tab", { name: "Layers", exact: true }).click();
-
-async function place(page: Page, tool: string, dx = 0, dy = 0) {
-  await page.getByRole("button", { name: tool }).click();
-  const box = (await canvas(page).boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
-}
 
 async function seedVisual(page: Page, title: string) {
   const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
@@ -34,10 +28,10 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await createWorkspace(page, "Lock Lab");
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
 
-  await place(page, "Rectangle (R)", -200, 0);
-  await place(page, "Text (T)", 200, 150);
+  await addShape(page, "Rectangle", -200, 0);
+  await addShape(page, "Text", 200, 150);
   await page.keyboard.type("Hello");
   await page.keyboard.press("Escape");
   await seedVisual(page, "Dot");
@@ -59,7 +53,7 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
 
   const editor = await openAsEditor(browser, page);
   await editor.goto(url);
-  await expect(editor.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(editor);
   await expect(layers(editor).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
   await expect(layers(editor).getByRole("button", { name: "Lock Rectangle" })).toBeDisabled();
   await expect(layers(editor).getByRole("button", { name: "Lock Rectangle" })).toHaveAttribute("title", "Locked by the brand template");

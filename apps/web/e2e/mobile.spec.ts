@@ -13,7 +13,7 @@ test("phone home shows tabs, presets and recent", async ({ page }) => {
 
   // top bar: workspace name + account; tab bar: Home, Templates, Library, Brand
   await expect(page.getByRole("button", { name: /^Workspace: Pocket Studio/ })).toContainText("Pocket Studio");
-  await expect(page.getByRole("img", { name: "Signed in as Tester" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Main" }).getByRole("img", { name: "Signed in as Tester" })).toBeVisible();
   for (const name of ["Home", "Templates", "Visual library", "Brand kits"]) await expect(tabs(page).getByRole("link", { name })).toBeVisible();
   expect(await tabs(page).getByRole("link", { name: "Visual library" }).innerText()).toBe("Library");
   await expect(tabs(page).getByRole("link", { name: "Shapes" })).toBeHidden();
@@ -43,7 +43,7 @@ test("phone home shows tabs, presets and recent", async ({ page }) => {
   expect(cols).toBe(2);
 
   // 56px New design button floats above the tab bar
-  const fab = page.getByRole("link", { name: "New design" });
+  const fab = page.locator("a.fab");
   const f = (await fab.boundingBox())!;
   expect(Math.round(f.width)).toBe(56);
   expect(Math.round(f.height)).toBe(56);

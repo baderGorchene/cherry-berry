@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, openAsEditor, openAsViewer, signUp, unique, uniquePng } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, openAsViewer, signUp, unique, uniquePng } from "./helpers";
 
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
 const props = (page: Page) => page.getByRole("complementary", { name: "Properties" });
@@ -27,10 +27,8 @@ async function newKit(page: Page, rules?: Record<string, boolean>) {
 async function design(page: Page) {
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  const box = (await canvas(page).boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await editorReady(page);
+  await addShape(page, "Rectangle");
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("Saved");
 }
@@ -115,7 +113,7 @@ test("public template with a workspace visual is refused", async ({ page }) => {
   await createWorkspace(page, "Tpl Visual");
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
   const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
   const up = await page.request.post("/api/assets", {
     multipart: {

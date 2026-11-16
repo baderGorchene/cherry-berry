@@ -1,18 +1,16 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, openAsEditor, openAsViewer, signUp, unique } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, openAsViewer, signUp, unique } from "./helpers";
 
 async function newPost(page: Page) {
   await signUp(page, unique("co"));
   await createWorkspace(page, "Collab Lab");
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
 }
 
 async function addRect(page: Page) {
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await addShape(page, "Rectangle");
 }
 
 const rects = (page: Page) => page.getByRole("complementary", { name: "Layers" }).getByRole("button", { name: "Rectangle", exact: true });
@@ -22,7 +20,7 @@ test("two people edit live", async ({ page: owner, browser }) => {
   await newPost(owner);
   const editor = await openAsEditor(browser, owner);
   await editor.goto(new URL(owner.url()).pathname);
-  await expect(editor.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(editor);
 
   await addRect(owner);
   await expect(rects(editor)).toBeVisible({ timeout: 5000 });
@@ -37,7 +35,7 @@ test("offline edits sync on reconnect", async ({ page: owner, browser }) => {
   await newPost(owner);
   const editor = await openAsEditor(browser, owner);
   await editor.goto(new URL(owner.url()).pathname);
-  await expect(editor.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(editor);
   await expect(status(editor)).toHaveText("Saved");
 
   await editor.context().setOffline(true);
@@ -54,7 +52,7 @@ test("a viewer watches changes but cannot edit", async ({ page: owner, browser }
   const viewer = await openAsViewer(browser, owner);
   await addRect(owner);
   await expect(rects(viewer)).toBeVisible({ timeout: 5000 });
-  await expect(viewer.getByRole("button", { name: "Rectangle (R)" })).toBeDisabled();
+  await expect(viewer.getByRole("button", { name: "Select (V)" })).toBeDisabled();
 });
 
 test("an idle lone user stays connected", async ({ page }) => {

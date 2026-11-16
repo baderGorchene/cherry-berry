@@ -1,13 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, openAsEditor, openAsViewer, signUp, unique } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, openAsViewer, signUp, unique } from "./helpers";
 
 const rects = (page: Page) => page.getByRole("complementary", { name: "Layers" }).getByRole("button", { name: "Rectangle", exact: true });
 const versions = (page: Page) => page.getByRole("complementary", { name: "Versions" });
 
 async function addRect(page: Page, dx = 0) {
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2);
+  await addShape(page, "Rectangle", dx);
 }
 
 /** A design with one rect and a named version "Client review v1"; the owner is back in the editor. */
@@ -16,7 +14,7 @@ async function withNamedVersion(page: Page) {
   await createWorkspace(page, "History Lab");
   await page.getByRole("button", { name: /Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
   await addRect(page);
   await expect(rects(page)).toHaveCount(1);
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
