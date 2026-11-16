@@ -105,6 +105,14 @@ describe("preflight", () => {
     expect(c.detail).toBe("Exported as RGB. Choose PDF/X or Colour plates for CMYK.");
   });
 
+  it("cmyk pages pass with print for plates too", () => {
+    const d = mk([]);
+    d.pages[0]!.colorMode = "cmyk";
+    const c = get(preflight(d, { format: "plates", pageIds: [d.pages[0]!.id], scale: 1 }, { fonts: ["Inter"], assets: [], print: true }), "color")!;
+    expect(c.status).toBe("pass");
+    expect(c.title).toBe("Converted to CMYK");
+  });
+
   it("cmyk copy mentions spot swatches without print", () => {
     const d = mk([]);
     d.pages[0]!.colorMode = "cmyk";

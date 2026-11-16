@@ -8,7 +8,7 @@ import { setupTestApp, signUp } from "./helpers";
 const PNG = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 let stub: Server;
 /** What the stub does next: normal, or a failure/junk reply. */
-let behave: "ok" | "429" | "junk" | "badname" | "empty" | "slash" = "ok";
+let behave: "ok" | "429" | "junk" | "badname" | "badpage" | "badpng" | "empty" | "slash" | "dupe" = "ok";
 const seen: { path: string; type?: string; dpi?: string | null }[] = [];
 let stubUrl = "";
 let t: Awaited<ReturnType<typeof setupTestApp>>;      // with PRINT_URL
@@ -27,6 +27,9 @@ beforeAll(async () => {
       if (behave === "junk") { res.writeHead(200, { "content-type": "application/json" }); return void res.end("not json"); }
       if (behave === "empty") { res.writeHead(200); return void res.end(JSON.stringify({ plates: [] })); }
       if (behave === "badname") { res.writeHead(200); return void res.end(JSON.stringify({ plates: [{ page: 1, name: 5, png: "AA==" }] })); }
+      if (behave === "badpage") { res.writeHead(200); return void res.end(JSON.stringify({ plates: [{ page: 1.5, name: "Cyan", png: "AA==" }] })); }
+      if (behave === "badpng") { res.writeHead(200); return void res.end(JSON.stringify({ plates: [{ page: 1, name: "Cyan", png: 7 }] })); }
+      if (behave === "dupe") { res.writeHead(200); return void res.end(JSON.stringify({ plates: [{ page: 1, name: "A/B", png: "AA==" }, { page: 1, name: "A:B", png: "AA==" }] })); }
       if (behave === "slash") {
         res.writeHead(200);
         return void res.end(JSON.stringify({ plates: [{ page: 1, name: "..\\..\\x", png: "AA==" }, { page: 1, name: "../x", png: "AA==" }] }));
@@ -109,7 +112,7 @@ describe("print exports", () => {
   });
 
   it("junk, empty and badly shaped plates give print_unavailable", async () => {
-    for (const b of ["junk", "empty", "badname"] as const) {
+    for (const b of ["junk", "empty", "badname", "badpage", "badpng"] as const) {
       behave = b;
       const res = await run(t, "plates");
       expect([b, res.statusCode, res.json().error]).toEqual([b, 503, "print_unavailable"]);
@@ -123,6 +126,12 @@ describe("print exports", () => {
     const names = Object.keys(unzipSync(new Uint8Array(res.rawPayload)));
     expect(names).toHaveLength(2);
     for (const n of names) expect(n).not.toMatch(/[\\/]/);
+  });
+
+  it("plates that sanitise to the same name get a numeric suffix", async () => {
+    behave = "dupe";
+    const res = await run(t, "plates");
+    expect(Object.keys(unzipSync(new Uint8Array(res.rawPayload))).sort()).toEqual(["p1-A-B-2.png", "p1-A-B.png"]);
   });
 
   it("print formats need PRINT_URL", async () => {

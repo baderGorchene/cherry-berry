@@ -10,6 +10,11 @@ export default defineConfig({
   // Windows always ships Edge, so no browser download is needed there.
   // A failing test keeps its trace (test-results/…/trace.zip, open with `npx playwright show-trace`).
   use: { baseURL: `http://localhost:${WEB}`, channel: process.platform === "win32" ? "msedge" : undefined, trace: "retain-on-failure" },
+  // Instance settings are global to the server, so the admin spec runs alone, after every other spec has finished.
+  projects: [
+    { name: "main", testIgnore: /admin\.spec/ },
+    { name: "admin", testMatch: /admin\.spec/, dependencies: ["main"] },
+  ],
   webServer: [
     {
       command: "pnpm --filter @cherry/server dev",

@@ -1,6 +1,4 @@
-import { mkdirSync, readFileSync, rmdirSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { expect, test, type APIRequestContext, type Browser, type Page } from "@playwright/test";
 import { createWorkspace, signUp, unique, uniquePng } from "./helpers";
 
@@ -64,14 +62,7 @@ async function seedQueue(browser: Browser, titles: string[], svgTitle: string) {
   for (const c of [owner, ...reporters]) await c.ctx.close();
 }
 
-// Instance settings are global to the server, so admin tests never overlap, even across --repeat-each workers.
-const LOCK = join(tmpdir(), "cherry-e2e-admin.lock");
-test.beforeEach(async () => {
-  for (let i = 0; i < 600; i++) {
-    try { mkdirSync(LOCK); return; } catch { await new Promise((r) => setTimeout(r, 200)); }
-  }
-  throw new Error("admin e2e lock is stuck");
-});
+test.describe.configure({ mode: "serial" });
 
 // Runs even after a failure or timeout, so a closed registration never leaks into the other specs.
 test.afterEach(async ({ browser }) => {
@@ -82,7 +73,6 @@ test.afterEach(async ({ browser }) => {
   expect(res.ok()).toBe(true);
   await ctx.close();
 });
-test.afterEach(() => { try { rmdirSync(LOCK); } catch { /* already gone */ } }); // after the reset above
 
 test("non-admin has no admin menu and /admin redirects home", async ({ page }) => {
   await signUp(page, unique("plain"));
