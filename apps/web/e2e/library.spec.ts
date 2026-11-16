@@ -216,3 +216,17 @@ test("license is required", async ({ page }) => {
   await dialog(page).getByLabel("Attribution / source").fill("Ann");
   await expect(dialog(page).getByRole("button", { name: "Add 1 visual" })).toBeEnabled();
 });
+
+test("the details drawer shows only when a visual is selected", async ({ page }) => {
+  await start(page, "drawer");
+  await upload(page, png("Drawer dot"));
+  await page.goto("/library");
+  await expect(tile(page, "Drawer dot")).toBeVisible();
+  const aside = page.getByRole("complementary", { name: "Selected visual" });
+  await expect(aside).toBeHidden();
+  const grid = (await page.locator(".split-main").boundingBox())!;
+  expect(grid.width).toBeGreaterThan(1000);
+  await page.getByRole("button", { name: /Drawer dot/ }).click();
+  await expect(aside).toBeVisible();
+  await expect(aside.getByRole("heading", { name: "Drawer dot" })).toBeVisible();
+});

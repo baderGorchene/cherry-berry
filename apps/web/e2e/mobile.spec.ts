@@ -114,4 +114,22 @@ test.describe("tidy asset pages at 375x812", () => {
       expect(await noSideScroll(page), path).toBe(true);
     }
   });
+  test("controls on library, templates and brand are at least 44px tall", async ({ page }) => {
+    await signUp(page, unique("m-tap"));
+    await createWorkspace(page, "Tap Studio");
+    const tall = async (loc: import("@playwright/test").Locator) => {
+      await expect(loc.first()).toBeVisible();
+      const n = await loc.count();
+      expect(n).toBeGreaterThan(0);
+      for (let i = 0; i < n; i++) expect((await loc.nth(i).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    };
+    await page.goto("/templates");
+    await tall(page.getByRole("button", { name: "Publish a template" }));
+    await tall(page.locator(".chips .chip"));
+    await page.goto("/library");
+    await tall(page.locator(".filters .chip"));
+    await page.goto("/brand");
+    await tall(page.getByRole("button", { name: "Create a brand kit" }));
+    await tall(page.getByText("Import kit", { exact: true }));
+  });
 });
