@@ -98,4 +98,26 @@ describe("POST /api/workspaces/:id/designs/import", () => {
     const uses = await t.db.select().from(assetUses).where(eq(assetUses.designId, r.json().design.id));
     expect(uses.map((u) => u.assetId)).toEqual([a!.id]);
   });
+
+  it("never 500s on near-limit nesting, and the design count matches", async () => {
+    const { bo, ws } = await setup();
+    for (const n of [500, 1500, 2500]) {
+      const g = '{"kind":"group","id":"g","name":"g","x":0,"y":0,"width":1,"height":1,"children":[';
+      const d = doc(); d.pages[0]!.nodes = [];
+      const text = JSON.stringify(d).replace('"nodes":[]', `"nodes":[${g.repeat(n)}${"]}".repeat(n)}]`);
+      const before = await total();
+      const r = await post(bo.cookie, ws, text);
+      expect([201, 400]).toContain(r.statusCode);
+      if (r.statusCode === 400) expect(r.json()).toEqual({ error: "invalid_document" });
+      expect(await total()).toBe(before + (r.statusCode === 201 ? 1 : 0));
+    }
+  });
+
+  it("caps and defaults the title", async () => {
+    const { bo, ws } = await setup();
+    const t = async (title: string) => (await post(bo.cookie, ws, serializeCherry({ ...doc(), title }))).json().design.title;
+    expect(await t("x".repeat(300))).toBe("x".repeat(120));
+    expect(await t("   ")).toBe("Untitled design");
+    expect(await t("")).toBe("Untitled design");
+  });
 });

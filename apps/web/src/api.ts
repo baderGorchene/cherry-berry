@@ -61,7 +61,8 @@ export const importDesign = async (workspaceId: string, text: string): Promise<D
     return (await api<{ design: Design }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/designs/import`, { body: { text } })).design;
   } catch (e) {
     // `invalid_document` already means "a save was rejected" in COPY; for a file it has its own copy.
-    throw e instanceof ApiError && e.code === "invalid_document" ? new ApiError(e.status, "invalid_cherry_file") : e;
+    if (e instanceof ApiError && e.code === "invalid_document") throw new ApiError(e.status, "invalid_cherry_file");
+    throw e instanceof ApiError && e.code === "too_large" ? new ApiError(e.status, "cherry_file_too_large") : e;
   }
 };
 export const listDesigns = (workspaceId: string) =>
@@ -338,6 +339,7 @@ const COPY: Record<string, string> = {
   invalid_logo: "That logo isn't available to this workspace.",
   invalid_font: "That file isn't a font we can use. Choose WOFF2, WOFF, TTF or OTF.",
   template_private_assets: "Every visual in a public template must be public. Make them public or publish to this workspace.",
+  cherry_file_too_large: "This file is too big to open (10 MB max).",
   invalid_cherry_file: "This .cherry file is damaged and can't be opened.",
   invalid_document: "This change couldn't be saved because the design became invalid.",
   not_saved: "Couldn't save just now. Your changes are kept, try again.",

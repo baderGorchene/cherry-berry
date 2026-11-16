@@ -58,11 +58,14 @@ export async function createDesign(
 export async function importDesign(db: Db, userId: string, workspaceId: string, doc: CherryDocument): Promise<DesignSummary> {
   if ((await memberRole(db, workspaceId, userId)) === "viewer") throw new WorkspaceError("forbidden");
   const page = doc.pages[0]!;
-  const state = Y.encodeStateAsUpdate(docToY({ ...doc, id: randomUUID() }));
-  const ids = [...new Set(doc.pages.flatMap((p) => [...imageAssetIds(p.nodes)]))].filter((i) => UUID.test(i));
+  let state: Uint8Array, ids: string[];
+  try {
+    state = Y.encodeStateAsUpdate(docToY({ ...doc, id: randomUUID() }));
+    ids = [...new Set(doc.pages.flatMap((p) => [...imageAssetIds(p.nodes)]))].filter((i) => UUID.test(i));
+  } catch { throw new HttpError(400, "invalid_document"); } // hostile nesting can overflow the stack
   return db.transaction(async (tx) => {
     const [d] = await tx.insert(designs).values({
-      workspaceId, title: doc.title, width: page.width, height: page.height, unit: page.unit, colorMode: page.colorMode,
+      workspaceId, title: doc.title.trim().slice(0, 120) || "Untitled design", width: page.width, height: page.height, unit: page.unit, colorMode: page.colorMode,
       state, createdBy: userId,
     }).returning(summaryColumns);
     if (ids.length) {
