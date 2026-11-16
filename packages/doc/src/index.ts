@@ -8,3 +8,4 @@ export * from "./units";
 export * from "./brand";
 export * from "./diff";
 export * from "./preflight";
+export * from "./fonts";

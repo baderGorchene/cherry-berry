@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
+import { FONTS } from "@cherry/doc";
 import { fontUrl, type BrandKit } from "../api";
 
-export const BUILT_IN_FONTS = ["Inter", "Space Grotesk", "Georgia", "Arial", "Times New Roman", "Courier New"];
+export const BUILT_IN_FONTS = [...FONTS.map((f) => f.family), "Georgia", "Arial", "Times New Roman", "Courier New"];
 
 /** The built-in families plus the kit's uploaded ones, each once. */
 export const kitFamilies = (kit: BrandKit): string[] => [...new Set([...BUILT_IN_FONTS, ...kit.fonts.map((f) => f.family)])];
