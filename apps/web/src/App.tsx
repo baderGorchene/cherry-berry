@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router";
+import { CreateDialogProvider } from "./create/CreateDialog";
 import { getSession, type User, type Workspace } from "./api";
 import Admin from "./routes/Admin";
 import Brand from "./routes/Brand";
@@ -8,7 +9,6 @@ import Editor from "./routes/Editor";
 import History from "./routes/History";
 import Home from "./routes/Home";
 import Library from "./routes/Library";
-import NewDesign from "./routes/NewDesign";
 import Shapes from "./routes/Shapes";
 import SignIn from "./routes/SignIn";
 import Templates from "./routes/Templates";
@@ -39,6 +39,7 @@ export default function App() {
 
   return (
     <Session.Provider value={{ user, setUser }}>
+      <CreateDialogProvider>
       <Routes>
         <Route path="/sign-in" element={user ? <Navigate to="/" replace /> : <SignIn />} />
         <Route path="/workspaces" element={<RequireUser><Workspaces /></RequireUser>} />
@@ -48,13 +49,14 @@ export default function App() {
         <Route path="/brand" element={<RequireUser><Brand /></RequireUser>} />
         <Route path="/brand/:id/guide" element={<RequireUser><StyleGuide /></RequireUser>} />
         <Route path="/templates" element={<RequireUser><Templates /></RequireUser>} />
-        <Route path="/new" element={<RequireUser><NewDesign /></RequireUser>} />
+        <Route path="/new" element={<RequireUser><Home /></RequireUser>} />
         <Route path="/d/:id" element={<RequireUser><Editor /></RequireUser>} />
         <Route path="/d/:id/history" element={<RequireUser><History /></RequireUser>} />
         <Route path="/admin" element={<RequireUser><Admin /></RequireUser>} />
         <Route path="/admin/:section" element={<RequireUser><Admin /></RequireUser>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </CreateDialogProvider>
     </Session.Provider>
   );
 }

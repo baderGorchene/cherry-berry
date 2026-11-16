@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { ApiError, instanceInfo, myWorkspaces, signOut, type Workspace } from "./api";
+import { useCreateDialog } from "./create/CreateDialog";
 import { currentWorkspace, useSession } from "./App";
 import { switchServerUrl } from "./native";
 import { IconBrand, IconChevron, IconHome, IconImage, IconPlus, IconShapes, IconTemplate } from "./icons";
@@ -23,6 +24,7 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
   const [currentId, setCurrentId] = useState(currentWorkspace.get());
   const [open, setOpen] = useState(false);
   const [admin, setAdmin] = useState(false);
+  const create = useCreateDialog();
   const wrap = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
@@ -81,7 +83,7 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
         </div>
         <span className="me only-m" role="img" aria-label={`Signed in as ${user?.name}`} title={user?.email}>{initials(user?.name ?? "")}</span>
         {current?.role !== "viewer" && (
-          <Link to="/new" className="btn btn-p side-cta only-d"><IconPlus /> Create a design</Link>
+          <button type="button" className="btn btn-p side-cta only-d" onClick={() => create.open()}><IconPlus /> Create a design</button>
         )}
         <span className="nav-group only-d" aria-hidden="true">Studio</span>
         {LINKS.filter((l) => l[5] === "Studio").map(([id, to, label, short, Icon]) => (

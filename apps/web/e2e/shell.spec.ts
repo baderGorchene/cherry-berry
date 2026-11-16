@@ -110,25 +110,3 @@ test("sign in shows the full welcome panel on wide screens and a band on phones"
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
-test("new design lists presets beside the custom form", async ({ page }) => {
-  await signUp(page, unique("new"));
-  await createWorkspace(page, "New Studio");
-  await page.goto("/new");
-  await expect(page.getByLabel("Width")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/");
-  await page.getByRole("button", { name: /Social post/ }).click();
-  await expect(page).toHaveURL(/\/d\//);
-});
-
-test("viewers cannot create from presets on the new design page", async ({ page, browser }) => {
-  await signUp(page, unique("owner"));
-  await createWorkspace(page, "View Studio");
-  await page.getByRole("button", { name: /Social post/ }).click();
-  await expect(page).toHaveURL(/\/d\//);
-  const viewer = await openAsViewer(browser, page);
-  await viewer.goto("/new");
-  await expect(viewer.getByText("You have view-only access to this workspace.")).toBeVisible();
-  await expect(viewer.getByRole("button", { name: /Social post/ })).toBeDisabled();
-  await expect(viewer.getByRole("button", { name: /Social post/ })).toHaveCSS("cursor", "default");
-  await expect(viewer.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
-});

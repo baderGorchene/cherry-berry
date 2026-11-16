@@ -8,7 +8,7 @@ async function newPost(page: Page) {
   await signUp(page, unique("m-ed"));
   await createWorkspace(page, "Pocket Editor");
   await page.getByRole("list", { name: "Sizes" }).getByRole("link", { name: "Post" }).click();
-  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await page.getByRole("dialog", { name: "Create a design" }).getByRole("button", { name: /^Social post/ }).click();
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await expect(tools(page).getByRole("button", { name: "Shapes" })).toBeEnabled();
 }

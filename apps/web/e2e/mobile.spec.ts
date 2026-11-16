@@ -26,14 +26,12 @@ test("phone home shows tabs, presets and recent", async ({ page }) => {
   await expect(page).toHaveURL(/\/shapes$/);
   await tabs(page).getByRole("link", { name: "Home" }).click();
 
-  // size presets open the new-design flow with that preset filled in
+  // the size row opens the Create dialog on that category
   const sizes = page.getByRole("list", { name: "Sizes" });
   for (const name of ["Post", "Story", "A4 print", "Custom"]) await expect(sizes.getByRole("link", { name })).toBeVisible();
   await sizes.getByRole("link", { name: "Story" }).click();
-  await expect(page).toHaveURL(/\/new\?preset=Story$/);
-  await expect(page.getByLabel("Width")).toHaveValue("1080");
-  await expect(page.getByLabel("Height")).toHaveValue("1920");
-  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page).toHaveURL(/\/new\?category=social$/);
+  await page.getByRole("dialog", { name: "Create a design" }).getByRole("button", { name: /^Story/ }).click();
   await expect(page).toHaveURL(/\/d\//);
   await page.goto("/");
 
@@ -43,13 +41,13 @@ test("phone home shows tabs, presets and recent", async ({ page }) => {
   expect(cols).toBe(2);
 
   // 56px New design button floats above the tab bar
-  const fab = page.getByRole("link", { name: "New design" }).and(page.locator("a.fab"));
+  const fab = page.locator("button.fab");
   const f = (await fab.boundingBox())!;
   expect(Math.round(f.width)).toBe(56);
   expect(Math.round(f.height)).toBe(56);
   expect(f.y + f.height).toBeLessThan(bar.y);
   await fab.click();
-  await expect(page).toHaveURL(/\/new$/);
+  await expect(page.getByRole("dialog", { name: "Create a design" })).toBeVisible();
 });
 
 test("phone library shows chips and upload button", async ({ page }) => {

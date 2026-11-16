@@ -4,6 +4,8 @@ import {
   ApiError, createDesign, errorMessage, listDesigns, myWorkspaces,
   type Design, type NewDesign, type Workspace,
 } from "../api";
+import { PRESETS } from "../create/sizes";
+import { useCreateDialog } from "../create/CreateDialog";
 import { currentWorkspace, useSession } from "../App";
 import AppShell from "../AppShell";
 import { IconPlus, IconSearch, IconTemplate, IconUpload } from "../icons";
@@ -53,21 +55,8 @@ function PresetArt({ name }: { name: string }) {
   }
 }
 
-export const PRESETS: { name: string; size: string; w: number; h: number; bg: string; body: NewDesign }[] = [
-  { name: "Social post", size: "1080 × 1080 px", w: 60, h: 60, bg: "var(--blush)",
-    body: { title: "Untitled design", width: 1080, height: 1080, unit: "px", colorMode: "rgb" } },
-  { name: "A4 print", size: "210 × 297 mm · CMYK", w: 44, h: 64, bg: "var(--orchid)",
-    body: { title: "Untitled design", width: 210, height: 297, unit: "mm", colorMode: "cmyk", bleed: 3 } },
-  { name: "Presentation", size: "1920 × 1080 px", w: 96, h: 54, bg: "var(--berry)",
-    body: { title: "Untitled design", width: 1920, height: 1080, unit: "px", colorMode: "rgb" } },
-  { name: "Story", size: "1080 × 1920 px", w: 40, h: 70, bg: "var(--petal)",
-    body: { title: "Untitled design", width: 1080, height: 1920, unit: "px", colorMode: "rgb" } },
-  { name: "Business card", size: "85 × 55 mm · CMYK", w: 84, h: 48, bg: "#fff",
-    body: { title: "Untitled design", width: 85, height: 55, unit: "mm", colorMode: "cmyk", bleed: 3 } },
-];
-
 /** Phone size row: label → preset name (null: custom size). */
-const SIZES: [string, string | null][] = [["Post", "Social post"], ["Story", "Story"], ["A4 print", "A4 print"], ["Custom", null]];
+const SIZES: [string, string][] = [["Post", "social"], ["Story", "social"], ["A4 print", "print"], ["Custom", "custom"]];
 
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 export function edited(iso: string, now = Date.now()): string {
@@ -95,6 +84,7 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
   const [createError, setCreateError] = useState("");
   const [q, setQ] = useState("");
+  const create_ = useCreateDialog();
 
   const load = () => {
     setLoadError(false);
@@ -146,7 +136,7 @@ export default function Home() {
           <div className="home-hero-top only-d">
             <span className="home-ws-pill">{current.name} · {current.role ?? "viewer"}</span>
             <span style={{ flex: 1 }} />
-            {viewOnly ? null : <Link to="/new" className="btn btn-p"><IconPlus /> New design</Link>}
+            {viewOnly ? null : <button type="button" className="btn btn-p" onClick={() => create_.open()}><IconPlus /> New design</button>}
             <span className="me" role="img" aria-label={`Signed in as ${user?.name}`} title={user?.email}>{initials(user?.name ?? "")}</span>
           </div>
 
@@ -169,11 +159,11 @@ export default function Home() {
           {viewOnly ? null : (
             <>
               <ul className="sizes" aria-label="Sizes">
-                {SIZES.map(([label, preset]) => {
-                  const p = PRESETS.find((x) => x.name === preset);
+                {SIZES.map(([label, category]) => {
+                  const p = PRESETS.find((x) => x.name === (label === "Post" ? "Social post" : label));
                   return (
                     <li key={label}>
-                      <Link to={p ? `/new?preset=${encodeURIComponent(p.name)}` : "/new"} className="size">
+                      <Link to={`/new?category=${category}`} className="size">
                         <span className="size-box" aria-hidden="true">
                           {p ? <span style={{ width: p.w * 0.66, height: p.h * 0.66, background: p.bg, borderRadius: 4 }} /> : <IconPlus />}
                         </span>
@@ -197,10 +187,10 @@ export default function Home() {
                     <span className="quick-lbl">{p.name}</span>
                   </button>
                 ))}
-                <Link to="/new" className="quick-tile" title="Custom dimensions in px, mm, or in">
+                <button type="button" className="quick-tile" title="Custom dimensions in px, mm, or in" onClick={() => create_.open("custom")}>
                   <span className="quick-icon quick-icon-new" aria-hidden="true"><IconPlus /></span>
                   <span className="quick-lbl">Custom size</span>
-                </Link>
+                </button>
                 <Link to="/library" className="quick-tile" title="Upload images, SVGs, or GIFs">
                   <span className="quick-icon quick-icon-up" aria-hidden="true"><IconUpload /></span>
                   <span className="quick-lbl">Upload</span>
@@ -253,7 +243,7 @@ export default function Home() {
             </ul>
           )}
         </section>
-        {viewOnly ? null : <Link to="/new" className="fab" aria-label="New design"><IconPlus /></Link>}
+        {viewOnly ? null : <button type="button" className="fab" aria-label="New design" onClick={() => create_.open()}><IconPlus /></button>}
     </AppShell>
   );
 }
