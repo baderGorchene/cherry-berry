@@ -9,6 +9,50 @@ import AppShell from "../AppShell";
 import { IconPlus, IconSearch, IconTemplate, IconUpload } from "../icons";
 import { initials } from "./Workspaces";
 
+function PresetArt({ name }: { name: string }) {
+  switch (name) {
+    case "Social post":
+      return (
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <rect x="3" y="3" width="22" height="22" rx="6" fill="#FFE0EF" stroke="#C654C3" strokeWidth="1.6" />
+          <path d="M14 19.5s-5-3.2-5-6.6a2.9 2.9 0 0 1 5-2 2.9 2.9 0 0 1 5 2c0 3.4-5 6.6-5 6.6Z" fill="#8E1EA2" />
+        </svg>
+      );
+    case "A4 print":
+      return (
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <rect x="6" y="3" width="16" height="22" rx="3" fill="#fff" stroke="#8E1EA2" strokeWidth="1.6" />
+          <path d="M9.5 9h9M9.5 13h9M9.5 17h6" stroke="#C654C3" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+    case "Presentation":
+      return (
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <rect x="2.5" y="5.5" width="23" height="16" rx="4" fill="#8E1EA2" />
+          <rect x="6.5" y="13.5" width="3.5" height="5" rx="1" fill="#FFC0DE" />
+          <rect x="12" y="10.5" width="3.5" height="8" rx="1" fill="#fff" />
+          <rect x="17.5" y="12" width="3.5" height="6.5" rx="1" fill="#ED96D7" />
+        </svg>
+      );
+    case "Story":
+      return (
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <rect x="7.5" y="2.5" width="13" height="23" rx="4" fill="#F8E2FB" stroke="#8E1EA2" strokeWidth="1.6" />
+          <circle cx="14" cy="11.5" r="3" fill="#C654C3" />
+          <path d="M10.5 18.5h7" stroke="#8E1EA2" strokeWidth="1.8" strokeLinecap="round" />
+        </svg>
+      );
+    default:
+      return (
+        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <rect x="3" y="6.5" width="22" height="15" rx="3.5" fill="#fff" stroke="#8E1EA2" strokeWidth="1.6" />
+          <circle cx="9" cy="14" r="2.5" fill="#C654C3" />
+          <path d="M14 12.5h7M14 16h5" stroke="#5D4E66" strokeWidth="1.6" strokeLinecap="round" />
+        </svg>
+      );
+  }
+}
+
 export const PRESETS: { name: string; size: string; w: number; h: number; bg: string; body: NewDesign }[] = [
   { name: "Social post", size: "1080 × 1080 px", w: 60, h: 60, bg: "var(--blush)",
     body: { title: "Untitled design", width: 1080, height: 1080, unit: "px", colorMode: "rgb" } },
@@ -148,7 +192,7 @@ export default function Home() {
                   <button key={p.name} type="button" className="quick-tile" disabled={busy}
                     title={`${p.name} · ${p.size}`} onClick={() => create(p.body)}>
                     <span className="quick-icon" aria-hidden="true">
-                      <span style={{ width: p.w * 0.42, height: p.h * 0.42, background: p.bg, borderRadius: 4, border: p.bg === "#fff" ? "2px solid var(--berry)" : 0 }} />
+                      <PresetArt name={p.name} />
                     </span>
                     <span className="quick-lbl">{p.name}</span>
                   </button>

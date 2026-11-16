@@ -22,8 +22,9 @@ export default function Pages({ ydoc, pages, pageId, readOnly, role, act, onSwit
       <h2 className="ed-ph">Pages</h2>
       <ul className="ed-list">
         {pages.map((p, i) => (
-          <li key={p.id} className="ed-pagerow">
-            <InlineName name={p.name} label={`${i + 1} · ${p.name}`} editable={!readOnly} pressed={p.id === pageId}
+          <li key={p.id} className={`ed-pagerow${p.id === pageId ? " ed-layrow-on" : ""}`}>
+            <span className="ed-pnum" aria-hidden="true">{i + 1}</span>
+            <InlineName name={p.name} label={p.name} editable={!readOnly} pressed={p.id === pageId}
               className={`ed-lay${p.id === pageId ? " ed-lay-on" : ""}`}
               onClick={() => onSwitch(p.id)} onRename={(name) => act(() => renamePage(ydoc, p.id, name))} />
             {p.id === pageId && <>
