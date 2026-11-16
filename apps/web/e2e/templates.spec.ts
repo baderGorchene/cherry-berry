@@ -206,3 +206,34 @@ test("viewer can browse but not use", async ({ page, browser }) => {
   await expect(viewer.getByRole("region", { name: "Tpl Viewers" }).getByText("Viewers can't create designs")).toBeVisible();
   await expect(viewer.getByRole("button", { name: "Publish a template" })).toHaveCount(0);
 });
+
+test("built-in starters are grouped by category; See all and ?category filter; Use opens the editor", async ({ page }) => {
+  await signUp(page, unique("tst"));
+  await createWorkspace(page, "Starter Lab");
+  await page.goto("/templates");
+  const social = page.getByRole("region", { name: "Social", exact: true });
+  const print = page.getByRole("region", { name: "Print", exact: true });
+  await expect(social).toBeVisible();
+  await expect(print).toBeVisible();
+  await expect(social.getByText("Built-in").first()).toBeVisible();
+  await expect(social.getByRole("link", { name: "See all" })).toHaveAttribute("href", "/templates?category=social");
+
+  await print.getByRole("link", { name: "See all" }).click();
+  await expect(page).toHaveURL(/category=print$/);
+  await expect(page.getByRole("region", { name: "Social", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Print", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "See all" })).toHaveCount(0);
+
+  await page.getByRole("region", { name: "Print", exact: true }).getByRole("button", { name: /^Use / }).first().click();
+  await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
+  await editorReady(page);
+});
+
+test("viewers can't use built-in starters", async ({ page, browser }) => {
+  await signUp(page, unique("tsv"));
+  await createWorkspace(page, "Starter Viewers");
+  await design(page);
+  const viewer = await openAsViewer(browser, page);
+  await viewer.goto("/templates");
+  await expect(viewer.getByRole("region", { name: "Social", exact: true }).getByRole("button", { name: /^Use / }).first()).toBeDisabled();
+});

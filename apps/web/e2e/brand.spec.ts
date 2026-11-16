@@ -132,3 +132,12 @@ test("style guide shows the kit and prints", async ({ page }) => {
   await expect(page.getByText("This brand kit isn't available.")).toBeVisible();
   await expect(page.getByRole("link", { name: "Home" })).toBeVisible();
 });
+
+test("empty brand page explains kits and offers create and import", async ({ page }) => {
+  await signUp(page, unique("brandempty"));
+  await createWorkspace(page, "Empty Brand");
+  await page.goto("/brand");
+  await expect(page.getByText("A brand kit keeps your colors, fonts and logos in one place")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Create a brand kit" })).toBeVisible();
+  await expect(page.getByText("Import kit", { exact: true })).toBeVisible();
+});

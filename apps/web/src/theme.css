@@ -138,7 +138,11 @@ button.row:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px;
 .fab:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px; }
 .preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px; }
 .recent { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; }
-.filters { display: flex; flex-direction: column; gap: 16px; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chip-dd { padding-right: 32px; background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4l4 4 4-4' fill='none' stroke='%2322142a' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 12px center; }
+.chip-dd[aria-expanded="true"] { border-color: var(--berry); }
+.empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
+.empty .drop { align-self: stretch; padding: 36px 20px; }
 .page { flex: 1; min-width: 0; padding: 28px clamp(16px, 4vw, 40px) 48px; display: flex; flex-direction: column; gap: 32px; }
 .page-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
 .page-title { font-size: 28px; letter-spacing: -0.01em; }
@@ -205,11 +209,14 @@ button.row:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px;
 
   /* library */
   .page-title { font-size: 26px; }
-  .filters { flex-direction: row; gap: 8px; margin: -4px -20px 0; padding: 4px 20px; overflow-x: auto; scrollbar-width: none; }
-  .filters .ph-row { display: contents; }
-  .filters .ph { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  .filters .chips { flex-wrap: nowrap; }
-  .filters .chip { flex: none; min-height: 44px; font-size: 13px; }
+  .filters { flex-wrap: nowrap; gap: 4px; }
+  .filters .ed-more-w { min-width: 0; flex: 0 1 auto; }
+  .filters .chip { min-height: 44px; font-size: 12px; padding-left: 8px; padding-right: 18px; background-position: right 6px center; background-size: 10px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .filters .ed-menu { min-width: 200px; }
+  .filters .ed-more-w:nth-child(n+2) .ed-ctx.ed-menu { left: auto; right: 0; }
+  .filters .ed-menu button { min-height: 44px; }
+  .empty .btn { min-height: 44px; }
+  .aside-idle { display: none; }
   .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .tile { height: 110px; }
   .badge { padding: 2px 6px; border-radius: 5px; font: 700 10px Inter, sans-serif; }

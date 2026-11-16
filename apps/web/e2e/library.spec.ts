@@ -24,7 +24,11 @@ async function start(page: Page, name: string) {
   await signUp(page, unique(name));
   await createWorkspace(page, `${name} Lab`);
 }
-const chip = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
+/** Opens a dropdown filter chip ("Source: Workspace") and picks an item from its menu. */
+async function pickFilter(page: Page, filter: "Type" | "Source" | "License", item: string) {
+  await page.getByRole("button", { name: new RegExp(`^${filter}: `) }).click();
+  await page.getByRole("menu").getByRole("menuitem", { name: item, exact: true }).click();
+}
 const tile = (page: Page, title: string) => page.getByRole("img", { name: title, exact: true });
 
 test("library lists, filters and shows details", async ({ page }) => {
@@ -41,17 +45,17 @@ test("library lists, filters and shows details", async ({ page }) => {
   await expect(badges.getByText("IMG", { exact: true })).toBeVisible();
   await expect(badges.getByText("CC0", { exact: true })).toBeVisible();
 
-  await chip(page, "Mine").click();
+  await pickFilter(page, "Source", "Mine");
   await expect(tile(page, "Berry dot")).toBeVisible();
   await expect(tile(page, "Berry outline")).toBeVisible();
-  await chip(page, "SVG").click();
+  await pickFilter(page, "Type", "SVG");
   await expect(tile(page, "Berry dot")).toHaveCount(0);
   await expect(tile(page, "Berry outline")).toBeVisible();
-  await chip(page, "All").click();
-  await chip(page, "CC0").click();
+  await pickFilter(page, "Type", "All");
+  await pickFilter(page, "License", "CC0");
   await expect(tile(page, "Berry outline")).toHaveCount(0);
   await expect(tile(page, "Berry dot")).toBeVisible();
-  await chip(page, "Any").click();
+  await pickFilter(page, "License", "Any");
   await page.getByLabel("Search visuals").fill("FRUIT");
   await expect(tile(page, "Berry outline")).toHaveCount(0);
   await expect(tile(page, "Berry dot")).toBeVisible();
@@ -61,6 +65,34 @@ test("library lists, filters and shows details", async ({ page }) => {
   await expect(aside.getByText("CC0 · public domain")).toBeVisible();
   await expect(aside.getByText("8 × 8 px")).toBeVisible();
   await expect(aside.getByText("0 designs")).toBeVisible();
+});
+
+test("filters are one row of three dropdown chips; Escape returns focus", async ({ page }) => {
+  await start(page, "chips");
+  await page.goto("/library");
+  const type = page.getByRole("button", { name: "Type: All" });
+  const source = page.getByRole("button", { name: "Source: Workspace" });
+  const lic = page.getByRole("button", { name: "License: Any" });
+  const ys = await Promise.all([type, source, lic].map(async (b) => Math.round((await b.boundingBox())!.y)));
+  expect(new Set(ys).size).toBe(1);
+  await type.click();
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem")).toHaveCount(4);
+  await page.keyboard.press("ArrowDown");
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(type).toBeFocused();
+  await pickFilter(page, "Type", "GIFs");
+  await expect(page.getByRole("button", { name: "Type: GIFs" })).toBeVisible();
+});
+
+test("empty library invites the first upload and offers a drop zone", async ({ page }) => {
+  await start(page, "libempty");
+  await page.goto("/library");
+  await expect(page.getByRole("button", { name: "Upload your first image" })).toBeVisible();
+  await expect(page.getByText("Drop files here or click to browse")).toBeVisible();
+  await page.getByRole("button", { name: "Upload your first image" }).click();
+  await expect(page.getByRole("dialog", { name: "Upload visuals" })).toBeVisible();
 });
 
 test("edit and delete your own visual", async ({ page }) => {
@@ -89,7 +121,7 @@ test("report someone else's public visual", async ({ browser }) => {
   const b = await (await browser.newContext()).newPage();
   await start(b, "libB");
   await b.goto("/library");
-  await chip(b, "Public").click();
+  await pickFilter(b, "Source", "Public");
   await b.getByRole("button", { name: new RegExp(title) }).click();
   const aside = b.getByRole("complementary", { name: "Selected visual" });
   await expect(aside.getByRole("button", { name: "Edit details" })).toHaveCount(0);

@@ -55,14 +55,11 @@ test("phone library shows chips and upload button", async ({ page }) => {
   await expect(page.getByRole("heading", { name: "Visual library" })).toBeVisible();
   await expect(page.getByRole("searchbox", { name: "Search visuals" })).toBeVisible();
 
-  // one horizontally scrolling chip row
-  const workspace = page.getByRole("button", { name: "Workspace", exact: true });
-  await expect(workspace).toHaveAttribute("aria-pressed", "true");
+  // one row of three dropdown chips
+  const workspace = page.getByRole("button", { name: "Source: Workspace" });
   const ys = new Set<number>();
-  for (const name of ["Workspace", "Mine", "Public", "SVG", "GIFs"]) {
-    const b = page.getByRole("button", { name, exact: true });
-    await b.scrollIntoViewIfNeeded();
-    ys.add(Math.round((await b.boundingBox())!.y));
+  for (const name of ["Type: All", "Source: Workspace", "License: Any"]) {
+    ys.add(Math.round((await page.getByRole("button", { name }).boundingBox())!.y));
   }
   expect(ys.size).toBe(1);
   expect((await workspace.boundingBox())!.height).toBeGreaterThanOrEqual(44);
@@ -103,5 +100,18 @@ test.describe("mobile shell", () => {
     const seg = (await server.locator("label").last().boundingBox())!;
     expect(seg.height).toBeGreaterThanOrEqual(44);
     expect(await noSideScroll(page)).toBe(true);
+  });
+});
+
+test.describe("tidy asset pages at 375x812", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+  test("library, shapes, templates and brand don't scroll sideways", async ({ page }) => {
+    await signUp(page, unique("m-tidy"));
+    await createWorkspace(page, "Tidy Studio");
+    for (const path of ["/library", "/shapes", "/templates", "/templates?category=print", "/brand"]) {
+      await page.goto(path);
+      await expect(page.getByRole("main")).toBeVisible();
+      expect(await noSideScroll(page), path).toBe(true);
+    }
   });
 });

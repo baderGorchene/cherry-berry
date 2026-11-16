@@ -36,3 +36,15 @@ test("shapes page imports and saves", async ({ browser }) => {
   await b.getByLabel("Search shapes").fill("FRUIT");
   await expect(b.getByRole("main").getByText(berry, { exact: true })).toBeVisible();
 });
+
+test("shapes page lists the built-in catalogue", async ({ page }) => {
+  await signUp(page, unique("shpcat"));
+  await createWorkspace(page, "Catalogue Lab");
+  await page.goto("/shapes");
+  const main = page.getByRole("main");
+  for (const name of ["Basic shapes", "Blobs", "Sparkles", "Badges", "Doodles"]) {
+    await expect(main.getByRole("heading", { name, exact: true })).toBeVisible();
+  }
+  await expect(main.getByText("Organic blob")).toBeVisible();
+  await expect(main.getByText("Rectangle", { exact: true })).toBeVisible();
+});
