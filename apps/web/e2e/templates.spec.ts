@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, openAsEditor, openAsViewer, signUp, unique, uniquePng } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, openAsViewer, signUp, unique, uniquePng, newDesign } from "./helpers";
 
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
 const props = (page: Page) => page.getByRole("complementary", { name: "Properties" });
@@ -25,7 +25,7 @@ async function newKit(page: Page, rules?: Record<string, boolean>) {
 
 /** On the home page of a workspace: starts a social post with a rectangle on it. */
 async function design(page: Page) {
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await editorReady(page);
   await addShape(page, "Rectangle");
@@ -111,7 +111,7 @@ test("requires approval when the kit says so", async ({ page, browser }) => {
 test("public template with a workspace visual is refused", async ({ page }) => {
   await signUp(page, unique("tv"));
   await createWorkspace(page, "Tpl Visual");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await editorReady(page);
   const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();

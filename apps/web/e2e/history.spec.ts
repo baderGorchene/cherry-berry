@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, openAsEditor, openAsViewer, signUp, unique } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, openAsViewer, signUp, unique, newDesign } from "./helpers";
 
 const rects = (page: Page) => page.getByRole("complementary", { name: "Layers" }).getByRole("button", { name: "Rectangle", exact: true });
 const versions = (page: Page) => page.getByRole("complementary", { name: "Versions" });
@@ -12,7 +12,7 @@ async function addRect(page: Page, dx = 0) {
 async function withNamedVersion(page: Page) {
   await signUp(page, unique("hist"));
   await createWorkspace(page, "History Lab");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await editorReady(page);
   await addRect(page);

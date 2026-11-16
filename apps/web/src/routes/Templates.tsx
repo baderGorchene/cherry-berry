@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate, useNavigate, useSearchParams } from "react-router";
 import {
   ApiError, TEMPLATE_CATEGORIES, approveTemplate, deleteTemplate, errorMessage, listDesigns, listTemplates, myWorkspaces,
   startFromTemplate, templateThumbUrl, type Design, type Template, type TemplateCategory, type Workspace,
@@ -96,7 +96,8 @@ export default function Templates() {
   const [, setCurrentId] = useState<string | null>(null); // re-render when the sidebar switches workspace
   const [text, setText] = useState("");
   const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const [params] = useSearchParams();
+  const [filter, setFilter] = useState<Filter>(() => CHIPS.find(([v]) => v === params.get("category"))?.[0] ?? "all");
   const [mine, setMine] = useState<Template[] | null>(null);
   const [pub, setPub] = useState<Template[] | null>(null);
   const [error, setError] = useState("");

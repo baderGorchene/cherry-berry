@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, signUp, unique } from "./helpers";
+import { createWorkspace, newDesign, signUp, unique } from "./helpers";
 
 // msedge can't emulate isMobile, so phones are a 390×844 touch viewport.
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
@@ -7,8 +7,7 @@ test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
 async function newPost(page: Page) {
   await signUp(page, unique("m-ed"));
   await createWorkspace(page, "Pocket Editor");
-  await page.getByRole("list", { name: "Sizes" }).getByRole("link", { name: "Post" }).click();
-  await page.getByRole("dialog", { name: "Create a design" }).getByRole("button", { name: /^Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await expect(tools(page).getByRole("button", { name: "Shapes" })).toBeEnabled();
 }

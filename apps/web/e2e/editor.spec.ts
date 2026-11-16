@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, openPanel, createWorkspace, editorReady, openAsViewer, signUp, unique, uniquePng } from "./helpers";
+import { addShape, openPanel, createWorkspace, editorReady, openAsViewer, signUp, unique, uniquePng, newDesign } from "./helpers";
 
 async function newSocialPost(page: Page) {
   await signUp(page, unique("ed"));
   await createWorkspace(page, "Editor Lab");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await editorReady(page);
 }
@@ -399,7 +399,7 @@ test("save a shape and drop it into another design", async ({ page }) => {
   await saveSelectedShape(page, "Peak", "Only me");
 
   await page.goto("/");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await page.getByRole("button", { name: "Shapes", exact: true }).click();
   await page.getByRole("tab", { name: "My shapes" }).click();

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { createDocument, serializeCherry } from "@cherry/doc";
-import { createWorkspace, openAsViewer, signUp, unique } from "./helpers";
+import { createWorkspace, openAsViewer, signUp, unique, newDesign } from "./helpers";
 
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Create a design" });
 const opener = (page: Page) => page.getByRole("button", { name: "Create a design" });
@@ -20,6 +20,8 @@ test("the sidebar opens a dialog with seven categories and Escape returns focus"
   await page.keyboard.press("Escape");
   await expect(dialog(page)).toBeHidden();
   await expect(opener(page)).toBeFocused();
+  await opener(page).click();
+  await expect(dialog(page).getByRole("searchbox", { name: "Search sizes" })).toBeFocused();
 });
 
 test("choosing Social post opens the editor at 1080 × 1080 px and search filters sizes", async ({ page }) => {
@@ -65,7 +67,7 @@ test("Open a .cherry file imports it; a broken file shows a plain message", asyn
 
 test("viewers see disabled size cards and Open file", async ({ page, browser }) => {
   await start(page, "viewer");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\//);
   const viewer = await openAsViewer(browser, page);
   await viewer.goto("/new");
@@ -73,6 +75,8 @@ test("viewers see disabled size cards and Open file", async ({ page, browser }) 
   await expect(dialog(viewer).getByRole("button", { name: /Instagram post/ })).toBeDisabled();
   await dialog(viewer).getByRole("tab", { name: "Open a .cherry file" }).click();
   await expect(dialog(viewer).getByLabel("Choose a .cherry file")).toBeDisabled();
+  await dialog(viewer).getByRole("tab", { name: "Custom size" }).click();
+  await expect(dialog(viewer).getByRole("button", { name: "Create", exact: true })).toBeDisabled();
 });
 
 test("phone: the dialog fills the screen without horizontal scroll", async ({ page }) => {

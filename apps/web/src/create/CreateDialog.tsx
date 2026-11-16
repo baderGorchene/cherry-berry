@@ -44,7 +44,7 @@ function Create({ pane, setPane, onClose }: { pane: CreatePane; setPane(p: Creat
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [viewOnly, setViewOnly] = useState(false);
+  const [viewOnly, setViewOnly] = useState<boolean | null>(null); // null until the role is known: everything that creates stays disabled
   const [unit, setUnit] = useState("px");
   useEffect(() => {
     myWorkspaces().then((r) => setViewOnly(currentWorkspace.pick(r.workspaces)?.role === "viewer"), () => {});
@@ -63,7 +63,7 @@ function Create({ pane, setPane, onClose }: { pane: CreatePane; setPane(p: Creat
   }
   const make = (body: NewDesign) => (ws: string) => createDesign(ws, body).then((r) => r.design.id);
   const pick = (z: Size) => { rememberSize(z.id); return run(make(sizeBody(z))); };
-  const off = busy || viewOnly;
+  const off = busy || viewOnly !== false;
 
   function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -80,7 +80,7 @@ function Create({ pane, setPane, onClose }: { pane: CreatePane; setPane(p: Creat
     <ul className="sz-grid">
       {list.map((z) => (
         <li key={z.id}>
-          <button type="button" className="sz-card" disabled={off} title={viewOnly ? "View-only access" : undefined} onClick={() => pick(z)}>
+          <button type="button" className="sz-card" disabled={off} title={viewOnly === true ? "View-only access" : undefined} onClick={() => pick(z)}>
             <Preview z={z} />
             <strong>{z.name}</strong>
             <span className="muted">{sizeLabel(z)}</span>
@@ -130,7 +130,7 @@ function Create({ pane, setPane, onClose }: { pane: CreatePane; setPane(p: Creat
           <div><label className="lbl" htmlFor="bleed">Bleed ({unit})</label>
             <input id="bleed" key={unit} name="bleed" className="inp" type="number" min="0" step="any" defaultValue={DEFAULT_BLEED[unit]} required /></div>
         )}
-        <div><button className="btn btn-p" type="submit" disabled={off} title={viewOnly ? "View-only access" : undefined}>Create</button></div>
+        <div><button className="btn btn-p" type="submit" disabled={off} title={viewOnly === true ? "View-only access" : undefined}>Create</button></div>
       </form>
     );
   } else if (pane === "open") {
@@ -159,7 +159,7 @@ function Create({ pane, setPane, onClose }: { pane: CreatePane; setPane(p: Creat
     <Modal title="Create a design" onClose={onClose} closeButton className="create-dlg">
       <label className="search create-search">
         <IconSearch />
-        <input type="search" className="inp" aria-label="Search sizes" placeholder="Search sizes…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="search" className="inp" data-autofocus aria-label="Search sizes" placeholder="Search sizes…" value={q} onChange={(e) => setQ(e.target.value)} />
       </label>
       <div className="create-cols">
         <div role="tablist" aria-label="Categories" aria-orientation="vertical" className="create-tabs" onKeyDown={onTabKey}>

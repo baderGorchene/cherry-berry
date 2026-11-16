@@ -114,3 +114,10 @@ export async function addShape(page: Page, shape: keyof typeof SHAPE_KEYS, dx = 
   await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
   if (watch && shape !== "Text") await expect(rows).toHaveCount(before + 1);
 }
+
+/** Creates a design from Home the way a user does: a shortcut opens the Create dialog, then a size card opens the editor. */
+export async function newDesign(page: Page, size: "Social post" | "Presentation" | "Story" = "Social post") {
+  await page.getByRole("button", { name: size, exact: true }).click();
+  await page.getByRole("dialog", { name: "Create a design" }).getByRole("button", { name: new RegExp(`^${size}`) }).first().click();
+  await expect(page).toHaveURL(/\/d\//);
+}

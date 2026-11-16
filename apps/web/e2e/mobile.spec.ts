@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, signUp, unique } from "./helpers";
+import { createWorkspace, newDesign, signUp, unique } from "./helpers";
 
 // msedge can't emulate isMobile, so phones are a 390×844 touch viewport.
 test.use({ viewport: { width: 390, height: 844 }, hasTouch: true });
@@ -26,16 +26,14 @@ test("phone home shows tabs, presets and recent", async ({ page }) => {
   await expect(page).toHaveURL(/\/shapes$/);
   await tabs(page).getByRole("link", { name: "Home" }).click();
 
-  // the size row opens the Create dialog on that category
-  const sizes = page.getByRole("list", { name: "Sizes" });
-  for (const name of ["Post", "Story", "A4 print", "Custom"]) await expect(sizes.getByRole("link", { name })).toBeVisible();
-  await sizes.getByRole("link", { name: "Story" }).click();
-  await expect(page).toHaveURL(/\/new\?category=social$/);
-  await page.getByRole("dialog", { name: "Create a design" }).getByRole("button", { name: /^Story/ }).click();
-  await expect(page).toHaveURL(/\/d\//);
+  // one scrolling row of shortcuts, each opening the Create dialog on its category
+  const shortcuts = page.getByRole("list", { name: "Create" });
+  await expect(shortcuts.getByRole("button")).toHaveCount(9);
+  await expect(shortcuts.getByRole("button", { name: "Story", exact: true })).toBeVisible();
+  await newDesign(page, "Story");
   await page.goto("/");
 
-  await expect(page.getByRole("heading", { name: "Recent" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Continue designing" })).toBeVisible();
   await expect(page.getByRole("link", { name: /Untitled design/ })).toBeVisible();
   const cols = await page.locator(".recent").evaluate((el) => getComputedStyle(el).gridTemplateColumns.split(" ").length);
   expect(cols).toBe(2);

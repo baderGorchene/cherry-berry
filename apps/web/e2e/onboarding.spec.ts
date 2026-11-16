@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspace, signUp, unique } from "./helpers";
+import { createWorkspace, signUp, unique, newDesign } from "./helpers";
 
 test("new user creates a workspace and reaches home", async ({ page }) => {
   await signUp(page, unique("ada"));
@@ -8,7 +8,7 @@ test("new user creates a workspace and reaches home", async ({ page }) => {
   await page.getByRole("button", { name: "Create workspace" }).click();
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("button", { name: /^Workspace: North Studio/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Start something" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "What are you making today?" })).toBeVisible();
 });
 
 test("second user joins with ID and password", async ({ browser }) => {
@@ -40,7 +40,7 @@ test("home search filters recent designs and long titles stay inside the card", 
   await signUp(page, unique("find"));
   await createWorkspace(page, "Search Studio");
   for (let i = 0; i < 2; i++) {
-    await page.getByRole("button", { name: i === 0 ? /Social post/ : /Presentation/ }).click();
+    await newDesign(page, i === 0 ? "Social post" : "Presentation");
     await expect(page).toHaveURL(/\/d\//);
     if (i === 0) {
       const title = page.getByLabel("Design title");
@@ -52,9 +52,9 @@ test("home search filters recent designs and long titles stay inside the card", 
     await page.getByRole("link", { name: "Back to home" }).click();
     await expect(page).toHaveURL(/\/$/);
   }
-  const items = page.getByRole("listitem").filter({ has: page.getByRole("link") }).filter({ hasText: /\d+ × \d+/ });
+  const items = page.locator(".recent > li");
   await expect(items).toHaveCount(2);
-  // previews keep the design ratio (1:1 poster, 16:9 presentation) and sit inside their 160px thumb box
+  // previews keep the design ratio (1:1 poster, 16:9 presentation) and sit inside their thumb tile
   for (const [text, ratio] of [[/Poster/, 1], [/1920/, 16 / 9]] as const) {
     const item = items.filter({ hasText: text });
     const p = (await item.getByTestId("design-preview").boundingBox())!;
@@ -65,7 +65,7 @@ test("home search filters recent designs and long titles stay inside the card", 
     expect(p.x + p.width).toBeLessThanOrEqual(box.x + box.width);
     expect(p.y + p.height).toBeLessThanOrEqual(box.y + box.height);
   }
-  const search = page.getByRole("searchbox", { name: "Search designs" });
+  const search = page.getByRole("searchbox", { name: "Search designs and templates" });
   await search.fill("poster");
   await expect(items).toHaveCount(1);
   const card = (await items.first().getByRole("link").boundingBox())!;
@@ -75,5 +75,61 @@ test("home search filters recent designs and long titles stay inside the card", 
   const t = (await title.boundingBox())!;
   expect(t.x + t.width).toBeLessThanOrEqual(card.x + card.width);
   await search.fill("zzz");
-  await expect(page.getByText("No designs match")).toBeVisible();
+  await expect(page.getByText("Nothing matches")).toBeVisible();
+});
+
+test("home leads with the hero, one search box, nine shortcuts that open the dialog, and recent designs", async ({ page }) => {
+  await signUp(page, unique("hero"));
+  await createWorkspace(page, "Hero Studio");
+  await newDesign(page, "Story");
+  await expect(page.getByLabel("Design title")).toBeVisible();
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.getByRole("link", { name: "Back to home" }).click();
+
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("What are you making today?");
+  await expect(page.getByRole("searchbox")).toHaveCount(1);
+  const row = page.getByRole("list", { name: "Create" });
+  const panes: [string, string][] = [
+    ["Social post", "Social media"], ["Story", "Social media"], ["Presentation", "Presentations"], ["Flyer", "Print"], ["Poster", "Print"],
+    ["Business card", "Cards & invites"], ["Invitation", "Cards & invites"], ["Custom size", "Custom size"], ["Open file", "Open a .cherry file"],
+  ];
+  await expect(row.getByRole("button")).toHaveCount(panes.length);
+  const dlg = page.getByRole("dialog", { name: "Create a design" });
+  for (const [label, tab] of panes) {
+    await row.getByRole("button", { name: label, exact: true }).click();
+    await expect(dlg.getByRole("tab", { name: tab, exact: true })).toHaveAttribute("aria-selected", "true");
+    await page.keyboard.press("Escape");
+    await expect(dlg).toBeHidden();
+  }
+
+  const cont = page.getByRole("region", { name: "Continue designing" });
+  await expect(cont.getByRole("link", { name: /Untitled design.*1080 × 1920 px/ })).toBeVisible();
+  await page.getByRole("searchbox").fill("market");
+  const results = page.getByRole("region", { name: "Search results" });
+  await expect(results.getByRole("heading", { name: "Templates" })).toBeVisible();
+  await expect(results.getByRole("button", { name: /^Use .*market/i })).toBeVisible();
+  await expect(results.getByRole("heading", { name: "Designs" })).toHaveCount(0);
+  await page.getByRole("searchbox").fill("untitled");
+  await expect(results.getByRole("heading", { name: "Designs" })).toBeVisible();
+  await expect(results.getByRole("heading", { name: "Templates" })).toHaveCount(0);
+});
+
+test("a new user sees the welcome line with templates first, and a starter opens the editor with its content", async ({ page }) => {
+  await signUp(page, unique("first"));
+  await createWorkspace(page, "First Studio");
+  await expect(page.getByText("No designs yet.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Continue designing" })).toHaveCount(0);
+  const tpl = page.getByRole("region", { name: "Start from a template" });
+  const cat = page.getByRole("region", { name: "Browse by category" });
+  expect((await tpl.boundingBox())!.y).toBeLessThan((await cat.boundingBox())!.y);
+  await expect(tpl.getByRole("button")).toHaveCount(4);
+  await tpl.getByRole("button", { name: /^Use / }).first().click();
+  await expect(page).toHaveURL(/\/d\//);
+  await expect(page.getByRole("main", { name: "Post canvas" })).toBeVisible();
+  await expect(page.getByLabel("Design title")).toHaveValue("Saturday market post");
+  await page.getByRole("link", { name: "Back to home" }).click();
+  await expect(page.getByRole("region", { name: "Continue designing" }).getByRole("link")).toHaveCount(1);
+  await page.getByRole("link", { name: "Cards & invites" }).click();
+  await expect(page).toHaveURL(/\/templates\?category=cards$/);
+  await expect(page.getByRole("button", { name: "Cards & invites", exact: true })).toHaveAttribute("aria-pressed", "true");
 });

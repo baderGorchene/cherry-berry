@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, signUp, unique } from "./helpers";
+import { addShape, createWorkspace, editorReady, signUp, unique, newDesign } from "./helpers";
 
 const content = (colors: [string, string, string, string][], rules: Record<string, boolean> = {}) => ({
   colors: colors.map(([id, name, role, hex]) => ({ id, name, role, hex })),
@@ -20,7 +20,7 @@ async function start(page: Page, colors: [string, string, string, string][], rul
   const res = await page.request.post(`/api/workspaces/${workspaces[0].id}/brand-kits`, { data: { name: "Lab kit", content: content(colors, rules) } });
   expect(res.status()).toBe(201);
   const { kit } = await res.json();
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await editorReady(page);
   return kit.id as string;

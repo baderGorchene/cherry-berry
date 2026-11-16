@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Download, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, signUp, unique, uniquePng } from "./helpers";
+import { addShape, createWorkspace, editorReady, signUp, unique, uniquePng, newDesign } from "./helpers";
 
 async function newSocialPost(page: Page) {
   await signUp(page, unique("exp"));
   await createWorkspace(page, "Export Lab");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await editorReady(page);
 }

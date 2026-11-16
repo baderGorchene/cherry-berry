@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, openAsEditor, signUp, unique } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, signUp, unique, newDesign } from "./helpers";
 
 async function newPost(page: Page) {
   await signUp(page, unique("pr"));
   await createWorkspace(page, "Presence Lab");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await editorReady(page);
 }
