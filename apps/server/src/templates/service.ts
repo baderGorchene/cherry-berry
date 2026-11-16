@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, getTableColumns, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import * as Y from "yjs";
-import { type CherryNode, setTitle, yToDoc } from "@cherry/doc";
+import { type CherryDocument, type CherryNode, setTitle, yToDoc } from "@cherry/doc";
 import { usableInDesign } from "../assets/service";
 import { thumbnail } from "../assets/ingest";
 import type { Collab } from "../collab/server";
@@ -163,7 +163,8 @@ export async function getThumb(db: Db, storage: Storage, userId: string, id: str
   return bytes;
 }
 
-export async function useTemplate(db: Db, userId: string, id: string, workspaceId: string): Promise<DesignSummary> {
+/** A published template `userId` may use in `workspaceId` (an editor there), loaded and parsed; writes nothing. */
+async function loadUsable(db: Db, userId: string, id: string, workspaceId: string) {
   const found = await findVisible(db, userId, id);
   const role = UUID.test(workspaceId) ? await getRole(db, workspaceId, userId) : undefined;
   if (!found || !role || found.t.status !== "published") throw new WorkspaceError("not_found");
@@ -175,8 +176,18 @@ export async function useTemplate(db: Db, userId: string, id: string, workspaceI
   Y.applyUpdate(ydoc, state);
   const parsed = yToDoc(ydoc);
   if (!parsed.ok) throw new HttpError(400, "invalid_document");
+  return { t, ydoc, doc: parsed.doc };
+}
+
+/** The template's document, for adding its pages to a design in `workspaceId`. Same rules as `useTemplate`. */
+export async function templateDoc(db: Db, userId: string, id: string, workspaceId: string): Promise<CherryDocument> {
+  return (await loadUsable(db, userId, id, workspaceId)).doc;
+}
+
+export async function useTemplate(db: Db, userId: string, id: string, workspaceId: string): Promise<DesignSummary> {
+  const { t, ydoc, doc } = await loadUsable(db, userId, id, workspaceId);
   setTitle(ydoc, t.name);
-  const ids = [...new Set(parsed.doc.pages.flatMap((p) => [...imageAssetIds(p.nodes)]))].filter((i) => UUID.test(i));
+  const ids = [...new Set(doc.pages.flatMap((p) => [...imageAssetIds(p.nodes)]))].filter((i) => UUID.test(i));
   return db.transaction(async (tx) => {
     const [d] = await tx.insert(designs).values({
       workspaceId, title: t.name, width: t.width, height: t.height, unit: t.unit, colorMode: t.colorMode,

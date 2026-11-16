@@ -84,6 +84,7 @@
 .ed-pgrid li.on .ed-gthumb { border-color: var(--berry); }
 .ed-gfoot { display: flex; align-items: center; gap: 2px; font-size: 13px; }
 .ed-gfoot .ell { flex: 1; min-width: 0; }
+.ed-gfoot .ed-icon { width: 34px; height: 34px; }
 /* File menu */
 .ed-file { min-height: 40px; }
 .ed-ctx.ed-menu { position: absolute; left: 0; top: calc(100% + 6px); min-width: 230px; }
@@ -98,6 +99,7 @@
   border: 1px solid var(--line); border-radius: 12px; background: #fff; font: 12px Inter, sans-serif; color: var(--ink); text-align: left; cursor: pointer;
 }
 div.ed-tpl { cursor: default; }
+.ed-tpl-in { border: 0; padding: 0; height: auto; }
 button.ed-tpl:hover:not(:disabled) { border-color: var(--blush); background: var(--tint); }
 .ed-tpl:disabled { opacity: .55; cursor: default; }
 .ed-tpl:focus-visible { outline: 3px solid var(--blush); outline-offset: 1px; }
@@ -322,7 +324,15 @@ button.ed-tpl:hover:not(:disabled) { border-color: var(--blush); background: var
 .ed-m .ed-phead { padding: 2px 8px; background: #fff; border-bottom: 1px solid var(--line); }
 .ed-m .ed-pdim { display: none; }
 .ed-m .ed-pname { flex: 1; }
-.ed-m .ed-phead .ed-icon { width: 40px; height: 44px; }
+.ed-m .ed-phead .ed-icon { width: 44px; height: 44px; }
+/* Phone touch targets: 44px minimum, also for the File menu, the strip and the All pages dialog (outside .ed-m). */
+@media (max-width: 759px) {
+  .ed-pname { min-height: 44px; }
+  .ed-menu button { min-height: 44px; }
+  .ed-thumb { min-width: 44px; }
+  .ed-gfoot .ed-icon { width: 44px; height: 44px; }
+  .ed-swatch { width: 44px; height: 44px; }
+}
 .ed-m .ed-bottom { padding: 4px 8px; gap: 6px; }
 .ed-m .ed-zslider { display: none; }
 .ed-m .ed-bottom .ed-mini { min-height: 44px; padding: 0 10px; }

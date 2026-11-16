@@ -67,6 +67,10 @@ function findNode(nodes: CherryNode[], id: string): CherryNode | undefined {
 
 const typing = (t: EventTarget | null) =>
   t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName));
+/** Enter/Space on a control, or inside a menu or dialog, belongs to that control, not the editor's shortcuts. */
+const ACTIVATES = "button, a, input, textarea, select, [contenteditable]:not([contenteditable=false]), [role=menu], [role=dialog]";
+const ownsActivation = (e: KeyboardEvent) =>
+  (e.key === "Enter" || e.key === " ") && e.target instanceof Element && !!e.target.closest(ACTIVATES);
 
 export default function Editor() {
   const { id = "" } = useParams();
@@ -191,7 +195,7 @@ function Shell({ d }: { d: Ready }) {
 
   const onKey = useRef<(e: KeyboardEvent) => void>(null);
   onKey.current = (e) => {
-    if (exporting || typing(e.target)) return; // the export dialog is modal
+    if (exporting || typing(e.target) || ownsActivation(e)) return; // the export dialog is modal
     if (pathKeys.current?.(e)) return e.preventDefault(); // pen finish, anchor delete/nudge
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
@@ -310,7 +314,7 @@ function Shell({ d }: { d: Ready }) {
   const done = editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>;
   const panelBody = (p: RailItem) => ({
     templates: (
-      <TemplatesPanel page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} onInsert={insertTemplate}
+      <TemplatesPanel page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} onInsert={insertTemplate}
         onOpen={async (id) => navigate(`/d/${(await startFromTemplate(id, d.design.workspaceId)).id}`)} />
     ),
     // On phones an armed tool closes the sheet so the canvas can take the tap.

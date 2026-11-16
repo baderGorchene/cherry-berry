@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { STARTER_TEMPLATES, type CherryDocument, type Page } from "@cherry/doc";
-import { errorMessage, listTemplates, templateThumbUrl, type Template } from "../api";
+import { STARTER_TEMPLATES, type CherryDocument, type CherryNode, type Page } from "@cherry/doc";
+import { errorMessage, getTemplateDoc, linkAssetToDesign, listTemplates, templateThumbUrl, type Template } from "../api";
 import DocPreview from "./DocPreview";
 
 type Item = { id: string; name: string; width: number; height: number; unit: string; doc?: CherryDocument };
@@ -15,11 +15,11 @@ const STARTERS: Item[] = STARTER_TEMPLATES.map((s) => {
 });
 
 /**
- * Starters plus the workspace's and public templates, "Fits this page" first. A starter's pages are inserted after the
- * current page; a server template only offers its thumbnail here (the API doesn't expose its document), so it opens as a new design.
+ * Starters plus the workspace's and public templates, "Fits this page" first. Using one inserts its pages after the
+ * current page; a server template's document is fetched first, and it can also open as a new design.
  */
-export default function TemplatesPanel({ page, workspaceId, readOnly, onInsert, onOpen }: {
-  page: Page; workspaceId: string; readOnly: boolean; onInsert(pages: Page[]): void; onOpen(templateId: string): Promise<void>;
+export default function TemplatesPanel({ page, designId, workspaceId, readOnly, onInsert, onOpen }: {
+  page: Page; designId: string; workspaceId: string; readOnly: boolean; onInsert(pages: Page[]): void; onOpen(templateId: string): Promise<void>;
 }) {
   const [server, setServer] = useState<Template[]>([]);
   const [error, setError] = useState("");
@@ -30,6 +30,15 @@ export default function TemplatesPanel({ page, workspaceId, readOnly, onInsert, 
     }, () => {});
     return () => { stale = true; };
   }, [workspaceId]);
+  const insertServer = async (id: string) => {
+    setError("");
+    try {
+      const doc = await getTemplateDoc(id, workspaceId);
+      onInsert(doc.pages);
+      // Record the template's visuals as used by this design so they keep loading (as "use" does for a new design).
+      await Promise.allSettled([...imageIds(doc.pages.flatMap((p) => p.nodes))].map((a) => linkAssetToDesign(designId, a)));
+    } catch (e) { setError(errorMessage(e)); }
+  };
   const items: Item[] = [...STARTERS, ...server.map((t) => ({ id: t.id, name: t.name, width: t.width, height: t.height, unit: t.unit }))];
   const card = (t: Item) => {
     const size = <span className="muted">{t.width} × {t.height} {t.unit}{t.doc && t.doc.pages.length > 1 ? ` · ${t.doc.pages.length} pages` : ""}</span>;
@@ -43,8 +52,11 @@ export default function TemplatesPanel({ page, workspaceId, readOnly, onInsert, 
     ) : (
       <li key={t.id}>
         <div className="ed-tpl">
-          <span className="ed-tpl-img"><img src={templateThumbUrl(t.id)} alt="" loading="lazy" /></span>
-          <b className="ell">{t.name}</b>{size}
+          <button type="button" className="ed-tpl ed-tpl-in" disabled={readOnly} aria-label={`Insert ${t.name}`} title="Add its pages after this page"
+            onClick={() => void insertServer(t.id)}>
+            <span className="ed-tpl-img"><img src={templateThumbUrl(t.id)} alt="" loading="lazy" /></span>
+            <b className="ell">{t.name}</b>{size}
+          </button>
           <button type="button" className="ed-mini" disabled={readOnly} aria-label={`Open ${t.name} as a new design`}
             onClick={() => { setError(""); onOpen(t.id).catch((e) => setError(errorMessage(e))); }}>Open as new design</button>
         </div>
@@ -67,3 +79,11 @@ export default function TemplatesPanel({ page, workspaceId, readOnly, onInsert, 
     </aside>
   );
 }
+
+const imageIds = (nodes: CherryNode[], out = new Set<string>()): Set<string> => {
+  for (const n of nodes) {
+    if (n.kind === "image") out.add(n.assetId);
+    else if (n.kind === "group") imageIds(n.children, out);
+  }
+  return out;
+};

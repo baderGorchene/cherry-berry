@@ -191,6 +191,56 @@ describe("templates", () => {
     expect((await call("POST", `/api/templates/${tpl.id}/use`, bo.cookie, { workspaceId: "x" })).statusCode).toBe(404);
   });
 
+  it("doc returns a template's pages under the same rules as use, and writes nothing", async () => {
+    const { ada, bo, ws } = await setup();
+    const d = await newDesign(ada.cookie, ws);
+    await fill(ada.cookie, d.id);
+    const tpl = (await publish(ada.cookie, d.id, { name: "Flyer" })).json().template;
+    const doc = (url: string, cookie?: string) => call("GET", url, cookie);
+    const url = (id: string, w: string) => `/api/templates/${id}/doc?workspaceId=${w}`;
+    const designs = async () => (await call("GET", `/api/workspaces/${ws}/designs`, ada.cookie)).json();
+    const before = await designs();
+    // owner and member of the workspace
+    for (const cookie of [ada.cookie, bo.cookie]) {
+      const res = await doc(url(tpl.id, ws), cookie);
+      expect(res.statusCode).toBe(200);
+      expect(res.json().doc.pages[0].nodes.map((n: { id: string }) => n.id)).toEqual(["rect1"]);
+    }
+    expect(await designs()).toEqual(before);
+    expect((await doc(url(tpl.id, ws))).statusCode).toBe(401);
+    expect((await doc(url(tpl.id, "x"), ada.cookie)).statusCode).toBe(404);
+    expect((await doc(`/api/templates/${tpl.id}/doc`, ada.cookie)).statusCode).toBe(400);
+    // an outsider can't see a workspace template, nor use it in their own workspace
+    const dee = await signUp(t.app, "dee@example.com", "Dee");
+    const ws2 = (await call("POST", "/api/workspaces", dee.cookie, { name: "Far", accessMode: "invite" })).json().workspace.id;
+    expect((await doc(url(tpl.id, ws2), dee.cookie)).statusCode).toBe(404);
+    expect((await doc(url(tpl.id, ws), dee.cookie)).statusCode).toBe(404);
+    // a workspace template can't be read for another workspace, even by its owner
+    const ws3 = (await call("POST", "/api/workspaces", ada.cookie, { name: "Other", accessMode: "invite" })).json().workspace.id;
+    expect((await doc(url(tpl.id, ws3), ada.cookie)).statusCode).toBe(404);
+    // a public template works in any workspace the user edits
+    const pub = await pubPublic(ada.cookie, ws);
+    expect((await doc(url(pub.id, ws2), dee.cookie)).statusCode).toBe(200);
+  });
+
+  it("doc: viewers get 403", async () => {
+    const { ada, bo, ws } = await setup("viewer");
+    const tpl = await pubWs(ada.cookie, ws);
+    expect((await call("GET", `/api/templates/${tpl.id}/doc?workspaceId=${ws}`, bo.cookie)).statusCode).toBe(403);
+  });
+
+  it("doc: a pending template is refused until approved", async () => {
+    const { ada, bo, ws } = await setup("editor");
+    await newKit(ada.cookie, ws, true);
+    const pending = await pubWs(bo.cookie, ws);
+    expect(pending.status).toBe("pending");
+    const url = `/api/templates/${pending.id}/doc?workspaceId=${ws}`;
+    expect((await call("GET", url, bo.cookie)).statusCode).toBe(404);
+    expect((await call("GET", url, ada.cookie)).statusCode).toBe(404);
+    await call("POST", `/api/templates/${pending.id}/approve`, ada.cookie);
+    expect((await call("GET", url, bo.cookie)).statusCode).toBe(200);
+  });
+
   it("viewers can't use a template", async () => {
     const { ada, bo, ws } = await setup("viewer");
     const tpl = await pubWs(ada.cookie, ws);

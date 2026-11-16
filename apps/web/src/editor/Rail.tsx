@@ -15,8 +15,7 @@ export default function Rail({ value, issues, only, onPick }: {
   value: RailItem | null; issues: number; only?: RailItem; onPick(item: RailItem): void;
 }) {
   return (
-    // Enter/Space activate the focused button; keep them from the editor's global shortcuts.
-    <nav aria-label="Editor panels" className="ed-rail" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>
+    <nav aria-label="Editor panels" className="ed-rail">
       {RAIL.map(([id, label, icon]) => {
         const badge = id === "brand" && issues > 0;
         return (

@@ -61,6 +61,37 @@ test("publish a workspace template and start from it", async ({ page }) => {
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
 });
 
+test("a workspace template's pages insert after the current page; viewers can't insert", async ({ page, browser }) => {
+  await signUp(page, unique("ti"));
+  await createWorkspace(page, "Tpl Insert");
+  await design(page);
+  await openPublish(page);
+  await submit(page);
+  await expect(dialog(page).getByRole("status")).toHaveText("Published");
+  await dialog(page).getByRole("button", { name: "Close" }).click();
+  await expect(dialog(page)).toBeHidden();
+
+  await openPanel(page, "Templates");
+  const fits = panel(page, "Templates").getByRole("region", { name: "Fits this page" });
+  await expect(fits.getByRole("button", { name: "Open Launch post as a new design" })).toBeVisible();
+  await fits.getByRole("button", { name: "Insert Launch post" }).click();
+  const thumbs = page.getByRole("navigation", { name: "Pages" }).getByRole("button", { name: /^Page \d$/ });
+  await expect(thumbs).toHaveCount(2);
+  await expect(thumbs.nth(1)).toHaveAttribute("aria-current", "page");
+  await openPanel(page, "Layers");
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
+  await page.keyboard.press("Control+Z");
+  await expect(thumbs).toHaveCount(1); // one undo step
+  await page.keyboard.press("Control+Shift+Z");
+  await expect(thumbs).toHaveCount(2);
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  const viewer = await openAsViewer(browser, page);
+  await openPanel(viewer, "Templates");
+  await expect(panel(viewer, "Templates").getByRole("button", { name: "Insert Launch post" })).toBeDisabled();
+  await expect(panel(viewer, "Templates").getByRole("button", { name: "Open Launch post as a new design" })).toBeDisabled();
+});
+
 test("brand template keeps its locks", async ({ page, browser }) => {
   await signUp(page, unique("tb"));
   await createWorkspace(page, "Tpl Brand");

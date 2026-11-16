@@ -345,6 +345,24 @@ test("the File menu opens with the keyboard and Escape returns focus", async ({ 
   await expect(page.getByRole("dialog", { name: "Create a design" }).getByRole("tab", { name: "Open a .cherry file" })).toHaveAttribute("aria-selected", "true");
 });
 
+test("Enter on a focused button activates it, not path edit, while a path is selected", async ({ page }) => {
+  await newSocialPost(page);
+  await drawTriangle(page);
+  await page.keyboard.press("V");
+  await layers(page).getByRole("button", { name: "Path", exact: true }).click();
+  const file = page.getByRole("button", { name: "File", exact: true });
+  await file.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("menu", { name: "File" })).toBeVisible();
+  await expect(page.getByText("Editing path", { exact: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  // the page header and bottom bar buttons too
+  await pageAction(page, "Duplicate page").focus();
+  await page.keyboard.press("Enter");
+  await expect(pageStrip(page).getByRole("button", { name: /^Page \d$/ })).toHaveCount(2);
+  await expect(page.getByText("Editing path", { exact: true })).toHaveCount(0);
+});
+
 test("a viewer can open every panel, but cannot insert from them", async ({ browser }) => {
   const owner = await (await browser.newContext()).newPage();
   await newSocialPost(owner);

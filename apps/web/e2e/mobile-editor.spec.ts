@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { createWorkspace, newDesign, openPanel, panel, rail, railButton, signUp, unique } from "./helpers";
 
 // msedge can't emulate isMobile, so phones are a 390×844 touch viewport.
@@ -282,4 +282,62 @@ test("export from the phone header", async ({ page }) => {
   const started = page.waitForEvent("download");
   await dialog.getByRole("button", { name: "Export PNG", exact: true }).click();
   expect((await started).suggestedFilename()).toMatch(/\.png$/);
+});
+
+test.describe("at 375 x 812", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test("phone touch targets are at least 44 x 44", async ({ page }) => {
+    await signUp(page, unique("m-44"));
+    await createWorkspace(page, "Pocket Targets");
+    const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
+    const kit = await page.request.post(`/api/workspaces/${workspaces[0].id}/brand-kits`, { data: { name: "Kit", content: {
+      colors: [{ id: "a", name: "Berry", role: "primary", hex: "#8E1EA2" }, { id: "b", name: "Ink", role: "text", hex: "#1A1A1A" }],
+      typography: {
+        heading: { fontFamily: "Space Grotesk", fontWeight: 700, fontSize: 32, lineHeight: 1.1 },
+        subheading: { fontFamily: "Space Grotesk", fontWeight: 500, fontSize: 20, lineHeight: 1.2 },
+        body: { fontFamily: "Inter", fontWeight: 400, fontSize: 12, lineHeight: 1.5 },
+      },
+      logos: { primary: null, onDark: null, mark: null, wordmark: null },
+      rules: { kitColorsOnly: false, warnOffBrandFonts: false, lockLogos: false, flagContrast: false, requireApproval: false },
+    } } });
+    expect(kit.status()).toBe(201);
+    await newDesign(page, "Social post");
+    await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+
+    const atLeast44 = async (loc: Locator) => {
+      const n = await loc.count();
+      expect(n).toBeGreaterThan(0);
+      for (let i = 0; i < n; i++) {
+        const b = (await loc.nth(i).boundingBox())!;
+        const what = await loc.nth(i).evaluate((e) => e.getAttribute("aria-label") ?? e.textContent ?? e.tagName);
+        expect.soft(Math.round(b.width), `${what} width`).toBeGreaterThanOrEqual(44);
+        expect.soft(Math.round(b.height), `${what} height`).toBeGreaterThanOrEqual(44);
+      }
+    };
+    const phead = page.locator(".ed-phead");
+    await atLeast44(phead.getByRole("textbox", { name: "Page name" }));
+    await atLeast44(phead.getByRole("button"));
+
+    // Text sheet: the linked kit's colour swatches
+    await openPanel(page, "Brand");
+    await sheet(page, "Brand").getByLabel("Link a brand kit").selectOption({ label: "Kit" });
+    await page.keyboard.press("Escape");
+    await openPanel(page, "Text");
+    await atLeast44(sheet(page, "Text").getByRole("button", { name: /^Text colour / }));
+    await page.keyboard.press("Escape");
+
+    // a portrait A4 page's thumbnail in the strip
+    await openPanel(page, "Templates");
+    await sheet(page, "Templates").getByRole("button", { name: "Insert Jazz night flyer" }).click();
+    await expect(sheet(page, "Templates")).toBeHidden();
+    await atLeast44(page.getByRole("navigation", { name: "Pages" }).getByRole("button"));
+
+    await page.getByRole("banner").getByRole("button", { name: "File", exact: true }).click();
+    await atLeast44(page.getByRole("menu", { name: "File" }).getByRole("menuitem"));
+    await page.keyboard.press("Escape");
+
+    await page.getByRole("button", { name: "Grid view" }).click();
+    await atLeast44(page.getByRole("dialog", { name: "All pages" }).getByRole("button", { name: /^Move page/ }));
+  });
 });

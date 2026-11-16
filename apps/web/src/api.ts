@@ -1,4 +1,4 @@
-import type { BrandKitContent, ExportAsset, ExportBody, Paint, Stroke } from "@cherry/doc";
+import type { BrandKitContent, CherryDocument, ExportAsset, ExportBody, Paint, Stroke } from "@cherry/doc";
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string) { super(code); }
@@ -238,6 +238,9 @@ export const publishTemplate = (designId: string, body: PublishBody) =>
   api<{ template: Template }>(`/api/designs/${enc(designId)}/template`, { body }).then((r) => r.template);
 export const startFromTemplate = (id: string, workspaceId: string) =>
   api<{ design: Design }>(`/api/templates/${enc(id)}/use`, { body: { workspaceId } }).then((r) => r.design);
+/** The template's document, to add its pages to a design in `workspaceId` (same rules as using it). */
+export const getTemplateDoc = (id: string, workspaceId: string) =>
+  api<{ doc: CherryDocument }>(`/api/templates/${enc(id)}/doc?workspaceId=${enc(workspaceId)}`).then((r) => r.doc);
 export const approveTemplate = (id: string) => api<{ template: Template }>(`/api/templates/${enc(id)}/approve`, { method: "POST" }).then((r) => r.template);
 export const deleteTemplate = (id: string) => api<void>(`/api/templates/${enc(id)}`, { method: "DELETE" });
 
