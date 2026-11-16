@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap");
 
 :root {
   --berry: #8E1EA2;
@@ -239,6 +239,7 @@ button.row:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px;
 .home-ws-pill {
   padding: 6px 12px; border-radius: 999px; background: rgba(255, 255, 255, .85); border: 1px solid var(--line);
   font: 600 12px Inter, sans-serif; color: var(--ink);
+  max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .home-hero-center { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; }
 .home-hero-center .home-title { font-size: clamp(28px, 4vw, 38px); letter-spacing: -0.02em; color: var(--deep); }

@@ -24,3 +24,15 @@ describe("BUILT_IN_FONTS", () => {
     for (const f of FONTS) expect(BUILT_IN_FONTS).toContain(f.family);
   });
 });
+
+describe("theme.css Google Fonts URL", () => {
+  it("loads every catalogue weight of Inter and Space Grotesk", async () => {
+    const { readFileSync } = await import("node:fs");
+    const url = readFileSync(new URL("../theme.css", import.meta.url), "utf8").split("\n")[0]!;
+    for (const f of FONTS.filter((f) => ["Inter", "Space Grotesk"].includes(f.family))) {
+      const m = new RegExp(`family=${f.family.replace(" ", "[+]")}:wght@([0-9;]+)`).exec(url);
+      expect(m, f.family).not.toBeNull();
+      expect(m![1]!.split(";").map(Number)).toEqual(expect.arrayContaining(f.weights));
+    }
+  });
+});
