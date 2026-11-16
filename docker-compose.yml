@@ -34,6 +34,13 @@ services:
     entrypoint: >
       sh -c "rc alias set local http://rustfs:9000 rustfsadmin rustfsadmin &&
       rc bucket create --ignore-existing local/cherry"
+  # Optional print service (CMYK PDF/X and colour plates). Run with: docker compose --profile print up
+  print:
+    profiles: ["print"]
+    build: ./apps/print
+    environment:
+      PRINT_ICC_PROFILE: ""
+    ports: ["8080:8080"]
 volumes:
   pgdata:
   rustfsdata:

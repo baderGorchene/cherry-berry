@@ -26,6 +26,18 @@ Uploads live in S3-compatible object storage (`S3_ENDPOINT`, `S3_BUCKET`, `S3_AC
 
 Build the web app with `pnpm --filter @cherry/web build`, set `WEB_DIST=apps/web/dist` and `PUBLIC_URL` to the address people use; one origin serves app and API. A relative `WEB_DIST` resolves against the server process working directory.
 
+## Print service (optional)
+
+The print service adds CMYK PDF/X-3 and per-ink colour plate exports (`pdf-x` and `plates`). It is a separate container that runs Ghostscript; without it those formats are unavailable and everything else works.
+
+```
+docker compose --profile print up --build print
+```
+
+Then set `PRINT_URL=http://localhost:8080` for the server. To embed your own output profile, mount an ICC file into the container and set `PRINT_ICC_PROFILE` to its path there; otherwise Ghostscript's bundled default CMYK profile is used. See `apps/print/README.md`.
+
+Ghostscript is licensed under the AGPL. That is why it lives in its own container and is only called as a command-line process: Cherry Berry (MIT) never links to it, and `apps/print` has no npm dependencies. If you distribute the image or run it as a service for others, the AGPL's terms for Ghostscript apply to you.
+
 ## Desktop app
 
 `apps/desktop` (`@cherry/desktop`) is a Tauri 2 shell. It opens the launcher (`apps/launcher`), which picks a server, then loads that server's web app in the window; links to other sites open in the system browser and downloads go to your Downloads folder. Requires Rust (stable) and the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform (WebView2 ships with Windows 11).
@@ -51,6 +63,7 @@ pnpm --filter @cherry/mobile cap open ios          # macOS with Xcode only
 
 - `apps/server` (`@cherry/server`) — Fastify 5 API, Better Auth, Drizzle ORM (PostgreSQL / PGlite), and S3-compatible asset storage
 - `apps/web` (`@cherry/web`) — React 19 + Vite 8 + Konva (`react-konva`) web editor
+- `apps/print` (`@cherry/print`) — optional Ghostscript print service container (CMYK PDF/X, colour plates)
 - `apps/desktop` (`@cherry/desktop`) — Tauri 2 desktop shell around the launcher and the server's web app
 - `apps/mobile` (`@cherry/mobile`) — Capacitor 8 Android and iOS shell around the launcher and the server's web app
 - `packages/doc` (`@cherry/doc`) — `.cherry` document Zod schemas, Yjs sync, units, and I/O
