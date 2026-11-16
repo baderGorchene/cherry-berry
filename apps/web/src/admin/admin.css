@@ -42,7 +42,7 @@
 
 .adm .rs { display: inline-block; padding: 3px 8px; border-radius: 6px; font: 600 12px Inter, sans-serif; background: #F1E8F3; color: var(--muted); }
 .adm .rs-err { background: #FDECEA; color: var(--error); }
-.adm .rs-warn { background: #FFF4E5; color: #8A4B0B; }
+.adm .rs-warn { background: #FFF4E5; color: var(--warning); }
 .adm .rs-on { background: var(--tint); color: var(--berry); }
 .adm .rep-list { display: flex; flex-direction: column; gap: 12px; }
 .adm .rep { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #fff; }

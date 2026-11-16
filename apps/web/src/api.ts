@@ -316,7 +316,7 @@ const COPY: Record<string, string> = {
   PASSWORD_TOO_SHORT: "Use a password of at least 8 characters.",
   unsupported_type: "That file type isn't supported. Use PNG, JPG, WEBP, GIF or SVG.",
   invalid_image: "That file couldn't be read as an image.",
-  upload_too_large: "That file is too large for this server (2 MB max for SVG).",
+  upload_too_large: "That file is too large for this server.",
   busy: "The server is busy. Try again in a moment.",
   library_not_found: "This visual is no longer available.",
   library_forbidden: "You don't have permission to change this visual.",

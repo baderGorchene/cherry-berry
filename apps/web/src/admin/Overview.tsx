@@ -42,7 +42,7 @@ export default function Overview() {
               <dt>Users</dt><dd>{o.users}</dd>
               <dt>Workspaces</dt><dd>{o.workspaces}</dd>
               <dt>Designs</dt><dd>{o.designs}</dd>
-              <dt>Waiting for review</dt><dd><Link to="/admin/moderation">{o.queue}</Link></dd>
+              <dt>Waiting for review</dt><dd><Link to="/admin/moderation" aria-label={`${o.queue} items waiting for review`}>{o.queue}</Link></dd>
             </dl>
           </section>
         </div>

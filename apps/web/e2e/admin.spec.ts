@@ -62,6 +62,16 @@ async function seedQueue(browser: Browser, titles: string[], svgTitle: string) {
   for (const c of [owner, ...reporters]) await c.ctx.close();
 }
 
+// Runs even after a failure or timeout, so a closed registration never leaks into the other specs.
+test.afterEach(async ({ browser }) => {
+  const ctx = await browser.newContext();
+  await account(ctx.request, ADMIN, "Instance Admin");
+  const { settings } = await (await ctx.request.get("/api/admin/settings")).json();
+  const res = await ctx.request.put("/api/admin/settings", { data: { ...settings, registration: "open", allowedDomains: [] } });
+  expect(res.ok()).toBe(true);
+  await ctx.close();
+});
+
 test("non-admin has no admin menu and /admin redirects home", async ({ page }) => {
   await signUp(page, unique("plain"));
   await createWorkspace(page, "Plain Lab");
@@ -74,6 +84,8 @@ test("non-admin has no admin menu and /admin redirects home", async ({ page }) =
 
 test("admin changes registration to allowed domains and a stranger can't sign up", async ({ page, browser }) => {
   await asAdmin(page);
+  await page.goto("/workspaces"); // an admin without a workspace still gets in from here
+  await expect(page.getByRole("link", { name: "Instance admin" })).toBeVisible();
   await page.goto("/");
   await page.getByRole("button", { name: /^Workspace:/ }).click();
   await page.getByRole("link", { name: "Instance admin" }).click();
@@ -88,21 +100,21 @@ test("admin changes registration to allowed domains and a stranger can't sign up
   await page.getByRole("button", { name: "Save" }).click();
   await expect(page.getByRole("status")).toHaveText("Saved");
 
-  try {
-    const stranger = await (await browser.newContext()).newPage();
-    await stranger.goto("/sign-in");
-    await stranger.getByRole("button", { name: "Create an account" }).click();
-    await stranger.getByLabel("Name").fill("Stranger");
-    await stranger.getByLabel("Email").fill("x@other.test");
-    await stranger.getByLabel("Password").fill(PASSWORD);
-    await stranger.getByRole("button", { name: "Create account" }).click();
-    await expect(stranger.getByRole("alert")).toHaveText("This server isn't taking new sign-ups. Ask an admin to invite you.");
-    await stranger.context().close();
-  } finally {
-    await page.getByLabel("Anyone").check();
-    await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByRole("status")).toHaveText("Saved");
-  }
+  const stranger = await (await browser.newContext()).newPage();
+  await stranger.goto("/sign-in");
+  await stranger.getByRole("button", { name: "Create an account" }).click();
+  await stranger.getByLabel("Name").fill("Stranger");
+  await stranger.getByLabel("Email").fill("x@other.test");
+  await stranger.getByLabel("Password").fill(PASSWORD);
+  await stranger.getByRole("button", { name: "Create account" }).click();
+  await expect(stranger.getByRole("alert")).toHaveText("This server isn't taking new sign-ups. Ask an admin to invite you.");
+  await stranger.context().close();
+
+  // A bad domain hidden behind another mode doesn't block saving that mode.
+  await page.getByLabel("Allowed domains", { exact: true }).fill("not a domain");
+  await page.getByLabel("Anyone").check();
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(page.getByRole("status")).toHaveText("Saved");
 });
 
 test("admin suspends a user who then can't sign in", async ({ page, browser }) => {
@@ -117,6 +129,9 @@ test("admin suspends a user who then can't sign in", async ({ page, browser }) =
   const row = page.getByRole("row").filter({ hasText: email });
   await expect(row).toHaveCount(1);
   await row.getByRole("button", { name: "Suspend" }).click();
+  const dlg = page.getByRole("dialog", { name: "Suspend Tester?" });
+  await expect(dlg).toContainText("They'll be signed out everywhere and can't sign in until you unsuspend them.");
+  await dlg.getByRole("button", { name: "Suspend" }).click();
   await expect(row.getByText("Suspended", { exact: true })).toBeVisible();
 
   const them = await (await browser.newContext()).newPage();
@@ -150,6 +165,7 @@ test("moderation keep and remove", async ({ page, browser }) => {
 
   await card(kept).getByRole("button", { name: "Keep" }).click();
   await expect(card(kept)).toHaveCount(0);
+  await expect(page.locator(":focus")).toHaveRole("button"); // focus moves on to the next card, not lost to <body>
 
   await card(removed).getByRole("button", { name: "Remove" }).click();
   const dlg = page.getByRole("dialog");

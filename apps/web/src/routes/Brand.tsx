@@ -4,13 +4,13 @@ import {
   ColorRole, colorBadge, defaultKitContent, parseKitFile, serializeKitFile, type BrandKitContent,
 } from "@cherry/doc";
 import {
-  ApiError, assetUrl, createKit, deleteFont, deleteKit, errorMessage, listKits, listTemplates, myWorkspaces, saveKit,
+  ApiError, assetUrl, createKit, deleteFont, deleteKit, errorMessage, instanceInfo, listKits, listTemplates, myWorkspaces, saveKit,
   templateThumbUrl, uploadAsset, uploadFont, type BrandKit, type Template, type Workspace,
 } from "../api";
 import { currentWorkspace, useSession } from "../App";
 import AppShell from "../AppShell";
 import { kitFamilies, useKitFonts } from "../brand/fonts";
-import { precheck } from "../library/upload";
+import { precheck, tooLarge } from "../library/upload";
 
 type KitColor = BrandKitContent["colors"][number];
 type Logos = BrandKitContent["logos"];
@@ -50,6 +50,8 @@ export default function Brand() {
   const [fontOpen, setFontOpen] = useState(false);
   const logoInput = useRef<HTMLInputElement>(null);
   const logoSlot = useRef<keyof Logos>("primary");
+  const [maxMb, setMaxMb] = useState(50);
+  useEffect(() => { instanceInfo().then((i) => setMaxMb(i.maxUploadMb), () => {}); }, []);
   const [, setCurrentId] = useState<string | null>(null); // re-render when the sidebar switches workspace
 
   useEffect(() => {
@@ -128,8 +130,9 @@ export default function Brand() {
   };
   const onLogo = async (file: File | undefined) => {
     if (!file || !kit) return;
-    const pre = precheck(file);
-    if (pre !== "ok") return fail(new ApiError(400, pre === "too_large" ? "upload_too_large" : pre));
+    const pre = precheck(file, maxMb);
+    if (pre === "too_large") return setError(tooLarge(maxMb));
+    if (pre !== "ok") return fail(new ApiError(400, pre));
     const key = logoSlot.current, id = kit.id;
     try {
       const { asset } = await uploadAsset(file, {

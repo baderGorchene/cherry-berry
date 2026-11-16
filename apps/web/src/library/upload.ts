@@ -16,6 +16,8 @@ export function precheck(file: { name: string; size: number; type: string }, max
   return file.size > maxMb * MB || (e === "svg" && file.size > 2 * MB) ? "too_large" : "ok";
 }
 
+export const tooLarge = (maxMb: number) => `That file is over ${maxMb} MB (2 MB for SVG).`;
+
 export function titleFromName(name: string): string {
   const t = name.replace(/\.[^.]*$/, "").replace(/[-_]/g, " ").trim();
   return t.charAt(0).toUpperCase() + t.slice(1);

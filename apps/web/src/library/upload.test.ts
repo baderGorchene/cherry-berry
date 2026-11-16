@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { precheck, sha256Hex, titleFromName, validate } from "./upload";
+import { precheck, sha256Hex, titleFromName, tooLarge, validate } from "./upload";
 
 const MB = 1024 * 1024;
 const f = (name: string, size = 1000) => ({ name, size, type: "" });
@@ -13,6 +13,12 @@ describe("precheck", () => {
     expect(precheck(f("a.svg", 1 * MB))).toBe("ok");
     expect(precheck(f("a.png", 60 * MB), 100)).toBe("ok");
     expect(precheck(f("a.png", 21 * MB), 20)).toBe("too_large");
+  });
+});
+
+describe("tooLarge", () => {
+  it("names the server's limit", () => {
+    expect(tooLarge(20)).toBe("That file is over 20 MB (2 MB for SVG).");
   });
 });
 

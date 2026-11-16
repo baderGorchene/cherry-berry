@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, assetUrl, errorMessage, moderate, moderationQueue, templateThumbUrl, type QueueAction, type QueueItem } from "../api";
 import { LICENSES } from "../library/assets";
 import Modal from "../Modal";
@@ -57,12 +57,26 @@ export default function Moderation() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<{ item: QueueItem; action: "remove" | "suspend" } | null>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const focusAt = useRef<number | null>(null); // where the removed card was, so focus lands on what took its place
   useEffect(() => { moderationQueue().then(setItems, (e) => setError(errorMessage(e))); }, []);
+  useEffect(() => {
+    const at = focusAt.current;
+    if (at === null) return;
+    focusAt.current = null;
+    const cards = list.current?.querySelectorAll<HTMLElement>(".rep") ?? [];
+    const next = cards[Math.min(at, cards.length - 1)];
+    (next?.querySelector<HTMLElement>("button") ?? heading.current)?.focus();
+  }, [items]);
 
   const act = async (item: QueueItem, action: QueueAction) => {
     setConfirm(null); setBusy(key(item)); setError("");
     // Removing deletes the target, so every row for it goes; keep and approve settle only this row.
-    const drop = () => setItems((is) => is?.filter((i) => (action === "remove" || action === "suspend" ? !sameTarget(i, item) : key(i) !== key(item))) ?? null);
+    const drop = () => {
+      focusAt.current = items?.findIndex((i) => key(i) === key(item)) ?? 0;
+      setItems((is) => is?.filter((i) => (action === "remove" || action === "suspend" ? !sameTarget(i, item) : key(i) !== key(item))) ?? null);
+    };
     try {
       await moderate(item, action);
       drop();
@@ -78,13 +92,13 @@ export default function Moderation() {
   return (
     <section className="sec" aria-labelledby="adm-h">
       <div className="adm-head">
-        <h2 id="adm-h" className="sec-title">Moderation</h2>
+        <h2 id="adm-h" ref={heading} tabIndex={-1} className="sec-title">Moderation</h2>
         <p className="page-sub">Reported public visuals, shapes and templates, and SVGs the sanitizer changed</p>
       </div>
       {error && <p role="alert" className="field-error">{error}</p>}
       {items?.length === 0 && <p className="card muted">Nothing to review.</p>}
       {items && items.length > 0 && (
-        <div className="rep-list">
+        <div className="rep-list" ref={list}>
           {items.map((i) => (
             <Card key={key(i)} item={i} busy={busy === key(i)}
               onAct={(action) => (action === "remove" || action === "suspend" ? setConfirm({ item: i, action }) : act(i, action))} />

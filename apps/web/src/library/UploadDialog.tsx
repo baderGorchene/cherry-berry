@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApiError, assetByHash, errorMessage, instanceInfo, uploadAsset, type Asset, type License, type Visibility } from "../api";
 import { LICENSES, VISIBILITY } from "./assets";
-import { precheck, sha256Hex, titleFromName, validate, type Details } from "./upload";
+import { precheck, sha256Hex, titleFromName, tooLarge, validate, type Details } from "./upload";
 
 type Status = "checking" | "ready" | "duplicate" | "uploading" | "added" | "error";
 type Row = { id: number; file: File; status: Status; error?: string; existing?: Asset; details: Details };
@@ -29,7 +29,7 @@ export default function UploadDialog({ workspaceId, viewer, onClose, onDone }: {
 
   const check = async (row: Row) => {
     const pre = precheck(row.file, maxMb);
-    if (pre !== "ok") return patch(row.id, { status: "error", error: errorMessage(new ApiError(400, pre === "too_large" ? "upload_too_large" : pre)) });
+    if (pre !== "ok") return patch(row.id, { status: "error", error: pre === "too_large" ? tooLarge(maxMb) : errorMessage(new ApiError(400, pre)) });
     try {
       const existing = await assetByHash(await sha256Hex(await row.file.arrayBuffer()), workspaceId);
       patch(row.id, existing ? { status: "duplicate", existing } : { status: "ready" });
@@ -81,7 +81,7 @@ export default function UploadDialog({ workspaceId, viewer, onClose, onDone }: {
         else { newest = res.asset; patch(r.id, { status: "added" }); }
       } catch (e) {
         clean = false;
-        patch(r.id, { status: "error", error: errorMessage(e) });
+        patch(r.id, { status: "error", error: e instanceof ApiError && e.code === "upload_too_large" ? tooLarge(maxMb) : errorMessage(e) });
       }
     }
     setBusy(false);

@@ -41,7 +41,9 @@ export default function Registration() {
     if (!s) return;
     setBusy(true); setStatus(""); setError("");
     try {
-      loaded(await saveAdminSettings({ ...s, allowedDomains: domains.split(/\s+/).filter(Boolean) }));
+      // The textarea only counts while it shows; otherwise keep the saved list so a hidden typo can't block the save.
+      const allowedDomains = s.registration === "domains" ? domains.split(/\s+/).filter(Boolean) : s.allowedDomains;
+      loaded(await saveAdminSettings({ ...s, allowedDomains }));
       setStatus("Saved");
     } catch (err) {
       setError(err instanceof ApiError && err.code === "invalid_body" ? "Check the domains: one per line, like acme.com." : errorMessage(err));

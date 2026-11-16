@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   adminUsers, adminWorkspaces, errorMessage, suspendUser, unsuspendUser, type AccessMode, type AdminUser, type AdminWorkspace,
 } from "../api";
 import { formatBytes } from "../library/assets";
 import { IconSearch } from "../icons";
+import Modal from "../Modal";
 
 const JOIN: Record<AccessMode, string> = { invite: "Invitation only", password: "ID + password", open: "Open" };
 const day = (iso: string) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
@@ -15,16 +16,28 @@ function UsersTable() {
   const [next, setNext] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [confirm, setConfirm] = useState<AdminUser | null>(null);
+  const current = useRef(q); // the query a response must still match to be shown
   useEffect(() => { const t = setTimeout(() => setQ(text.trim()), 250); return () => clearTimeout(t); }, [text]);
   useEffect(() => {
     let live = true; // a response for an older query is dropped
+    current.current = q;
+    setError("");
     adminUsers(q).then((r) => { if (live) { setUsers(r.users); setNext(r.next); } }, (e) => live && setError(errorMessage(e)));
     return () => { live = false; };
   }, [q]);
 
-  const more = () => adminUsers(q, next).then((r) => { setUsers((u) => [...u, ...r.users]); setNext(r.next); }, (e) => setError(errorMessage(e)));
+  const more = async () => {
+    const sent = q;
+    setLoading(true);
+    try {
+      const r = await adminUsers(sent, next);
+      if (current.current === sent) { setUsers((u) => [...u, ...r.users]); setNext(r.next); }
+    } catch (e) { if (current.current === sent) setError(errorMessage(e)); } finally { setLoading(false); }
+  };
   const toggle = async (u: AdminUser) => {
-    setBusy(u.id); setError("");
+    setConfirm(null); setBusy(u.id); setError("");
     try {
       await (u.suspended ? unsuspendUser : suspendUser)(u.id);
       setUsers((us) => us.map((x) => (x.id === u.id ? { ...x, suspended: !u.suspended } : x)));
@@ -56,7 +69,7 @@ function UsersTable() {
                 <td className="adm-act">
                   {u.admin ? <span className="rs rs-on">Admin</span> : <>
                     {u.suspended && <span className="rs rs-err">Suspended</span>}
-                    <button type="button" className="btn btn-sm" disabled={busy === u.id} onClick={() => toggle(u)}>{u.suspended ? "Unsuspend" : "Suspend"}</button>
+                    <button type="button" className="btn btn-sm" disabled={busy === u.id} onClick={() => (u.suspended ? toggle(u) : setConfirm(u))}>{u.suspended ? "Unsuspend" : "Suspend"}</button>
                   </>}
                 </td>
               </tr>
@@ -65,7 +78,16 @@ function UsersTable() {
         </table>
       </div>
       {!users.length && q && <p className="muted">No users match “{q}”.</p>}
-      {next && <div><button type="button" className="btn" onClick={more}>Load more</button></div>}
+      {next && <div><button type="button" className="btn" disabled={loading} onClick={more}>Load more</button></div>}
+      {confirm && (
+        <Modal title={`Suspend ${confirm.name}?`} onClose={() => setConfirm(null)}>
+          <p>They'll be signed out everywhere and can't sign in until you unsuspend them.</p>
+          <div className="hist-actions">
+            <button type="button" className="btn" onClick={() => setConfirm(null)}>Cancel</button>
+            <button type="button" className="btn btn-danger" onClick={() => toggle(confirm)}>Suspend</button>
+          </div>
+        </Modal>
+      )}
     </section>
   );
 }

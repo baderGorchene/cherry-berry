@@ -27,7 +27,8 @@ export default function Workspaces() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<Workspace[]>([]);
   const [canCreate, setCanCreate] = useState(true);
-  useEffect(() => { instanceInfo().then((i) => setCanCreate(i.canCreateWorkspace), () => {}); }, []);
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => { instanceInfo().then((i) => { setCanCreate(i.canCreateWorkspace); setAdmin(i.admin); }, () => {}); }, []);
 
   useEffect(() => {
     const t = setTimeout(() => openWorkspaces(q).then((r) => setOpen(r.workspaces), () => setOpen([])), 200);
@@ -53,7 +54,9 @@ export default function Workspaces() {
       <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <Link to="/" className="brand" style={{ textDecoration: "none" }}>Cherry Berry</Link>
-          <span className="muted" style={{ fontSize: 14 }}>Signed in as {user?.email}</span>
+          <span className="muted" style={{ fontSize: 14 }}>
+            {admin && <><Link to="/admin">Instance admin</Link> · </>}Signed in as {user?.email}
+          </span>
         </header>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <h1 style={{ fontSize: 40, letterSpacing: "-0.02em", overflowWrap: "anywhere" }}>Pick a workspace</h1>

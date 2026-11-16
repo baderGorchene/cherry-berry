@@ -1,6 +1,7 @@
 import { deflateSync } from "node:zlib";
 import { expect, type Browser, type Page } from "@playwright/test";
 
+// admin.spec.ts relies on the @example.com domain: it allows it while registration is limited to listed domains.
 export const unique = (name: string) => `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
 
 export async function signUp(page: Page, email: string) {
