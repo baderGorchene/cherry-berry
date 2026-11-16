@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, openAsViewer, signUp, unique, uniquePng } from "./helpers";
+import { addShape, openPanel, createWorkspace, editorReady, openAsViewer, signUp, unique, uniquePng } from "./helpers";
 
 async function newSocialPost(page: Page) {
   await signUp(page, unique("ed"));
@@ -11,7 +11,9 @@ async function newSocialPost(page: Page) {
 
 const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
 /** Shapes and Visuals share the left panel with Layers; switch back to see the layers. */
-const showLayers = (page: Page) => page.getByRole("tab", { name: "Layers", exact: true }).click();
+const showLayers = (page: Page) => openPanel(page, "Layers");
+/** The Pages-list row whose name button is exactly `name`. */
+const pageRow = (p: Page, name: string) => p.getByRole("listitem").filter({ has: p.getByRole("button", { name, exact: true }) });
 const status = (page: Page) => page.getByRole("status");
 
 /** Pen-draws a closed triangle around the canvas center; returns its first anchor and an inside point (screen px). */
@@ -127,11 +129,11 @@ test("undo and redo", async ({ page }) => {
 test("pages", async ({ page }) => {
   await newSocialPost(page);
   await page.getByRole("button", { name: "+ Add page" }).click();
-  const page2 = page.getByRole("listitem").filter({ hasText: "Page 2" });
+  const page2 = pageRow(page, "Page 2");
   await expect(page2).toBeVisible();
   await page2.getByRole("button", { name: "Delete" }).click();
   await expect(page2).toHaveCount(0);
-  const page1 = page.getByRole("listitem").filter({ hasText: "Page 1" });
+  const page1 = pageRow(page, "Page 1");
   await expect(page1.getByRole("button", { name: "Delete" })).toBeDisabled();
 });
 
@@ -150,7 +152,7 @@ test("properties show page info when nothing is selected", async ({ page }) => {
 test("page actions show only on the current page", async ({ page }) => {
   await newSocialPost(page);
   await page.getByRole("button", { name: "+ Add page" }).click();
-  await expect(page.getByRole("listitem").filter({ hasText: "Page 2" })).toBeVisible();
+  await expect(pageRow(page, "Page 2")).toBeVisible();
   await expect(page.getByRole("button", { name: "Duplicate" })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Duplicate" })).toBeVisible();
 });
@@ -160,8 +162,15 @@ test("viewer is read-only", async ({ browser }) => {
   await newSocialPost(owner);
   const viewer = await openAsViewer(browser, owner);
   await expect(viewer.getByRole("button", { name: "Select (V)" })).toBeDisabled();
-  await viewer.getByRole("tab", { name: "Shapes", exact: true }).click();
+  await openPanel(viewer, "Shapes");
   await expect(viewer.getByRole("button", { name: "Import SVG…" })).toBeDisabled();
+  // the R shortcut and a canvas click add nothing
+  await openPanel(viewer, "Layers");
+  await viewer.keyboard.press("r");
+  const vbox = (await viewer.getByLabel("Page 1 canvas").boundingBox())!;
+  await viewer.mouse.click(vbox.x + vbox.width / 2, vbox.y + vbox.height / 2);
+  await viewer.waitForTimeout(500);
+  await expect(layers(viewer).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(0);
 });
 
 test("left panel tabs switch between layers, shapes and visuals", async ({ page }) => {
@@ -172,11 +181,15 @@ test("left panel tabs switch between layers, shapes and visuals", async ({ page 
   await expect(tab("Shapes")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("complementary", { name: "Shapes panel" })).toBeVisible();
   await expect(layers(page)).not.toBeVisible();
-  await tab("Visuals").click();
+  await openPanel(page, "Visuals");
   await expect(page.getByRole("complementary", { name: "Visuals panel" })).toBeVisible();
-  await tab("Layers").click();
+  await openPanel(page, "Layers");
+  // R arms the rectangle tool (focus stays on the Layers tab): a click on the canvas then adds one.
   await page.keyboard.press("r");
   await expect(page.getByRole("button", { name: "Select (V)" })).toHaveAttribute("aria-pressed", "false");
+  const cbox = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  await page.mouse.click(cbox.x + cbox.width / 2, cbox.y + cbox.height / 2);
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
   // Keyboard activation keeps focus on the tab.
   await tab("Visuals").focus();
   await page.keyboard.press("Enter");
@@ -269,7 +282,7 @@ test("broken design id", async ({ page }) => {
 });
 
 test("a save rejected as invalid offers a reload to the latest version", async ({ page, context, browser }) => {
-  const row = (p: Page, name: string) => p.getByRole("listitem").filter({ hasText: name });
+  const row = pageRow;
   await newSocialPost(page);
   await page.getByRole("button", { name: "+ Add page" }).click();
   await expect(status(page)).toHaveText("Saved");

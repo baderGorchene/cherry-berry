@@ -53,6 +53,12 @@ test("a viewer watches changes but cannot edit", async ({ page: owner, browser }
   await addRect(owner);
   await expect(rects(viewer)).toBeVisible({ timeout: 5000 });
   await expect(viewer.getByRole("button", { name: "Select (V)" })).toBeDisabled();
+  // the R shortcut and a canvas click add nothing
+  await viewer.keyboard.press("r");
+  const box = (await viewer.getByLabel("Page 1 canvas").boundingBox())!;
+  await viewer.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await viewer.waitForTimeout(500);
+  await expect(rects(viewer)).toHaveCount(1);
 });
 
 test("an idle lone user stays connected", async ({ page }) => {

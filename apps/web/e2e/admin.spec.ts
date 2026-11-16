@@ -124,7 +124,7 @@ test("account menu opens the instance admin overview", async ({ page }) => {
   await asAdmin(page);
   await page.goto("/");
   await page.getByRole("button", { name: /^Workspace:/ }).click();
-  await page.getByRole("link", { name: "Instance admin" }).first().click();
+  await page.locator(".ws-menu").getByRole("link", { name: "Instance admin" }).click();
   await expect(page).toHaveURL(/\/admin$/);
   await expect(page.getByRole("heading", { name: "Instance admin" })).toBeVisible();
   await expect(page.getByText("PGlite")).toBeVisible();

@@ -94,11 +94,23 @@ export async function editorReady(page: Page) {
 
 const SHAPE_KEYS = { Rectangle: "r", Ellipse: "o", Line: "l", Text: "t" } as const;
 
+/** Opens a tab of the editor's left panel (Layers, Shapes, Visuals, Brand). The only place that knows the tab names. */
+export async function openPanel(page: Page, name: "Layers" | "Shapes" | "Visuals" | "Brand") {
+  await page.getByRole("tab", { name, exact: true }).click();
+}
+
 /** Adds a shape the way a user does: arms it with its keyboard shortcut, then clicks the canvas centre (offset by dx, dy px).
- *  The only place that knows how shapes are added; the Shapes panel is not needed (and Layers stays visible). */
-export async function addShape(page: Page, shape: keyof typeof SHAPE_KEYS, dx = 0, dy = 0) {
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur()); // shortcuts are ignored while a field has focus
+ *  The only place that knows how shapes are added (the Shapes panel is not needed, and Layers stays visible).
+ *  When the Layers panel is showing, fails unless exactly one layer appeared (so an ignored key is loud). */
+export async function addShape(page: Page, shape: keyof typeof SHAPE_KEYS, dx = 0, dy = 0, canvas = page.getByLabel(/^Page \d+ canvas$/)) {
+  const rows = page.getByRole("complementary", { name: "Layers" }).locator("li.ed-layrow");
+  const watch = await page.getByRole("complementary", { name: "Layers" }).isVisible();
+  const before = watch ? await rows.count() : 0;
+  // Commit a pending text edit (Escape) instead of discarding it; other fields just lose focus, since shortcuts are ignored while typing.
+  if (await page.getByLabel("Edit text").isVisible()) await page.keyboard.press("Escape");
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press(SHAPE_KEYS[shape]);
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  const box = (await canvas.boundingBox())!;
   await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
+  if (watch && shape !== "Text") await expect(rows).toHaveCount(before + 1);
 }

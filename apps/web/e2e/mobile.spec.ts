@@ -43,7 +43,7 @@ test("phone home shows tabs, presets and recent", async ({ page }) => {
   expect(cols).toBe(2);
 
   // 56px New design button floats above the tab bar
-  const fab = page.locator("a.fab");
+  const fab = page.getByRole("link", { name: "New design" }).and(page.locator("a.fab"));
   const f = (await fab.boundingBox())!;
   expect(Math.round(f.width)).toBe(56);
   expect(Math.round(f.height)).toBe(56);
