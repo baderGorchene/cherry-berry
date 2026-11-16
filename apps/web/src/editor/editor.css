@@ -161,6 +161,12 @@
 .ed-shapes { flex: 1; min-height: 0; padding: 12px 10px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
 .ed-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
 .ed-shapes input[type="search"] { min-height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 8px; font: 13px Inter, sans-serif; }
+.ed-kchip {
+  min-height: 26px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff;
+  color: var(--muted); font: 600 11px Inter, sans-serif; cursor: pointer;
+}
+.ed-kchip:hover { border-color: var(--blush); color: var(--berry); }
+.ed-kchip[aria-pressed="true"] { background: var(--berry); border-color: var(--berry); color: #fff; }
 .ed-shapegrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .ed-shape {
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 6px; min-width: 0;

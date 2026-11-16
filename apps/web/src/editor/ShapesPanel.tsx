@@ -6,6 +6,7 @@ import type { Shape } from "../api";
 import ReportDialog from "../library/ReportDialog";
 import { useShapeList } from "./shapeForm";
 import type { Tool } from "./Canvas";
+import { ELEMENT_CATEGORIES, ELEMENTS, type ElementCategory, type ElementPreset } from "./elements";
 import { SHAPES } from "./Toolbar";
 
 export const TABS = [["basic", "Basic"], ["mine", "My shapes"], ["workspace", "Workspace"], ["public", "Public"]] as const;
@@ -83,6 +84,7 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<TabId>("basic");
+  const [cat, setCat] = useState<ElementCategory | "All">("All");
   const [text, setText] = useState("");
   const { res, retry } = useShapeList(tab === "basic" ? null : tab, workspaceId, text);
   const [importError, setImportError] = useState("");
@@ -98,11 +100,17 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
     onSelect(nodes.map((n) => n.id));
   };
 
-  const insert = (s: Shape) => {
-    const n = shapeNode(s, page);
+  const insert = (s: Pick<Shape, "name" | "d" | "width" | "height" | "fillRule"> & { fill?: Shape["fill"]; stroke?: Shape["stroke"] }) => {
+    const n = shapeNode(s as Shape, page);
     act(() => addNode(ydoc, page.id, n));
     onSelect([n.id]);
   };
+  const q = text.trim().toLowerCase();
+  const filteredElements = ELEMENTS.filter((el: ElementPreset) =>
+    (cat === "All" || el.category === cat) &&
+    (!q || el.name.toLowerCase().includes(q) || el.tags.some((t) => t.includes(q))),
+  );
+  const filteredBasic = SHAPES.filter((s) => !q || s.label.toLowerCase().includes(q));
 
   return (
     <aside aria-label="Shapes panel" className="ed-shapes">
@@ -117,13 +125,37 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
         onChange={(e) => { void onFile(e.target.files?.[0]); e.target.value = ""; }} />
       {importError && <p role="alert" className="ed-err">{importError}</p>}
       {tab === "basic" ? (
-        <div className="ed-shapegrid">
-          {SHAPES.map((s) => (
-            <button key={s.kind} className="ed-shape" disabled={readOnly} onClick={() => onTool(s.kind)}>
-              {s.icon}<span>{s.label.replace(/ \(.\)$/, "")}</span>
-            </button>
-          ))}
-        </div>
+        <>
+          <input type="search" aria-label="Search elements" placeholder="Search elements (blob, sparkle, badge…)" value={text}
+            onChange={(e) => setText(e.target.value)} />
+          <div className="chips" role="group" aria-label="Element categories">
+            {(["All", ...ELEMENT_CATEGORIES] as const).map((c) => (
+              <button key={c} type="button" className="ed-kchip" aria-pressed={cat === c} onClick={() => setCat(c)}>{c}</button>
+            ))}
+          </div>
+          {cat === "All" && filteredBasic.length > 0 && (
+            <div className="ed-shapegrid">
+              {filteredBasic.map((s) => (
+                <button key={s.kind} className="ed-shape" disabled={readOnly} onClick={() => onTool(s.kind)}>
+                  {s.icon}<span>{s.label.replace(/ \(.\)$/, "")}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="ed-shapegrid">
+            {filteredElements.map((el) => (
+              <button key={el.id} className="ed-shape" disabled={readOnly} title={el.name} onClick={() => insert(el)}>
+                <svg viewBox={thumbBox(el)} width="36" height="36" aria-hidden="true">
+                  <path d={el.d} fill={el.fill?.color ?? "#8E1EA2"} fillRule={el.fillRule} />
+                </svg>
+                <span>{el.name}</span>
+              </button>
+            ))}
+          </div>
+          {filteredBasic.length === 0 && filteredElements.length === 0 && (
+            <p className="muted" style={{ fontSize: 13 }}>No elements match “{text.trim()}”</p>
+          )}
+        </>
       ) : (
         <>
           <input type="search" aria-label="Search shapes" placeholder="Search shapes" value={text} onChange={(e) => setText(e.target.value)} />

@@ -9,6 +9,7 @@ import { imageNode, usableIn } from "./visuals";
 
 const SOURCES: [AssetScope, string][] = [["mine", "Mine"], ["workspace", "Workspace"], ["public", "Public"]];
 const TYPES: [AssetKind | undefined, string][] = [[undefined, "All"], ["image", "Images"], ["gif", "GIFs"], ["svg", "SVG"]];
+const KEYWORDS = ["minimal", "abstract", "pattern", "retro", "boho", "grainy", "pastel"];
 
 function Chips<T>({ label, options, value, onPick }: { label: string; options: [T, string][]; value: T; onPick(v: T): void }) {
   return (
@@ -68,7 +69,13 @@ export default function VisualsPanel({ ydoc, page, designId, workspaceId, readOn
       <Chips label="Source" options={SOURCES} value={scope} onPick={setScope} />
       <Chips label="Type" options={TYPES} value={kind} onPick={setKind} />
       <button className="ed-mini" disabled={readOnly} onClick={() => setUploading(true)}>Upload…</button>
-      <input type="search" aria-label="Search visuals" placeholder="Search visuals" value={text} onChange={(e) => setText(e.target.value)} />
+      <input type="search" aria-label="Search visuals" placeholder="Search visuals (minimal, pattern, retro…)" value={text} onChange={(e) => setText(e.target.value)} />
+      <div className="chips" role="group" aria-label="Style keywords">
+        {KEYWORDS.map((kw) => (
+          <button key={kw} type="button" className="ed-kchip" aria-pressed={text.trim().toLowerCase() === kw}
+            onClick={() => setText(text.trim().toLowerCase() === kw ? "" : kw)}>{kw}</button>
+        ))}
+      </div>
       {error && <p role="alert" className="ed-err">{error}</p>}
       {!res ? <p className="muted" style={{ fontSize: 13 }}>Loading…</p>
         : "error" in res ? (
