@@ -1,9 +1,10 @@
 import { execFile, spawn } from "node:child_process";
-import { once } from "node:events";
 import { createWriteStream } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, stat } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { tmpdir } from "node:os";
+import { pipeline } from "node:stream/promises";
+import { Transform, type Writable } from "node:stream";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AbortedError, DEFAULT_ICC, GsError, pdfxArgs, platesArgs, plateFiles, TimeoutError } from "./gs.ts";
@@ -57,9 +58,8 @@ const realVersion = () =>
 
 class TooLargeError extends Error {}
 
-/** Streams the request body to `file`, enforcing the size limit and checking for a PDF header in the first 1 KB. */
-async function receivePdf(req: IncomingMessage, file: string, max: number): Promise<void> {
-  const ws = createWriteStream(file);
+/** Streams the request body to the writable for `file`, enforcing the size limit and a PDF header in the first 1 KB. */
+async function receivePdf(req: IncomingMessage, ws: Writable, max: number): Promise<void> {
   let size = 0;
   let head = Buffer.alloc(0);
   let checked = false;
@@ -67,23 +67,30 @@ async function receivePdf(req: IncomingMessage, file: string, max: number): Prom
     checked = true;
     if (head.indexOf("%PDF-") === -1) throw new GsError("not a PDF");
   };
-  try {
-    for await (const c of req as AsyncIterable<Buffer>) {
-      size += c.length;
-      if (size > max) throw new TooLargeError();
-      if (!checked) {
-        head = Buffer.concat([head, c.subarray(0, 1024 - head.length)]);
-        if (head.length >= 1024) check();
+  const guard = new Transform({
+    transform(chunk: Buffer, _enc, cb) {
+      try {
+        size += chunk.length;
+        if (size > max) throw new TooLargeError();
+        if (!checked) {
+          head = Buffer.concat([head, chunk.subarray(0, 1024 - head.length)]);
+          if (head.length >= 1024) check();
+        }
+        cb(null, chunk);
+      } catch (e) {
+        cb(e as Error);
       }
-      if (!ws.write(c)) await once(ws, "drain");
-    }
-    if (!checked) check();
-    ws.end();
-    await once(ws, "finish");
-  } catch (e) {
-    ws.destroy();
-    throw e;
-  }
+    },
+    flush(cb) {
+      try {
+        if (!checked) check();
+        cb();
+      } catch (e) {
+        cb(e as Error);
+      }
+    },
+  });
+  await pipeline(req, guard, ws); // write-stream errors (ENOSPC, EIO) reject here instead of crashing the process
 }
 
 function send(res: ServerResponse, status: number, body: object | Buffer, type = "application/json") {
@@ -101,6 +108,10 @@ export function createPrintServer(opts: {
   maxWaiting?: number;
   timeoutMs?: number;
   maxBody?: number;
+  /** Test seam: where the upload is written. */
+  openFile?: (file: string) => Writable;
+  /** Aborting this kills running gs jobs (graceful shutdown). */
+  shutdown?: AbortSignal;
 }): Server {
   const maxWaiting = opts.maxWaiting ?? 4;
   const queue = createQueue(maxWaiting);
@@ -113,6 +124,9 @@ export function createPrintServer(opts: {
 
   return createServer(async (req, res) => {
     const ac = new AbortController();
+    const onShutdown = () => ac.abort();
+    opts.shutdown?.addEventListener("abort", onShutdown, { once: true });
+    res.on("close", () => opts.shutdown?.removeEventListener("abort", onShutdown));
     res.on("close", () => {
       if (!res.writableFinished) ac.abort();
     });
@@ -144,7 +158,7 @@ export function createPrintServer(opts: {
 
       dir = await mkdtemp(join(tmpdir(), "cherry-print-"));
       const input = join(dir, "in.pdf");
-      await receivePdf(req, input, maxBody);
+      await receivePdf(req, (opts.openFile ?? createWriteStream)(input), maxBody);
       const jobDir = dir;
       const run = async (args: string[]) => {
         if (ac.signal.aborted) throw new AbortedError(); // client left while queued: never start gs
@@ -199,7 +213,12 @@ export function createPrintServer(opts: {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.PORT ?? 8080);
-  const server = createPrintServer({ run: realRun, version: realVersion, icc: process.env.PRINT_ICC_PROFILE || undefined });
+  const shutdown = new AbortController();
+  const server = createPrintServer({ shutdown: shutdown.signal, run: realRun, version: realVersion, icc: process.env.PRINT_ICC_PROFILE || undefined });
   server.listen(port, "0.0.0.0", () => console.log(`print service listening on :${port}`));
-  process.on("SIGTERM", () => process.exit(0));
+  process.on("SIGTERM", () => {
+    shutdown.abort(); // kills any running gs
+    server.close();
+    setTimeout(() => process.exit(0), 500).unref();
+  });
 }

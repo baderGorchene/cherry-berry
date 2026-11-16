@@ -27,7 +27,9 @@ OutputIntent from it (pdfwrite adds no output intent by itself).
 
 ## Ghostscript commands
 
-    gs -dSAFER -dBATCH -dNOPAUSE -dPDFX -sDEVICE=pdfwrite -sColorConversionStrategy=CMYK        -sProcessColorModel=DeviceCMYK --permit-file-read=$ICC -sOutputICCProfile=$ICC -sICCProfile=$ICC        -sOutputFile=out.pdf PDFX_def.ps in.pdf
+    gs -dSAFER -dBATCH -dNOPAUSE -dPDFX -sDEVICE=pdfwrite -sColorConversionStrategy=CMYK \
+       -sProcessColorModel=DeviceCMYK --permit-file-read=$ICC -sOutputICCProfile=$ICC -sICCProfile=$ICC \
+       -sOutputFile=out.pdf PDFX_def.ps in.pdf
 
     gs -dSAFER -dBATCH -dNOPAUSE -sDEVICE=tiffsep -sCompression=none -r150 -sOutputFile=<dir>/p%d.tif in.pdf
 

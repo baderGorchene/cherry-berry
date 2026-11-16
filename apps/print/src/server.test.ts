@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { AddressInfo } from "node:net";
 import { dirname } from "node:path";
+import { Writable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
 import { tiff } from "./fixture.ts";
 import { DEFAULT_ICC, GsError } from "./gs.ts";
@@ -13,7 +14,7 @@ afterEach(() => servers.splice(0).forEach((s) => (s.closeAllConnections(), s.clo
 
 async function start(
   run: Run,
-  opts: { version?: () => Promise<string>; maxWaiting?: number; maxBody?: number; icc?: string } = {},
+  opts: { version?: () => Promise<string>; maxWaiting?: number; maxBody?: number; icc?: string; openFile?: (f: string) => Writable; shutdown?: AbortSignal } = {},
 ) {
   const server = createPrintServer({
     run,
@@ -21,6 +22,8 @@ async function start(
     icc: opts.icc,
     maxWaiting: opts.maxWaiting,
     maxBody: opts.maxBody,
+    openFile: opts.openFile,
+    shutdown: opts.shutdown,
   });
   await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
   servers.push(server);
@@ -119,6 +122,39 @@ describe("print server", () => {
   it("a corrupt plate TIFF gives 422, not 500", async () => {
     const base = await start(async (args) => writeFileSync(`${dirname(outputOf(args))}/p1(Cyan).tif`, "garbage"));
     expect((await post(`${base}/plates`, PDF)).status).toBe(422);
+  });
+
+  it("a write-stream error gives 500 and the server stays up", async () => {
+    let first = true;
+    const base = await start(
+      async (args) => writeFileSync(outputOf(args), "%PDF-ok"),
+      {
+        openFile: (f) => {
+          if (!first) return createWriteStream(f);
+          first = false;
+          return new Writable({ write: (_c, _e, cb) => cb(Object.assign(new Error("ENOSPC"), { code: "ENOSPC" })) });
+        },
+      },
+    );
+    expect((await post(`${base}/pdfx`, PDF)).status).toBe(500);
+    expect((await post(`${base}/pdfx`, PDF)).status).toBe(200);
+  });
+
+  it("shutdown aborts a running job", async () => {
+    const shutdown = new AbortController();
+    let fired!: () => void;
+    const sawAbort = new Promise<void>((r) => (fired = r));
+    const base = await start(
+      async (_a, _t, signal) => {
+        signal?.addEventListener("abort", () => fired());
+        await new Promise((r) => setTimeout(r, 2000));
+      },
+      { shutdown: shutdown.signal },
+    );
+    void post(`${base}/pdfx`, PDF).catch(() => {});
+    await new Promise((r) => setTimeout(r, 150));
+    shutdown.abort();
+    await sawAbort;
   });
 
   it("non-PDF body gives 422", async () => {
