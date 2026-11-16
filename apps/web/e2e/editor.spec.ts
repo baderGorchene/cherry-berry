@@ -963,3 +963,27 @@ test("a viewer gets no editing controls in the toolbar or a selection menu", asy
   await expect(toolbar(viewer).getByRole("button")).toHaveCount(0);
   await expect(selectionMenu(viewer)).toHaveCount(0);
 });
+
+test("at 1280 x 800 with a panel open, every text toolbar control is reachable", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await newSocialPost(page);
+  await expect(panel(page, "Layers")).toBeVisible();
+  await placeText(page, "Reach");
+  // The bar scrolls sideways within itself: every control can be scrolled fully into view, the page never scrolls.
+  const bar = toolbar(page);
+  for (const c of await bar.locator("button, select, input").all()) {
+    await c.scrollIntoViewIfNeeded();
+    await expect(c).toBeInViewport({ ratio: 1 });
+  }
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  // A mouse wheel over the bar scrolls it too.
+  await bar.evaluate((e) => { e.scrollLeft = 0; });
+  const b = (await bar.boundingBox())!;
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await page.mouse.wheel(0, 2000);
+  const lock = bar.getByLabel("Brand lock");
+  await expect(lock).toBeInViewport({ ratio: 1 });
+  await lock.selectOption({ label: "Fixed" });
+  await expect(lock).toHaveValue("fixed");
+  await expect(status(page)).toHaveText("Saved");
+});

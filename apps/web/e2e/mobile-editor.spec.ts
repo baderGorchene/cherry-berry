@@ -102,34 +102,6 @@ test("phone editor shows the rail as a bottom bar and opens panels in sheets", a
   await page.keyboard.press("Escape");
 });
 
-test("selecting a layer shows the context toolbar, which scrolls within itself", async ({ page }) => {
-  await newPost(page);
-  await placeRect(page);
-  await expect(page.getByRole("dialog")).toHaveCount(0); // no properties sheet any more
-  await expect((await position(page)).getByLabel("X", { exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(selectionMenu(page).getByRole("button", { name: "Delete" })).toBeVisible();
-
-  // a text layer from the Text sheet
-  await openPanel(page, "Text");
-  await sheet(page, "Text").getByRole("button", { name: "Add a little body text" }).click();
-  await expect(sheet(page, "Text")).toBeHidden(); // the insert shows the canvas and its toolbar
-  const bar = toolbar(page);
-  await expect(bar.getByLabel("Size", { exact: true })).toBeVisible();
-  await expect((await popover(page, "Spacing", "Text spacing")).getByLabel("Line height", { exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
-  const tb = await bar.evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth, overflow: getComputedStyle(e).overflowX }));
-  expect(tb.scroll).toBeGreaterThan(tb.client);
-  expect(tb.overflow).toBe("auto");
-  await bar.evaluate((e) => { e.scrollLeft = e.scrollWidth; });
-  await expect(bar.getByLabel("Opacity", { exact: true })).toBeInViewport();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
-  for (const b of await bar.getByRole("button").all()) {
-    const r = (await b.boundingBox())!;
-    expect(Math.round(r.height)).toBeGreaterThanOrEqual(44);
-  }
-});
-
 test("pinch zooms without moving the layer", async ({ page }) => {
   await newPost(page);
   await placeRect(page);
@@ -284,6 +256,35 @@ test("export from the phone header", async ({ page }) => {
 
 test.describe("at 375 x 812", () => {
   test.use({ viewport: { width: 375, height: 812 } });
+
+  test("selecting a layer shows the context toolbar, which scrolls within itself", async ({ page }) => {
+    await newPost(page);
+    await placeRect(page);
+    await expect(page.getByRole("dialog")).toHaveCount(0); // no properties sheet any more
+    await expect((await position(page)).getByLabel("X", { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(selectionMenu(page).getByRole("button", { name: "Delete" })).toBeVisible();
+
+    // a text layer from the Text sheet
+    await openPanel(page, "Text");
+    await sheet(page, "Text").getByRole("button", { name: "Add a little body text" }).click();
+    await expect(sheet(page, "Text")).toBeHidden(); // the insert shows the canvas and its toolbar
+    const bar = toolbar(page);
+    await expect(bar.getByLabel("Size", { exact: true })).toBeVisible();
+    await expect((await popover(page, "Spacing", "Text spacing")).getByLabel("Line height", { exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    const tb = await bar.evaluate((e) => ({ scroll: e.scrollWidth, client: e.clientWidth, overflow: getComputedStyle(e).overflowX }));
+    expect(tb.scroll).toBeGreaterThan(tb.client);
+    expect(tb.overflow).toBe("auto");
+    const last = bar.locator("button, select, input").last();
+    await last.scrollIntoViewIfNeeded();
+    await expect(last).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+    for (const b of await bar.getByRole("button").all()) {
+      const r = (await b.boundingBox())!;
+      expect(Math.round(r.height)).toBeGreaterThanOrEqual(44);
+    }
+  });
 
   test("phone touch targets are at least 44 x 44", async ({ page }) => {
     await signUp(page, unique("m-44"));

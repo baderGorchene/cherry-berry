@@ -9,7 +9,7 @@ import {
 import { getKit, myWorkspaces, startFromTemplate, type BrandKit } from "../api";
 import { useSession } from "../App";
 import { useCreateDialog } from "../create/CreateDialog";
-import { canDelete, canEditContent, canMove } from "../editor/brandLock";
+import { canDelete, canEditContent, canMove, groupBlock } from "../editor/brandLock";
 import { useKitFonts } from "../brand/fonts";
 import "../editor/editor.css";
 import BrandPanel from "../editor/BrandPanel";
@@ -276,7 +276,8 @@ function Shell({ d }: { d: Ready }) {
     act(() => ydoc.transact(() => movable.forEach((n) => updateNode(ydoc, page.id, n.id, { locked })), LOCAL));
   };
   const tops = page.nodes.filter((n) => sel.selected.includes(n.id));
-  const canGroup = tops.length >= 2 && tops.length === sel.selected.length && allMovable;
+  const groupWhy = groupBlock(tops, role);
+  const canGroup = tops.length >= 2 && tops.length === sel.selected.length && allMovable && !groupWhy;
   const group = () => {
     if (!canGroup) return;
     const g = groupNodes(tops, "Group");
@@ -379,7 +380,7 @@ function Shell({ d }: { d: Ready }) {
     <ContextToolbar ydoc={ydoc} page={page} nodes={selectedNodes} kit={kit} docColors={colors} role={role} readOnly={readOnly}
       workspaceId={d.design.workspaceId} designId={d.design.id} act={act} onLinked={setKitId}
       canCombine={canCombine} canConvert={convertible} message={message} onCombine={runCombine} onConvert={runConvert}
-      onGroup={group} onUngroup={ungroup} onEditPath={enterEdit} onLock={toggleLock} onReorder={reorder}
+      canGroup={canGroup} groupWhy={groupWhy} onGroup={group} onUngroup={ungroup} onEditPath={enterEdit} onLock={toggleLock} onReorder={reorder}
       editing={editNode ? { node: editNode, anchors, onDone: exitEdit, panel: !phone } : null} />
   );
   const moreItems: FileItem[] = [

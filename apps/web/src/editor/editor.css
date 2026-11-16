@@ -127,7 +127,7 @@ button.ed-tpl:hover:not(:disabled) { border-color: var(--blush); background: var
 /* Context toolbar: one row above the canvas (a scrolling row above the bottom bar on phones). */
 .ed-tb {
   flex: none; display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 8px 12px; overflow-x: auto;
-  background: #fff; border-bottom: 1px solid var(--line); overscroll-behavior-x: contain; scrollbar-width: thin;
+  background: #fff; border-bottom: 1px solid var(--line); overscroll-behavior-x: contain; scrollbar-width: thin; scrollbar-color: #D9CCDD transparent;
 }
 .ed-tb > * { flex: none; }
 .ed-tb .ed-f { flex: none; padding: 0 8px; }
@@ -162,6 +162,8 @@ button.ed-tpl:hover:not(:disabled) { border-color: var(--blush); background: var
   border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 10px 28px rgba(34, 20, 42, .18);
 }
 .ed-pop2 .ed-ph { padding: 0; }
+.ed-pop2 .ed-f input { flex: 1 1 48px; width: 100%; } /* popovers sit inside the toolbar's DOM; undo its compact fields */
+.ed-pop2 .ed-color .ed-f { flex: 1; }
 .ed-pop2 .ed-mini { min-height: 34px; }
 .ed-sw-sec { display: flex; flex-direction: column; gap: 6px; }
 .ed-swatches { display: flex; flex-wrap: wrap; gap: 6px; }

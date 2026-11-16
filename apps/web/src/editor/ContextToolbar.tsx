@@ -63,17 +63,22 @@ export type PathEditing = { node: CherryNode; anchors: AnchorRef[]; onDone(): vo
  */
 export default function ContextToolbar({
   ydoc, page, nodes, kit, docColors, role, readOnly, workspaceId, designId, act, onLinked,
-  canCombine, canConvert, message, onCombine, onConvert, onGroup, onUngroup, onEditPath, onLock, onReorder, editing,
+  canCombine, canConvert, message, onCombine, onConvert, canGroup, groupWhy, onGroup, onUngroup, onEditPath, onLock, onReorder, editing,
 }: {
   ydoc: Y.Doc; page: Page; nodes: CherryNode[]; kit: BrandKit | null; docColors: string[]; role: Role; readOnly: boolean;
   workspaceId: string; designId: string; act(fn: () => void): void; onLinked(kitId: string | null): void;
   canCombine: boolean; canConvert: boolean; message: string; onCombine(op: BoolOp): void; onConvert(n: CherryNode): void;
-  onGroup(): void; onUngroup(): void; onEditPath(id: string): void; onLock(): void; onReorder(to: "forward" | "backward"): void;
+  /** `groupWhy` says why Group is off (brand locks), or "". */
+  canGroup: boolean; groupWhy: string; onGroup(): void; onUngroup(): void; onEditPath(id: string): void; onLock(): void; onReorder(to: "forward" | "backward"): void;
   editing: PathEditing | null;
 }) {
   const { unit } = page;
   const kind = toolbarKind(nodes);
-  const bar = (children: ReactNode) => <div role="toolbar" aria-label="Selection" className="ed-tb">{children}</div>;
+  // One row that keeps its height (so the canvas never jumps) and scrolls sideways when it doesn't fit; a mouse wheel scrolls it too.
+  const bar = (children: ReactNode) => (
+    <div role="toolbar" aria-label="Selection" className="ed-tb"
+      onWheel={(e) => { const el = e.currentTarget; if (!e.deltaX && el.scrollWidth > el.clientWidth) el.scrollLeft += e.deltaY; }}>{children}</div>
+  );
 
   if (editing) return bar(<>
     <span className="ed-pill">Editing path</span>
@@ -148,7 +153,9 @@ export default function ContextToolbar({
   </>;
 
   if (kind === "multi" || kind === "group") return bar(<>
-    {kind === "multi" && !frozen && <button type="button" className="ed-tbb" onClick={onGroup}>Group</button>}
+    {kind === "multi" && (!frozen || groupWhy) && (
+      <button type="button" className="ed-tbb" disabled={!canGroup} title={groupWhy || undefined} onClick={onGroup}>Group</button>
+    )}
     {kind === "group" && !frozen && <button type="button" className="ed-tbb" onClick={onUngroup}>Ungroup</button>}
     {canCombine && !frozen && (
       <span role="group" aria-label="Combine" className="ed-tbg">
