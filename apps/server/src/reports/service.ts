@@ -97,11 +97,14 @@ export async function resolveReport(
   // Only workspace-visibility items have a queue; anything else is not this user's to resolve.
   if (!target || target.gone || target.visibility !== "workspace" || !target.workspaceId) throw new WorkspaceError("not_found");
   await requireModerator(db, target.workspaceId, userId);
-  if (action === "remove") {
-    // An owner or admin passes the same checks as the uploader, so the existing deletes (and their cleanup) do the work.
-    if (rep.targetType === "asset") await deleteAsset(db, storage, userId, rep.targetId);
-    else await deleteShape(db, userId, rep.targetId);
-  }
-  await db.update(reports).set({ status: action === "remove" ? "removed" : "dismissed", resolvedBy: userId, resolvedAt: sql`now()` })
-    .where(and(eq(reports.targetType, rep.targetType), eq(reports.targetId, rep.targetId), eq(reports.status, "open")));
+  await db.transaction(async (tx) => {
+    const tdb = tx as unknown as Db;
+    if (action === "remove") {
+      // An owner or admin passes the same checks as the uploader, so the existing deletes (and their cleanup) do the work.
+      if (rep.targetType === "asset") await deleteAsset(tdb, storage, userId, rep.targetId);
+      else await deleteShape(tdb, userId, rep.targetId);
+    }
+    await tx.update(reports).set({ status: action === "remove" ? "removed" : "dismissed", resolvedBy: userId, resolvedAt: sql`now()` })
+      .where(and(eq(reports.targetType, rep.targetType), eq(reports.targetId, rep.targetId), eq(reports.status, "open")));
+  });
 }

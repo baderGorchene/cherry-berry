@@ -50,7 +50,7 @@ const usePhone = () => useSyncExternalStore(onPhoneChange, () => phoneQuery().ma
 const BOOL_KEYS: Record<string, BoolOp> = { u: "union", s: "subtract", i: "intersect", e: "exclude" };
 
 const STATUS: Record<Ready["status"], string> = {
-  saved: "Saved", saving: "Saving…", unsaved: "Unsaved changes", offline: "Offline — retrying", error: "Not saved",
+  saved: "Saved", saving: "Saving…", offline: "Offline — retrying", error: "Not saved",
 };
 
 function findNode(nodes: CherryNode[], id: string): CherryNode | undefined {

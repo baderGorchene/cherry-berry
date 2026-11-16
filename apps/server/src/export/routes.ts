@@ -43,8 +43,15 @@ export function registerExportRoutes(
   app.post("/api/designs/:id/export", { config: { rateLimit: limit } }, async (req, reply) => {
     const user = await requireUser(req);
     const id = parse(IdParams, req.params).id;
-    const out = await svc.exportDesign(db, storage, collab, user.id, id, parse(Body, req.body), printUrl);
-    return reply.header("content-type", out.mime).header("content-disposition", contentDisposition(out.filename))
-      .send(Buffer.from(out.bytes.buffer, out.bytes.byteOffset, out.bytes.byteLength));
+    const ac = new AbortController();
+    const onClose = () => { if (!req.raw.complete) ac.abort(); };
+    req.raw.on("close", onClose);
+    try {
+      const out = await svc.exportDesign(db, storage, collab, user.id, id, parse(Body, req.body), printUrl, ac.signal);
+      return reply.header("content-type", out.mime).header("content-disposition", contentDisposition(out.filename))
+        .send(Buffer.from(out.bytes.buffer, out.bytes.byteOffset, out.bytes.byteLength));
+    } finally {
+      req.raw.off("close", onClose);
+    }
   });
 }

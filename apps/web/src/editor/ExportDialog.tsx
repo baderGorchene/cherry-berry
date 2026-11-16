@@ -31,7 +31,7 @@ export default function ExportDialog({ designId, doc, pageId, status, onShow, on
   useEffect(() => { exportInfo(designId).then(setInfo, () => setInfo("failed")); }, [designId]);
 
   const print = typeof info === "object" && info.print;
-  const label = FORMATS.find((f) => f.id === format)!.label;
+  const label = formatsFor(print).find((f) => f.id === format)?.label ?? FORMATS[0]!.label;
   const cherry = format === "cherry";
   const picked = parsePageRange(range, doc.pages.length);
   const pageIds = cherry || pages === "all" ? doc.pages.map((p) => p.id)

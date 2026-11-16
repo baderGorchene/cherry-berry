@@ -42,6 +42,7 @@ export function exportPixels(format: string, pages: Page[], scale: number): numb
   const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
   switch (format) {
     case "png": case "jpg": return sum(pages.map(area));
+    case "plates": return sum(pages.map((p) => { const { width, height } = rasterSize(p, 150 / 96); return width * height; }));
     case "gif": return pages.length * area(pages[0]!); // every frame is the first page's size
     case "pptx": return sum(pages.flatMap((p) => p.nodes.filter(pictured).map((n) => picture(n, p).area)));
     default: return 0;

@@ -94,8 +94,11 @@ export async function updateKit(
 export async function deleteKit(db: Db, storage: Storage, userId: string, id: string): Promise<void> {
   const { row, role } = await loadKit(db, id, userId);
   if (!canWrite(role)) throw new WorkspaceError("forbidden");
-  const shas = (await db.selectDistinct({ sha: brandFonts.sha256 }).from(brandFonts).where(eq(brandFonts.kitId, row.id))).map((r) => r.sha);
-  await db.delete(brandKits).where(eq(brandKits.id, row.id)); // font rows go with it (FK cascade)
+  const shas = await db.transaction(async (tx) => {
+    const deleted = await tx.delete(brandFonts).where(eq(brandFonts.kitId, row.id)).returning({ sha: brandFonts.sha256 });
+    await tx.delete(brandKits).where(eq(brandKits.id, row.id));
+    return [...new Set(deleted.map((r) => r.sha))];
+  });
   // ponytail: font objects orphaned by workspace/user deletion cascades are swept in Phase 9
   for (const sha of shas) await removeFontObjectIfUnused(db, storage, sha);
 }
@@ -121,15 +124,24 @@ export async function addFont(
   const format = sniffFont(file);
   if (!format) throw new HttpError(400, "invalid_font");
   const sha256 = createHash("sha256").update(file).digest("hex");
-  // The lock is shared with deleteFont, so the object can't be removed between our put and our insert.
-  return db.transaction(async (tx) => {
+  // Insert the row first under FONT_LOCK so concurrent deletes keep the object, then upload outside the DB transaction.
+  const row = await db.transaction(async (tx) => {
     await tx.execute(FONT_LOCK(sha256));
-    await storage.put(`fonts/${sha256}`, file, "application/octet-stream");
-    const [row] = await tx.insert(brandFonts).values({
+    const [r] = await tx.insert(brandFonts).values({
       kitId, ...meta, format, sha256, bytes: file.length, createdBy: userId,
     }).returning();
-    return toFont(row!);
+    return r!;
   });
+  try {
+    await storage.put(`fonts/${sha256}`, file, "application/octet-stream");
+  } catch (e) {
+    await db.transaction(async (tx) => {
+      await tx.execute(FONT_LOCK(sha256));
+      await tx.delete(brandFonts).where(eq(brandFonts.id, row.id));
+    });
+    throw e;
+  }
+  return toFont(row);
 }
 
 async function loadFont(db: Db, id: string, userId: string): Promise<{ font: FontRow; role: Role }> {

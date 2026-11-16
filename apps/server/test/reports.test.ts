@@ -193,14 +193,18 @@ describe("hide rule", () => {
     expect(await ids("/api/assets?scope=public", uploader.cookie, "assets")).toContain(a);
   });
 
-  it("hides from by-hash too, except for the uploader", async () => {
+  it("hides from by-hash and direct asset endpoints, except for the uploader", async () => {
     const { uploader, reporters, viewer } = await crowd();
     const bytes = await png();
     const id = (await upload(uploader.cookie, { visibility: "public" }, bytes)).json().asset.id;
     const sha = createHash("sha256").update(bytes).digest("hex");
     for (const r of reporters) await report(r.cookie, "asset", id);
     expect((await call("GET", `/api/assets/by-hash/${sha}`, viewer.cookie)).statusCode).toBe(404);
+    expect((await call("GET", `/api/assets/${id}`, viewer.cookie)).statusCode).toBe(404);
+    expect((await call("GET", `/api/assets/${id}/file`, viewer.cookie)).statusCode).toBe(404);
+    expect((await call("GET", `/api/assets/${id}/thumb`, viewer.cookie)).statusCode).toBe(404);
     expect((await call("GET", `/api/assets/by-hash/${sha}`, uploader.cookie)).statusCode).toBe(200);
+    expect((await call("GET", `/api/assets/${id}`, uploader.cookie)).statusCode).toBe(200);
   });
 
   it("applies the same rule to public shapes", async () => {

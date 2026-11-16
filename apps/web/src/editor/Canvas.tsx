@@ -288,7 +288,7 @@ export default function Canvas({
       t.start = p;
       t.moved = false;
       if (pathMode) { t.press = e; t.pathDrag = false; return; } // replayed on a drag or a tap, never on a pinch
-      if (tool !== "select" && !readOnly) { const q = pointer(); return setDrag({ kind: "create", from: q, to: q, shift: false }); }
+      if (tool !== "select" && !readOnly) { stageRef.current!.setPointersPositions(e); const q = pointer(); if (q) setDrag({ kind: "create", from: q, to: q, shift: false }); return; }
       const shape = stageRef.current!.getIntersection({ x: p.x + r.width / 2, y: p.y + r.height / 2 });
       const hit = shape && hitOf(shape);
       if (hit === "tr") return;
@@ -313,7 +313,7 @@ export default function Canvas({
         onZoom(z.zoom);
         onPan(z.pan);
       } else if (t.pan) onPan({ x: t.pan.pan.x + p.x - t.pan.from.x, y: t.pan.pan.y + p.y - t.pan.from.y });
-      else if (drag) setDrag({ ...drag, to: pointer() });
+      else if (drag) { stageRef.current!.setPointersPositions(e); const q = pointer(); if (q) setDrag({ ...drag, to: q }); }
       else if (pathMode) pathInput.current?.hover(e);
     } else {
       if (!t.pts.delete(e.pointerId)) return;

@@ -145,7 +145,7 @@ export function registerAssetRoutes(
     const bytes = a && await storage.get(thumb ? `thumbs/${a.sha256}.webp` : `files/${a.sha256}`);
     if (!a || !bytes) throw new WorkspaceError("not_found");
     return reply.headers({ ...SECURITY_HEADERS, "content-type": thumb ? "image/webp" : CONTENT_TYPES[a.format] })
-      .send(Buffer.from(bytes));
+      .send(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
   };
   app.get("/api/assets/:id/file", serve(false));
   app.get("/api/assets/:id/thumb", serve(true));

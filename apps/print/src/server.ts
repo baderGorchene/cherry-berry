@@ -59,7 +59,7 @@ const realVersion = () =>
 class TooLargeError extends Error {}
 
 /** Streams the request body to the writable for `file`, enforcing the size limit and a PDF header in the first 1 KB. */
-async function receivePdf(req: IncomingMessage, ws: Writable, max: number): Promise<void> {
+async function receivePdf(req: IncomingMessage, ws: Writable, max: number, signal?: AbortSignal): Promise<void> {
   let size = 0;
   let head = Buffer.alloc(0);
   let checked = false;
@@ -90,7 +90,7 @@ async function receivePdf(req: IncomingMessage, ws: Writable, max: number): Prom
       }
     },
   });
-  await pipeline(req, guard, ws); // write-stream errors (ENOSPC, EIO) reject here instead of crashing the process
+  await pipeline(req, guard, ws, { signal }); // write-stream errors (ENOSPC, EIO) reject here instead of crashing the process
 }
 
 function send(res: ServerResponse, status: number, body: object | Buffer, type = "application/json") {
@@ -158,7 +158,7 @@ export function createPrintServer(opts: {
 
       dir = await mkdtemp(join(tmpdir(), "cherry-print-"));
       const input = join(dir, "in.pdf");
-      await receivePdf(req, (opts.openFile ?? createWriteStream)(input), maxBody);
+      await receivePdf(req, (opts.openFile ?? createWriteStream)(input), maxBody, AbortSignal.any([ac.signal, AbortSignal.timeout(30_000)]));
       const jobDir = dir;
       const run = async (args: string[]) => {
         if (ac.signal.aborted) throw new AbortedError(); // client left while queued: never start gs

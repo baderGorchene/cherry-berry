@@ -140,6 +140,13 @@ describe("shapes", () => {
     expect((await call("DELETE", "/api/shapes/not-a-uuid", ada.cookie)).statusCode).toBe(404);
   });
 
+  it("rejects overflowing coordinates that produce Infinity bounds", async () => {
+    const ada = await signUp(t.app, "ada@example.com");
+    const res = await call("POST", "/api/shapes", ada.cookie, body({ d: "M 0 0 L 1e308 0 M 0 0 L -1e308 0" }));
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_shape");
+  });
+
   it("requires a session", async () => {
     expect((await call("GET", "/api/shapes?scope=public")).statusCode).toBe(401);
     expect((await call("POST", "/api/shapes", undefined, body())).statusCode).toBe(401);

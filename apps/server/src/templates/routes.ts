@@ -15,7 +15,7 @@ const PublishBody = z.object({
   visibility: z.enum(["workspace", "public"]),
   license: z.enum(["cc0", "cc-by", "workspace-only"]),
   attribution: z.string().trim().max(300),
-  kitId: z.string().nullable().optional(),
+  kitId: z.string().uuid().nullable().optional(),
   // A 2 MB image is about 2.8 MB of base64; the service checks the decoded size.
   thumb: z.string().max(3_000_000).refine((s) => s.length % 4 === 0 && BASE64.test(s)),
 });
@@ -48,7 +48,8 @@ export function registerTemplateRoutes(
   app.get("/api/templates/:id/thumb", async (req, reply) => {
     const user = await requireUser(req);
     const bytes = await svc.getThumb(db, storage, user.id, parse(IdParams, req.params).id);
-    return reply.headers({ ...SECURITY_HEADERS, "content-type": "image/webp" }).send(Buffer.from(bytes));
+    return reply.headers({ ...SECURITY_HEADERS, "content-type": "image/webp" })
+      .send(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
   });
 
   app.post("/api/templates/:id/use", async (req, reply) => {

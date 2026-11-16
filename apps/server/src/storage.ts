@@ -25,19 +25,20 @@ export function s3Storage(cfg: Config["s3"]): Storage {
   const fail = async (what: string, res: Response) => {
     throw new Error(`S3 ${what} failed: ${res.status} ${(await res.text()).slice(0, 200)}`);
   };
+  const timeout = () => AbortSignal.timeout(30_000);
   return {
     async put(key, body, contentType) {
-      const res = await client.fetch(url(key), { method: "PUT", body: body as BodyInit, headers: { "content-type": contentType } });
+      const res = await client.fetch(url(key), { method: "PUT", body: body as BodyInit, headers: { "content-type": contentType }, signal: timeout() });
       if (!res.ok) await fail("put", res);
     },
     async get(key) {
-      const res = await client.fetch(url(key));
+      const res = await client.fetch(url(key), { signal: timeout() });
       if (res.status === 404) return null;
       if (!res.ok) await fail("get", res);
       return new Uint8Array(await res.arrayBuffer());
     },
     async delete(key) {
-      const res = await client.fetch(url(key), { method: "DELETE" });
+      const res = await client.fetch(url(key), { method: "DELETE", signal: timeout() });
       if (!res.ok && res.status !== 404) await fail("delete", res);
     },
   };

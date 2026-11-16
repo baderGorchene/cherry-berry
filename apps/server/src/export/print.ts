@@ -7,9 +7,10 @@ const base = (u: string) => (u.endsWith("/") ? u : `${u}/`);
 const unavailable = () => new HttpError(503, "print_unavailable");
 
 /** POSTs to the print service. Network errors, timeouts and any non-2xx status all become 503 print_unavailable. */
-async function post(url: string, body: Uint8Array): Promise<Response> {
+async function post(url: string, body: Uint8Array, signal?: AbortSignal): Promise<Response> {
   try {
-    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/pdf" }, body: body as BodyInit, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    const sig = signal ? AbortSignal.any([AbortSignal.timeout(TIMEOUT_MS), signal]) : AbortSignal.timeout(TIMEOUT_MS);
+    const res = await fetch(url, { method: "POST", headers: { "content-type": "application/pdf" }, body: body as BodyInit, signal: sig });
     if (!res.ok) { await res.body?.cancel(); throw unavailable(); }
     return res;
   } catch (e) {
@@ -18,16 +19,16 @@ async function post(url: string, body: Uint8Array): Promise<Response> {
 }
 
 /** The RGB PDF converted to CMYK PDF/X by the print service. */
-export async function toPdfx(printUrl: string, pdf: Uint8Array): Promise<Uint8Array> {
-  const res = await post(new URL("pdfx", base(printUrl)).href, pdf);
+export async function toPdfx(printUrl: string, pdf: Uint8Array, signal?: AbortSignal): Promise<Uint8Array> {
+  const res = await post(new URL("pdfx", base(printUrl)).href, pdf, signal);
   try { return new Uint8Array(await res.arrayBuffer()); } catch { throw unavailable(); }
 }
 
 export type Plate = { page: number; name: string; png: Uint8Array };
 
 /** One greyscale PNG per ink per page. */
-export async function toPlates(printUrl: string, pdf: Uint8Array, dpi = 150): Promise<Plate[]> {
-  const res = await post(new URL(`plates?dpi=${dpi}`, base(printUrl)).href, pdf);
+export async function toPlates(printUrl: string, pdf: Uint8Array, dpi = 150, signal?: AbortSignal): Promise<Plate[]> {
+  const res = await post(new URL(`plates?dpi=${dpi}`, base(printUrl)).href, pdf, signal);
   try {
     const { plates } = (await res.json()) as { plates: { page: number; name: string; png: string }[] };
     if (!Array.isArray(plates) || !plates.length

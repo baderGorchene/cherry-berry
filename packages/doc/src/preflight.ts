@@ -32,7 +32,7 @@ export function usedAssetIds(pages: Page[]): string[] {
 }
 
 const ref = (h: Hit) => ({ pageId: h.pageId, nodeId: h.node.id });
-const MM_PX = 96 / 25.4;
+const SAFE_MARGIN_PX = toPx(5, "mm");
 const hasText = (n: CherryNode): boolean => n.kind === "text" || (n.kind === "group" && n.children.some(hasText));
 
 export function preflight(
@@ -67,7 +67,7 @@ export function preflight(
     const near = hits.filter((h) => {
       if (!h.top || !hasText(h.node)) return false;
       const p = pages.find((q) => q.id === h.pageId)!;
-      const m = 5 * MM_PX, n = h.node;
+      const m = SAFE_MARGIN_PX, n = h.node;
       const [x, y, w, hh] = [toPx(n.x, p.unit), toPx(n.y, p.unit), toPx(n.width, p.unit), toPx(n.height, p.unit)];
       return x < m || y < m || x + w > toPx(p.width, p.unit) - m || y + hh > toPx(p.height, p.unit) - m;
     });

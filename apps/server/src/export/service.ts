@@ -75,15 +75,15 @@ let running = 0;
 
 /** At most MAX_EXPORTS at once in this process; one more is refused with 429 rate_limited. */
 export async function exportDesign(
-  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody, printUrl?: string,
+  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody, printUrl?: string, signal?: AbortSignal,
 ): Promise<Out & { filename: string }> {
   if (running >= MAX_EXPORTS) throw new HttpError(429, "rate_limited");
   running++;
-  try { return await renderExport(db, storage, collab, userId, designId, body, printUrl); } finally { running--; }
+  try { return await renderExport(db, storage, collab, userId, designId, body, printUrl, signal); } finally { running--; }
 }
 
 async function renderExport(
-  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody, printUrl?: string,
+  db: Db, storage: Storage, collab: Collab, userId: string, designId: string, body: ExportBody, printUrl?: string, signal?: AbortSignal,
 ): Promise<Out & { filename: string }> {
   if ((body.format === "pdf-x" || body.format === "plates") && !printUrl) throw new HttpError(400, "invalid_body");
   const { design } = await loadWithRole(db, designId, userId);
@@ -94,6 +94,7 @@ async function renderExport(
   if (pages.length !== wanted.size) throw new HttpError(400, "invalid_pages");
   const scale = body.scale ?? 1;
   if ((["png", "jpg", "gif"].includes(body.format) && !pages.every((p) => rasterOk(rasterSize(p, scale))))
+    || (body.format === "plates" && !pages.every((p) => rasterOk(rasterSize(p, 150 / 96))))
     || exportPixels(body.format, pages, scale) > EXPORT_PIXEL_BUDGET) {
     throw new HttpError(400, "export_too_large");
   }
@@ -119,8 +120,8 @@ async function renderExport(
     case "pdf-x": case "plates": {
       const pdf = (await writePdf(pages, images, true, body.cropMarks ?? true, fonts)).bytes;
       out = body.format === "pdf-x"
-        ? { bytes: await toPdfx(printUrl!, pdf), mime: "application/pdf", ext: "pdf" }
-        : { bytes: zipPlates(await toPlates(printUrl!, pdf)), mime: "application/zip", ext: "zip" };
+        ? { bytes: await toPdfx(printUrl!, pdf, signal), mime: "application/pdf", ext: "pdf" }
+        : { bytes: zipPlates(await toPlates(printUrl!, pdf, 150, signal)), mime: "application/zip", ext: "zip" };
       return { ...out, filename: body.format === "plates" ? `${base}-plates.zip` : `${base}.pdf` };
     }
     case "png": case "jpg": out = await writeRaster(pages, images, body.format, scale, body.transparent ?? false, base, fonts); break;

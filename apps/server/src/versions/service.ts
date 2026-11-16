@@ -115,19 +115,23 @@ export async function restoreVersion(db: Db, collab: Collab, userId: string, ver
   // Editors may not restore across a brand lock; owners and admins may.
   if (role === "editor" && brandLockViolation(cur, target)) throw new WorkspaceError("brand_locked");
   // The check is repeated on the live document itself, so an edit that landed since `state` was read cannot slip through.
-  // The snapshot is taken from the same moment and saved once the restore has gone through, so a refusal leaves no trace.
   let prior: Uint8Array | undefined;
-  try {
-    // The "restore" origin keeps this off every client's undo stack.
-    await collab.withDocument(design.id, (doc) => {
-      const now = yToDoc(doc);
-      if (role === "editor" && now.ok && brandLockViolation(now.doc, target)) throw new WorkspaceError("brand_locked");
-      prior = Y.encodeStateAsUpdate(doc);
-      replaceDocument(doc, target, "restore");
-    }, userId);
-  } finally {
-    if (prior) await insertVersion(db, { designId: design.id, kind: "restore", name: "Before restore", summary: `Before restoring ${label(v)}`, state: prior, createdBy: userId });
-  }
+  // The "restore" origin keeps this off every client's undo stack.
+  await collab.withDocument(design.id, (doc) => {
+    const now = yToDoc(doc);
+    if (role === "editor" && now.ok && brandLockViolation(now.doc, target)) throw new WorkspaceError("brand_locked");
+    prior = Y.encodeStateAsUpdate(doc);
+    replaceDocument(doc, target, "restore");
+  }, userId);
+  const ids = [...new Set(target.pages.flatMap((p) => [...imageAssetIds(p.nodes)]))].filter((i) => UUID.test(i));
+  await db.transaction(async (tx) => {
+    await insertVersion(tx, { designId: design.id, kind: "restore", name: "Before restore", summary: `Before restoring ${label(v)}`, state: prior!, createdBy: userId });
+    await tx.delete(assetUses).where(eq(assetUses.designId, design.id));
+    if (ids.length) {
+      const live = await tx.select({ id: assets.id }).from(assets).where(and(inArray(assets.id, ids), usableInDesign(userId, design.workspaceId)));
+      if (live.length) await tx.insert(assetUses).values(live.map((x) => ({ designId: design.id, assetId: x.id }))).onConflictDoNothing();
+    }
+  });
   const [row] = await db.select(summaryColumns).from(designs).where(eq(designs.id, design.id));
   return summary(row!);
 }

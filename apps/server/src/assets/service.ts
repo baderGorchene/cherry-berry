@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull, or, sql, type SQL } from "drizzle-orm";
 import type { Db } from "../db/client";
-import { assetUses, assets, designs, memberships, user, workspaces } from "../db/schema";
+import { assetUses, assets, designs, memberships, reports, user, workspaces } from "../db/schema";
 import { escapeLike } from "../http";
 import { notHidden } from "../reports/hide";
 import type { Storage } from "../storage";
@@ -48,10 +48,15 @@ const visibleTo = (userId: string): SQL => and(
 
 type Access = Pick<Row, "id" | "createdBy" | "visibility" | "workspaceId" | "deletedAt">;
 
-/** Own, public, or workspace in a workspace the user belongs to; never deleted. Used for listing and recording uses. */
+/** Own, public (unless hidden by 3+ open reports), or workspace in a workspace the user belongs to; never deleted. */
 export async function canSeeAsset(db: Db, userId: string, asset: Access): Promise<boolean> {
   if (asset.deletedAt) return false;
-  if (asset.createdBy === userId || asset.visibility === "public") return true;
+  if (asset.createdBy === userId) return true;
+  if (asset.visibility === "public") {
+    const [r] = await db.select({ n: sql<number>`count(*)::int` }).from(reports)
+      .where(and(eq(reports.targetType, "asset"), eq(reports.targetId, asset.id), eq(reports.status, "open"))) as [{ n: number }];
+    return r.n < 3;
+  }
   return asset.visibility === "workspace" && !!asset.workspaceId && !!(await getRole(db, asset.workspaceId, userId));
 }
 
@@ -65,9 +70,10 @@ export async function canReadAsset(db: Db, userId: string, asset: Access): Promi
   return !!hit;
 }
 
-/** Assets a design in `workspaceId` may use for `userId`: not deleted, and public, the user's own, or visible in that workspace. */
+/** Assets a design in `workspaceId` may use for `userId`: not deleted, not hidden, and public, the user's own, or visible in that workspace. */
 export const usableInDesign = (userId: string, workspaceId: string): SQL | undefined => and(
   isNull(assets.deletedAt),
+  notHidden("asset", assets.id, assets.visibility, assets.createdBy, userId),
   or(eq(assets.visibility, "public"), eq(assets.createdBy, userId),
     and(eq(assets.visibility, "workspace"), eq(assets.workspaceId, workspaceId))),
 );
@@ -110,30 +116,36 @@ export async function createAsset(
   db: Db, storage: Storage, userId: string, img: Ingested, meta: AssetMeta,
 ): Promise<{ asset: Asset; duplicate: boolean }> {
   const workspaceId = await placement(db, userId, meta);
-  const existing = await findByHash(db, userId, img.sha256, workspaceId);
-  if (existing) return { asset: existing, duplicate: true };
-  // Row first (short transaction under the lock, so a concurrent hard delete sees it and keeps the objects),
-  // then the objects; if the put fails the row goes again. No connection is held across the upload.
-  const row = await db.transaction(async (tx) => {
+  // Dedupe check + row insert share the advisory lock so concurrent identical uploads don't create duplicate rows.
+  // No DB connection is held across the S3 upload; if the put fails, the row (and any partial file) is cleaned up.
+  const res = await db.transaction(async (tx) => {
     await lockBytes(tx, img.sha256);
+    const existing = await findByHash(tx as unknown as Db, userId, img.sha256, workspaceId);
+    if (existing) return { duplicate: true as const, asset: existing };
     const [r] = await tx.insert(assets).values({
       createdBy: userId, workspaceId, visibility: meta.visibility, title: meta.title, tags: meta.tags,
       license: meta.license, attribution: meta.attribution, kind: img.kind, format: img.format,
       width: img.width, height: img.height, bytes: img.file.length, sha256: img.sha256, sanitized: img.sanitized,
     }).returning({ id: assets.id });
-    return r!;
+    return { duplicate: false as const, id: r!.id };
   });
+  if (res.duplicate) return { asset: res.asset, duplicate: true };
   try {
     await storage.put(`files/${img.sha256}`, img.file, img.contentType);
     await storage.put(`thumbs/${img.sha256}.webp`, img.thumb, "image/webp");
   } catch (e) {
     await db.transaction(async (tx) => {
       await lockBytes(tx, img.sha256);
-      await tx.delete(assets).where(eq(assets.id, row.id));
+      await tx.delete(assets).where(eq(assets.id, res.id));
+      const [other] = await tx.select({ id: assets.id }).from(assets).where(eq(assets.sha256, img.sha256)).limit(1);
+      if (!other) {
+        await storage.delete(`files/${img.sha256}`).catch(() => {});
+        await storage.delete(`thumbs/${img.sha256}.webp`).catch(() => {});
+      }
     });
     throw e;
   }
-  return { asset: (await getAsset(db, userId, row.id))!, duplicate: false };
+  return { asset: (await getAsset(db, userId, res.id))!, duplicate: false };
 }
 
 export async function listAssets(

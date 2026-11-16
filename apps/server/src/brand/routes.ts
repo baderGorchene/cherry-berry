@@ -80,6 +80,7 @@ export function registerBrandRoutes(
   app.get("/api/fonts/:id/file", async (req, reply) => {
     const user = await requireUser(req);
     const { format, bytes } = await svc.getFontFile(db, storage, user.id, parse(IdParams, req.params).id);
-    return reply.headers({ ...SECURITY_HEADERS, "content-type": FONT_TYPES[format] }).send(Buffer.from(bytes));
+    return reply.headers({ ...SECURITY_HEADERS, "content-type": FONT_TYPES[format] })
+      .send(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
   });
 }

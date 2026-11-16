@@ -4,7 +4,7 @@ import { HocuspocusProvider } from "@hocuspocus/provider";
 import { createUndoManager, yToDoc } from "@cherry/doc";
 import { ApiError, errorMessage, getDesign, type Design, type Role } from "../api";
 
-export type SaveStatus = "saved" | "unsaved" | "saving" | "offline" | "error";
+export type SaveStatus = "saved" | "saving" | "offline" | "error";
 
 export type DesignState =
   | { state: "loading" }

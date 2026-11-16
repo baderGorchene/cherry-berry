@@ -6,7 +6,7 @@ import type { WebSocket } from "ws";
 import * as Y from "yjs";
 import type { Auth } from "../auth";
 import type { Db } from "../db/client";
-import { designs } from "../db/schema";
+import { designs, user } from "../db/schema";
 import { checkUpdate, loadWithRole, persistState } from "../designs/service";
 import { HttpError } from "../errors";
 import type { Role } from "../workspaces/service";
@@ -51,6 +51,9 @@ export function createCollab(db: Db, auth: Auth, publicUrl: string): Collab {
     async onAuthenticate({ requestHeaders, documentName, connectionConfig }) {
       const session = await auth.api.getSession({ headers: requestHeaders });
       if (!session) throw reject(null, "unauthorized");
+      // Catches a session created in the instant before a suspension deleted the user's sessions.
+      const [u] = await db.select({ at: user.suspendedAt }).from(user).where(eq(user.id, session.user.id));
+      if (u?.at) throw reject(null, "suspended");
       // Postgres compares uuids case-insensitively; an upper-case alias would load a second live document for the row.
       if (documentName !== documentName.toLowerCase()) throw reject(null, "not_found");
       let role: Role;

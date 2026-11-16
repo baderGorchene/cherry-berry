@@ -302,4 +302,12 @@ describe("templates", () => {
     expect((await q("category=nope")).statusCode).toBe(400);
     expect((await call("GET", "/api/templates?scope=workspace", ada.cookie)).statusCode).toBe(400);
   });
+
+  it("rejects empty string kitId with 400", async () => {
+    const { ada, ws } = await setup();
+    const d = await newDesign(ada.cookie, ws);
+    const res = await publish(ada.cookie, d.id, { kitId: "" });
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error).toBe("invalid_body");
+  });
 });

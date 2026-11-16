@@ -31,7 +31,7 @@ function normalize(d: string): { d: string; width: number; height: number } {
     const b = pathBounds(m);
     const out = transformPath(toPathData(m), [1, 0, 0, 1, -b.x, -b.y]);
     const { width, height } = pathBounds(parsePath(out));
-    if (!(width > 0 || height > 0) || out.length > MAX_NORMALIZED_D) throw new Error("invalid");
+    if (!(width > 0 || height > 0) || !Number.isFinite(width) || !Number.isFinite(height) || out.length > MAX_NORMALIZED_D) throw new Error("invalid");
     return { d: out, width, height };
   } catch {
     throw new WorkspaceError("invalid_shape");

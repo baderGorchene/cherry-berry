@@ -93,12 +93,15 @@ export async function actOnQueue(
   if (action === "suspend") {
     const [u] = await db.select({ email: user.email }).from(user).where(eq(user.id, t.by));
     if (u && isAdmin(config, u.email)) throw new HttpError(400, "invalid_body"); // refuse before changing anything
-    // Suspend first: if the removal below fails the admin can retry, and suspending twice is harmless.
-    await suspendUser(db, config, t.by);
-    onSuspend?.(t.by);
   }
-  if (item.targetType === "asset") await deleteAssetAsAdmin(db, storage, item.targetId);
-  else if (item.targetType === "shape") await db.delete(shapes).where(eq(shapes.id, item.targetId));
-  else await deleteTemplateAsAdmin(db, storage, item.targetId);
-  await close("removed");
+  await db.transaction(async (tx) => {
+    const tdb = tx as unknown as Db;
+    if (action === "suspend") await suspendUser(tdb, config, t.by);
+    if (item.targetType === "asset") await deleteAssetAsAdmin(tdb, storage, item.targetId);
+    else if (item.targetType === "shape") await tx.delete(shapes).where(eq(shapes.id, item.targetId));
+    else await deleteTemplateAsAdmin(tdb, storage, item.targetId);
+    await tx.update(reports).set({ status: "removed", resolvedBy: adminId, resolvedAt: sql`now()` }).where(and(
+      eq(reports.targetType, item.targetType), eq(reports.targetId, item.targetId), eq(reports.status, "open")));
+  });
+  if (action === "suspend") onSuspend?.(t.by);
 }
