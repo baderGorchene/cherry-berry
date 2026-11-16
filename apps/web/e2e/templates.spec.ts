@@ -1,8 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, openAsEditor, openAsViewer, signUp, unique, uniquePng } from "./helpers";
+import { addShape, createWorkspace, editorReady, fileMenu, openAsEditor, openAsViewer, openPanel, panel, signUp, unique, uniquePng, newDesign } from "./helpers";
 
-const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
-const props = (page: Page) => page.getByRole("complementary", { name: "Properties" });
+const layers = (page: Page) => page.getByRole("complementary", { name: "Layers panel" });
+const props = (page: Page) => page.getByRole("toolbar", { name: "Selection", exact: true });
 const canvas = (page: Page) => page.getByLabel("Page 1 canvas");
 const dialog = (page: Page) => page.getByRole("dialog", { name: "Publish as a template" });
 
@@ -25,18 +25,16 @@ async function newKit(page: Page, rules?: Record<string, boolean>) {
 
 /** On the home page of a workspace: starts a social post with a rectangle on it. */
 async function design(page: Page) {
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  const box = (await canvas(page).boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await editorReady(page);
+  await addShape(page, "Rectangle");
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("Saved");
 }
 
 async function openPublish(page: Page) {
-  await page.getByRole("button", { name: "Publish", exact: true }).click();
+  await fileMenu(page, "Publish as template");
   await expect(dialog(page)).toBeVisible();
   await dialog(page).getByLabel("Name").fill("Launch post");
   await dialog(page).getByLabel("Category").selectOption({ label: "Social" });
@@ -61,6 +59,37 @@ test("publish a workspace template and start from it", async ({ page }) => {
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await expect(page.getByLabel("Design title")).toHaveValue("Launch post");
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
+});
+
+test("a workspace template's pages insert after the current page; viewers can't insert", async ({ page, browser }) => {
+  await signUp(page, unique("ti"));
+  await createWorkspace(page, "Tpl Insert");
+  await design(page);
+  await openPublish(page);
+  await submit(page);
+  await expect(dialog(page).getByRole("status")).toHaveText("Published");
+  await dialog(page).getByRole("button", { name: "Close" }).click();
+  await expect(dialog(page)).toBeHidden();
+
+  await openPanel(page, "Templates");
+  const fits = panel(page, "Templates").getByRole("region", { name: "Fits this page" });
+  await expect(fits.getByRole("button", { name: "Open Launch post as a new design" })).toBeVisible();
+  await fits.getByRole("button", { name: "Insert Launch post" }).click();
+  const thumbs = page.getByRole("navigation", { name: "Pages" }).getByRole("button", { name: /^Page \d$/ });
+  await expect(thumbs).toHaveCount(2);
+  await expect(thumbs.nth(1)).toHaveAttribute("aria-current", "page");
+  await openPanel(page, "Layers");
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
+  await page.keyboard.press("Control+Z");
+  await expect(thumbs).toHaveCount(1); // one undo step
+  await page.keyboard.press("Control+Shift+Z");
+  await expect(thumbs).toHaveCount(2);
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  const viewer = await openAsViewer(browser, page);
+  await openPanel(viewer, "Templates");
+  await expect(panel(viewer, "Templates").getByRole("button", { name: "Insert Launch post" })).toBeDisabled();
+  await expect(panel(viewer, "Templates").getByRole("button", { name: "Open Launch post as a new design" })).toBeDisabled();
 });
 
 test("brand template keeps its locks", async ({ page, browser }) => {
@@ -113,9 +142,9 @@ test("requires approval when the kit says so", async ({ page, browser }) => {
 test("public template with a workspace visual is refused", async ({ page }) => {
   await signUp(page, unique("tv"));
   await createWorkspace(page, "Tpl Visual");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
   const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
   const up = await page.request.post("/api/assets", {
     multipart: {
@@ -124,11 +153,11 @@ test("public template with a workspace visual is refused", async ({ page }) => {
     },
   });
   expect(up.status()).toBe(201);
-  await page.getByRole("button", { name: "Visuals" }).click();
-  const visuals = page.getByRole("complementary", { name: "Visuals panel" });
+  await openPanel(page, "Uploads");
+  const visuals = panel(page, "Uploads");
   await visuals.getByRole("button", { name: "Workspace", exact: true }).click();
   await visuals.getByRole("button", { name: "Dot" }).click();
-  await page.getByRole("tab", { name: "Layers", exact: true }).click();
+  await openPanel(page, "Layers");
   await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toBeVisible();
   await expect(page.getByRole("status")).toHaveText("Saved");
 
@@ -176,4 +205,53 @@ test("viewer can browse but not use", async ({ page, browser }) => {
   await expect(viewer.getByRole("region", { name: "Tpl Viewers" }).getByRole("button", { name: "Use Launch post" })).toBeDisabled();
   await expect(viewer.getByRole("region", { name: "Tpl Viewers" }).getByText("Viewers can't create designs")).toBeVisible();
   await expect(viewer.getByRole("button", { name: "Publish a template" })).toHaveCount(0);
+});
+
+test("built-in starters are grouped by category; See all and ?category filter; Use opens the editor", async ({ page }) => {
+  await signUp(page, unique("tst"));
+  await createWorkspace(page, "Starter Lab");
+  await page.goto("/templates");
+  const social = page.getByRole("region", { name: "Social", exact: true });
+  const print = page.getByRole("region", { name: "Print", exact: true });
+  await expect(social).toBeVisible();
+  await expect(print).toBeVisible();
+  await expect(social.getByText("Built-in").first()).toBeVisible();
+  await expect(social.getByRole("link", { name: "See all" })).toHaveAttribute("href", "/templates?category=social");
+
+  await print.getByRole("link", { name: "See all" }).click();
+  await expect(page).toHaveURL(/category=print$/);
+  await expect(page.getByRole("region", { name: "Social", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "Print", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "See all" })).toHaveCount(0);
+
+  await page.getByRole("region", { name: "Print", exact: true }).getByRole("button", { name: /^Use / }).first().click();
+  await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
+  await editorReady(page);
+});
+
+test("on a print starter, clicking empty page shows the nothing-selected toolbar (the bleed background doesn't take the click)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await signUp(page, unique("tsb"));
+  await createWorkspace(page, "Bleed Lab");
+  await page.goto("/templates?category=print");
+  await page.getByRole("button", { name: "Use Jazz night flyer" }).click();
+  await editorReady(page);
+  const bar = page.getByRole("toolbar", { name: "Selection", exact: true });
+  await page.getByRole("button", { name: "Fit", exact: true }).click();
+  const zoom = parseFloat(await page.getByTitle("Zoom level").innerText()) / 100;
+  const c = (await page.getByLabel(/ canvas$/).boundingBox())!;
+  // 266 mm down, mid-width: between the body copy and the footer, where only the background rect lies. Fit centres the page.
+  const mm = (96 / 25.4) * zoom;
+  await page.mouse.click(c.x + c.width / 2, c.y + c.height / 2 + (266 - 297 / 2) * mm);
+  await expect(bar.getByLabel("Page width")).toHaveValue("210");
+  await expect(bar.getByRole("group", { name: "Page size" })).toBeVisible();
+});
+
+test("viewers can't use built-in starters", async ({ page, browser }) => {
+  await signUp(page, unique("tsv"));
+  await createWorkspace(page, "Starter Viewers");
+  await design(page);
+  const viewer = await openAsViewer(browser, page);
+  await viewer.goto("/templates");
+  await expect(viewer.getByRole("region", { name: "Social", exact: true }).getByRole("button", { name: /^Use / }).first()).toBeDisabled();
 });

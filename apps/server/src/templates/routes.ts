@@ -52,6 +52,11 @@ export function registerTemplateRoutes(
       .send(Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength));
   });
 
+  app.get("/api/templates/:id/doc", async (req) => {
+    const user = await requireUser(req);
+    return { doc: await svc.templateDoc(db, user.id, parse(IdParams, req.params).id, parse(UseBody, req.query).workspaceId) };
+  });
+
   app.post("/api/templates/:id/use", async (req, reply) => {
     const user = await requireUser(req);
     const design = await svc.useTemplate(db, user.id, parse(IdParams, req.params).id, parse(UseBody, req.body).workspaceId);

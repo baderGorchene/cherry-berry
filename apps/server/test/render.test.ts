@@ -7,7 +7,7 @@ import { describe, expect, it } from "vitest";
 import "konva/skia-backend";
 import Konva from "konva";
 import { Canvas, FontLibrary, loadImage, type Image } from "skia-canvas";
-import { PT_PX, UNIT_PX, toPx, type CherryNode, type Page } from "@cherry/doc";
+import { FONTS, PT_PX, UNIT_PX, toPx, type CherryNode, type Page } from "@cherry/doc";
 import { drawPage, loadImages, nodePng, pagePx } from "../src/export/render";
 import { availableFamilies, kitFamily, registerBuiltInFonts, useKitFonts } from "../src/export/fonts";
 
@@ -193,7 +193,7 @@ describe("render", () => {
     expect(FontLibrary.has("Inter") && FontLibrary.has("Space Grotesk") && FontLibrary.has(kitFamily(kitId, "Kit Sans"))).toBe(true);
     expect(FontLibrary.has("Kit Sans")).toBe(false);
     expect(kitFamily(randomUUID(), "Kit Sans")).not.toBe(kitFamily(kitId, "Kit Sans"));
-    expect(availableFamilies(["Kit Sans"])).toEqual(["Inter", "Space Grotesk", "Kit Sans"]);
+    expect(availableFamilies(["Kit Sans"])).toEqual([...FONTS.map((f) => f.family), "Kit Sans"]);
   });
 
   it("a corrupt cached kit font is replaced by the real bytes", async () => {
@@ -219,5 +219,17 @@ describe("render", () => {
     expect(Buffer.from(textAs(leak)).equals(fallback)).toBe(true);
     expect(Buffer.from(textAs(leak.toUpperCase())).equals(fallback)).toBe(true);
     expect(Buffer.from(textAs(`Nope Sans, ${leak}`)).equals(fallback)).toBe(true);
+  });
+});
+
+describe("font catalogue", () => {
+  it("registers every family and renders them differently", async () => {
+    const { FONTS } = await import("@cherry/doc");
+    registerBuiltInFonts();
+    for (const f of FONTS) expect(FontLibrary.has(f.family), f.family).toBe(true);
+    const text = (fontFamily: string): CherryNode => ({ ...base, id: "t", kind: "text", x: 0, y: 0, width: 300, height: 80, text: "Hamburgefons",
+      fontFamily, fontSize: 24, fontWeight: 400, lineHeight: 1.2, letterSpacing: 0, align: "left", fill: solid("#000000") }) as CherryNode;
+    const px = (family: string) => Buffer.from(ours(page([text(family)], { width: 300, height: 80 }), new Map()).buffer);
+    expect(px("Playfair Display").equals(px("Inter"))).toBe(false);
   });
 });

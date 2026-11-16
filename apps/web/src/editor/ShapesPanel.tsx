@@ -2,15 +2,19 @@ import { useRef, useState } from "react";
 import * as Y from "yjs";
 import { addNode, type CherryNode, type Page } from "@cherry/doc";
 import { InvalidSvg, parsePath, pathBounds, scalePath, svgToPaths, transformPath } from "@cherry/vector";
-import type { Shape } from "../api";
+import { assetUrl, type Shape } from "../api";
+import { useAssetList } from "../library/assets";
 import ReportDialog from "../library/ReportDialog";
 import { useShapeList } from "./shapeForm";
 import type { Tool } from "./Canvas";
 import { ELEMENT_CATEGORIES, ELEMENTS, type ElementCategory, type ElementPreset } from "./elements";
 import { SHAPES } from "./Toolbar";
+import { placeAsset } from "./VisualsPanel";
 
 export const TABS = [["basic", "Basic"], ["mine", "My shapes"], ["workspace", "Workspace"], ["public", "Public"]] as const;
-type TabId = (typeof TABS)[number][0];
+// The editor's Elements panel also lists the workspace's SVG visuals.
+const PANEL_TABS = [...TABS, ["svg", "SVG visuals"]] as const;
+type TabId = (typeof PANEL_TABS)[number][0];
 
 /** A library shape as a path node whose longer side is 25% of the page's shorter side, centred on the page. */
 export function shapeNode(s: Shape, page: Page): CherryNode {
@@ -78,15 +82,16 @@ export function ShapeThumb({ s, size = 40 }: { s: Pick<Shape, "d" | "width" | "h
   );
 }
 
-export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, onTool, onSelect }: {
-  ydoc: Y.Doc; page: Page; workspaceId: string; readOnly: boolean; act(fn: () => void): void;
+export default function ShapesPanel({ ydoc, page, workspaceId, designId, readOnly, act, onTool, onSelect }: {
+  ydoc: Y.Doc; page: Page; workspaceId: string; designId: string; readOnly: boolean; act(fn: () => void): void;
   onTool(t: Tool): void; onSelect(ids: string[]): void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [tab, setTab] = useState<TabId>("basic");
   const [cat, setCat] = useState<ElementCategory | "All">("All");
   const [text, setText] = useState("");
-  const { res, retry } = useShapeList(tab === "basic" ? null : tab, workspaceId, text);
+  const { res, retry } = useShapeList(tab === "basic" || tab === "svg" ? null : tab, workspaceId, text);
+  const svgs = useAssetList("workspace", { workspaceId: tab === "svg" ? workspaceId : undefined, kind: "svg" }, text);
   const [importError, setImportError] = useState("");
   const [reporting, setReporting] = useState<Shape | null>(null);
   const onFile = async (file: File | undefined) => {
@@ -113,9 +118,9 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
   const filteredBasic = SHAPES.filter((s) => !q || s.label.toLowerCase().includes(q));
 
   return (
-    <aside aria-label="Shapes panel" className="ed-shapes">
+    <aside aria-label="Elements panel" className="ed-shapes">
       <div role="tablist" className="ed-tabs">
-        {TABS.map(([id, label]) => (
+        {PANEL_TABS.map(([id, label]) => (
           <button key={id} role="tab" aria-selected={tab === id} className={`ed-mini${tab === id ? " ed-ib-on" : ""}`}
             onClick={() => setTab(id)}>{label}</button>
         ))}
@@ -155,6 +160,25 @@ export default function ShapesPanel({ ydoc, page, workspaceId, readOnly, act, on
           {filteredBasic.length === 0 && filteredElements.length === 0 && (
             <p className="muted" style={{ fontSize: 13 }}>No elements match “{text.trim()}”</p>
           )}
+        </>
+      ) : tab === "svg" ? (
+        <>
+          <input type="search" aria-label="Search SVG visuals" placeholder="Search SVG visuals" value={text} onChange={(e) => setText(e.target.value)} />
+          {!svgs.res ? <p className="muted" style={{ fontSize: 13 }}>Loading…</p>
+            : "error" in svgs.res ? (
+              <div><p role="alert" className="ed-err">{svgs.res.error}</p><button className="ed-mini" onClick={svgs.retry}>Retry</button></div>
+            ) : !svgs.res.assets.length ? <p className="muted" style={{ fontSize: 13 }}>No SVG visuals in this workspace yet</p>
+              : (
+                <div className="ed-shapegrid">
+                  {svgs.res.assets.map((a) => (
+                    <button key={a.id} className="ed-shape" disabled={readOnly} title={a.title}
+                      onClick={() => void placeAsset(ydoc, page, designId, a, act, onSelect).then((e) => setImportError(e ?? ""))}>
+                      <img src={assetUrl(a.id, "thumb")} alt="" loading="lazy" />
+                      <span>{a.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
         </>
       ) : (
         <>

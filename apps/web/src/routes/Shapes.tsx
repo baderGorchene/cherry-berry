@@ -5,7 +5,8 @@ import {
   ApiError, deleteShape, errorMessage, myWorkspaces, saveShape, type Shape, type Workspace,
 } from "../api";
 import { currentWorkspace, useSession } from "../App";
-import { readSvg, ShapeThumb, TABS } from "../editor/ShapesPanel";
+import { readSvg, ShapeThumb, TABS, thumbBox } from "../editor/ShapesPanel";
+import { ELEMENT_CATEGORIES, ELEMENTS } from "../editor/elements";
 import { ShapeFields, shapePayload, useShapeForm, useShapeList } from "../editor/shapeForm";
 import { SHAPES } from "../editor/Toolbar";
 import ReportDialog from "../library/ReportDialog";
@@ -90,7 +91,7 @@ export default function Shapes() {
           <header className="page-head">
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
               <h1 className="page-title">Shapes</h1>
-              <p className="page-sub">Basic shapes and the shapes your team saved.</p>
+              <p className="page-sub">The built-in catalogue and the shapes your team saved.</p>
             </div>
           </header>
           <div role="tablist" className="tabs-u">
@@ -99,13 +100,33 @@ export default function Shapes() {
             ))}
           </div>
           {tab === "basic" ? (
-            <ul className="tiles tiles-sq">
-              {SHAPES.map((s) => (
-                <li key={s.kind} className="card" style={cell}>
-                  {s.icon}<span style={{ color: "var(--ink)", fontSize: 14 }}>{s.label.replace(/ \(.\)$/, "")}</span>
-                </li>
+            <>
+              <section className="sec" aria-label="Basic shapes">
+                <h2 className="sec-title">Basic shapes</h2>
+                <ul className="tiles tiles-sq">
+                  {SHAPES.map((s) => (
+                    <li key={s.kind} className="card" style={cell}>
+                      {s.icon}<span style={{ color: "var(--ink)", fontSize: 14 }}>{s.label.replace(/ \(.\)$/, "")}</span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+              {ELEMENT_CATEGORIES.map((c) => (
+                <section key={c} className="sec" aria-label={c}>
+                  <h2 className="sec-title">{c}</h2>
+                  <ul className="tiles tiles-sq">
+                    {ELEMENTS.filter((el) => el.category === c).map((el) => (
+                      <li key={el.id} className="card" style={cell}>
+                        <svg viewBox={thumbBox(el)} width="48" height="48" aria-hidden="true">
+                          <path d={el.d} fill={el.fill?.color ?? "#8E1EA2"} fillRule={el.fillRule} />
+                        </svg>
+                        <span style={{ color: "var(--ink)", fontSize: 14 }}>{el.name}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
+            </>
           ) : (
             <>
               <input className="inp" type="search" aria-label="Search shapes" placeholder="Search shapes" value={text} onChange={(e) => setText(e.target.value)} />

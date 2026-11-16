@@ -154,9 +154,10 @@ export default function Brand() {
     <AppShell active="brand" onSwitch={setCurrentId}>
       {error && <p role="alert" className="field-error">{error}</p>}
       {kits === null ? <p className="muted">Loading…</p> : !kit ? (
-        <section className="card">
+        <section className="card empty">
           <h1 className="page-title">Brand kits</h1>
-          <p>No brand kit yet.</p>
+          <p><strong>No brand kit yet.</strong></p>
+          <p className="muted">A brand kit keeps your colors, fonts and logos in one place, so every design in the workspace stays on brand. You can also lock parts of a template so they can't be changed by mistake.</p>
           {canEdit ? (
             <div className="chips">
               <button type="button" className="btn btn-p" onClick={promptNew}>Create a brand kit</button>

@@ -1,73 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
+import { STARTER_TEMPLATES, serializeCherry } from "@cherry/doc";
 import {
-  ApiError, createDesign, errorMessage, listDesigns, myWorkspaces,
-  type Design, type NewDesign, type Workspace,
+  ApiError, errorMessage, importDesign, listDesigns, listTemplates, myWorkspaces, startFromTemplate,
+  type Design, type Workspace,
 } from "../api";
+import { type CreatePane } from "../create/sizes";
+import { useCreateDialog } from "../create/CreateDialog";
 import { currentWorkspace, useSession } from "../App";
 import AppShell from "../AppShell";
-import { IconPlus, IconSearch, IconTemplate, IconUpload } from "../icons";
-import { initials } from "./Workspaces";
+import RecentCard from "../home/RecentCard";
+import { TemplateTile, type Pick } from "../home/TemplateRow";
+import { IconPlus, IconSearch, IconUpload } from "../icons";
 
-function PresetArt({ name }: { name: string }) {
-  switch (name) {
-    case "Social post":
-      return (
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <rect x="3" y="3" width="22" height="22" rx="6" fill="#FFE0EF" stroke="#C654C3" strokeWidth="1.6" />
-          <path d="M14 19.5s-5-3.2-5-6.6a2.9 2.9 0 0 1 5-2 2.9 2.9 0 0 1 5 2c0 3.4-5 6.6-5 6.6Z" fill="#8E1EA2" />
-        </svg>
-      );
-    case "A4 print":
-      return (
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <rect x="6" y="3" width="16" height="22" rx="3" fill="#fff" stroke="#8E1EA2" strokeWidth="1.6" />
-          <path d="M9.5 9h9M9.5 13h9M9.5 17h6" stroke="#C654C3" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
-      );
-    case "Presentation":
-      return (
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <rect x="2.5" y="5.5" width="23" height="16" rx="4" fill="#8E1EA2" />
-          <rect x="6.5" y="13.5" width="3.5" height="5" rx="1" fill="#FFC0DE" />
-          <rect x="12" y="10.5" width="3.5" height="8" rx="1" fill="#fff" />
-          <rect x="17.5" y="12" width="3.5" height="6.5" rx="1" fill="#ED96D7" />
-        </svg>
-      );
-    case "Story":
-      return (
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <rect x="7.5" y="2.5" width="13" height="23" rx="4" fill="#F8E2FB" stroke="#8E1EA2" strokeWidth="1.6" />
-          <circle cx="14" cy="11.5" r="3" fill="#C654C3" />
-          <path d="M10.5 18.5h7" stroke="#8E1EA2" strokeWidth="1.8" strokeLinecap="round" />
-        </svg>
-      );
-    default:
-      return (
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <rect x="3" y="6.5" width="22" height="15" rx="3.5" fill="#fff" stroke="#8E1EA2" strokeWidth="1.6" />
-          <circle cx="9" cy="14" r="2.5" fill="#C654C3" />
-          <path d="M14 12.5h7M14 16h5" stroke="#5D4E66" strokeWidth="1.6" strokeLinecap="round" />
-        </svg>
-      );
-  }
+/** Case-insensitive substring search over designs and templates; an empty query finds nothing. */
+export function searchHome(q: string, designs: Design[], templates: { id: string; name: string }[]): { designs: Design[]; templates: { id: string; name: string }[] } {
+  const n = q.trim().toLowerCase();
+  if (!n) return { designs: [], templates: [] };
+  const has = (s: string) => s.toLowerCase().includes(n);
+  return { designs: designs.filter((d) => has(d.title)), templates: templates.filter((t) => has(t.name)) };
 }
 
-export const PRESETS: { name: string; size: string; w: number; h: number; bg: string; body: NewDesign }[] = [
-  { name: "Social post", size: "1080 × 1080 px", w: 60, h: 60, bg: "var(--blush)",
-    body: { title: "Untitled design", width: 1080, height: 1080, unit: "px", colorMode: "rgb" } },
-  { name: "A4 print", size: "210 × 297 mm · CMYK", w: 44, h: 64, bg: "var(--orchid)",
-    body: { title: "Untitled design", width: 210, height: 297, unit: "mm", colorMode: "cmyk", bleed: 3 } },
-  { name: "Presentation", size: "1920 × 1080 px", w: 96, h: 54, bg: "var(--berry)",
-    body: { title: "Untitled design", width: 1920, height: 1080, unit: "px", colorMode: "rgb" } },
-  { name: "Story", size: "1080 × 1920 px", w: 40, h: 70, bg: "var(--petal)",
-    body: { title: "Untitled design", width: 1080, height: 1920, unit: "px", colorMode: "rgb" } },
-  { name: "Business card", size: "85 × 55 mm · CMYK", w: 84, h: 48, bg: "#fff",
-    body: { title: "Untitled design", width: 85, height: 55, unit: "mm", colorMode: "cmyk", bleed: 3 } },
+// [label, dialog pane, colour, page shape (or a plain icon)]
+const SHORTCUTS: [string, CreatePane, string, [number, number] | "plus" | "open"][] = [
+  ["Social post", "social", "#FFC0DE", [1, 1]],
+  ["Story", "social", "#F4D4F5", [9, 16]],
+  ["Presentation", "presentation", "#ED96D7", [16, 9]],
+  ["Flyer", "print", "#FFFFFF", [210, 297]],
+  ["Poster", "print", "#FFC0DE", [2, 3]],
+  ["Business card", "cards", "#F4D4F5", [7, 4]],
+  ["Invitation", "cards", "#ED96D7", [5, 7]],
+  ["Custom size", "custom", "#FFFFFF", "plus"],
+  ["Open file", "open", "#FFC0DE", "open"],
 ];
 
-/** Phone size row: label → preset name (null: custom size). */
-const SIZES: [string, string | null][] = [["Post", "Social post"], ["Story", "Story"], ["A4 print", "A4 print"], ["Custom", null]];
+const CATEGORIES = [["Social", "social", "#FFC0DE"], ["Presentations", "presentation", "#F4D4F5"], ["Print", "print", "#ED96D7"], ["Cards & invites", "cards", "#E8C8F2"]] as const;
 
 const rtf = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
 export function edited(iso: string, now = Date.now()): string {
@@ -81,20 +48,23 @@ export function edited(iso: string, now = Date.now()): string {
   return `Edited ${rtf.format(Math.round(v), "year")}`;
 }
 
-const tile = { padding: 14, gap: 10, textAlign: "left", font: "inherit", color: "inherit", textDecoration: "none" } as const;
-const thumbBox = { height: 84, display: "flex", alignItems: "center", justifyContent: "center", background: "var(--tint)", borderRadius: 10 } as const;
+const STARTERS: Pick[] = STARTER_TEMPLATES.map((s) => ({ id: s.id, name: s.name, starter: s }));
+const SHOWN = 8;
 
 export default function Home() {
-  const { user, setUser } = useSession();
+  const { setUser } = useSession();
   const navigate = useNavigate();
   const [list, setList] = useState<Workspace[] | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [currentId, setCurrentId] = useState(currentWorkspace.get());
   const [designs, setDesigns] = useState<Design[] | "error" | null>(null);
   const [designsTry, setDesignsTry] = useState(0);
+  const [templates, setTemplates] = useState<Pick[]>(STARTERS);
   const [busy, setBusy] = useState(false);
-  const [createError, setCreateError] = useState("");
+  const [useError, setUseError] = useState("");
+  const [all, setAll] = useState(false);
   const [q, setQ] = useState("");
+  const create_ = useCreateDialog();
 
   const load = () => {
     setLoadError(false);
@@ -117,6 +87,24 @@ export default function Home() {
     });
     return () => { cancelled = true; };
   }, [current?.id, designsTry]);
+  useEffect(() => {
+    if (!current) return;
+    let cancelled = false;
+    Promise.allSettled([listTemplates("workspace", { workspaceId: current.id }), listTemplates("public")]).then((rs) => {
+      if (cancelled) return;
+      const seen = new Set<string>();
+      const more = rs.flatMap((r) => (r.status === "fulfilled" ? r.value : []))
+        .filter((t) => t.status === "published" && !seen.has(t.id) && !!seen.add(t.id))
+        .map((t): Pick => ({ id: t.id, name: t.name, template: t }));
+      setTemplates([...STARTERS, ...more]);
+    });
+    return () => { cancelled = true; };
+  }, [current?.id]);
+
+  const found = useMemo(
+    () => searchHome(q, Array.isArray(designs) ? designs : [], templates),
+    [q, designs, templates],
+  );
 
   if (loadError) return (
     <div className="card" style={{ maxWidth: 420, margin: "48px auto" }}>
@@ -127,133 +115,111 @@ export default function Home() {
   if (list === null) return <p className="muted" style={{ padding: 24 }}>Loading…</p>;
   if (!current) return <Navigate to="/workspaces" replace />;
   const viewOnly = current.role === "viewer";
-  const shown = Array.isArray(designs) ? designs.filter((d) => d.title.toLowerCase().includes(q.trim().toLowerCase())) : [];
 
-  const create = async (body: NewDesign) => {
-    setBusy(true); setCreateError("");
+  const use = async (t: Pick) => {
+    setBusy(true); setUseError("");
     try {
-      const { design } = await createDesign(current.id, body);
-      navigate(`/d/${design.id}`);
+      const d = t.starter ? await importDesign(current.id, serializeCherry(t.starter.doc)) : await startFromTemplate(t.id, current.id);
+      navigate(`/d/${d.id}`);
     } catch (e) {
-      setCreateError(errorMessage(e));
+      setUseError(errorMessage(e));
       setBusy(false);
     }
   };
+  const tiles = (items: Pick[]) => items.map((t) => <TemplateTile key={t.id} t={t} disabled={busy || viewOnly} onUse={use} />);
+  const searching = q.trim() !== "";
+  const mine = Array.isArray(designs) ? [...designs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)) : [];
+  const firstRun = Array.isArray(designs) && designs.length === 0;
+  const card = (d: Design) => <li key={d.id}><RecentCard d={d} when={edited(d.updatedAt)} /></li>;
+
+  const templateRow = (
+    <section className="sec" aria-labelledby="h-tpl">
+      <div className="sec-head">
+        <h2 className="sec-title" id="h-tpl">Start from a template</h2>
+        <Link to="/templates" className="sec-link">See all</Link>
+      </div>
+      {viewOnly && <p className="muted">Viewers can't create designs.</p>}
+      <ul className="tpl-row">{tiles(templates)}</ul>
+    </section>
+  );
+
+  const continueDesigning = (
+    <section className="sec" aria-labelledby="h-cont">
+      <div className="sec-head">
+        <h2 className="sec-title" id="h-cont">Continue designing</h2>
+        {mine.length > SHOWN && <button type="button" className="btn-link" onClick={() => setAll((a) => !a)}>{all ? "Show fewer" : `See all (${mine.length})`}</button>}
+      </div>
+      {designs === null ? <p className="muted">Loading…</p> : designs === "error" ? (
+        <div className="card" style={{ alignItems: "flex-start" }}>
+          <p role="alert">Couldn't load your designs.</p>
+          <button className="btn" onClick={() => setDesignsTry((n) => n + 1)}>Retry</button>
+        </div>
+      ) : <ul className="recent">{(all ? mine : mine.slice(0, SHOWN)).map(card)}</ul>}
+    </section>
+  );
 
   return (
     <AppShell active="home" onSwitch={setCurrentId}>
-        <section className="home-hero">
-          <div className="home-hero-top only-d">
-            <span className="home-ws-pill">{current.name} · {current.role ?? "viewer"}</span>
-            <span style={{ flex: 1 }} />
-            {viewOnly ? null : <Link to="/new" className="btn btn-p"><IconPlus /> New design</Link>}
-            <span className="me" role="img" aria-label={`Signed in as ${user?.name}`} title={user?.email}>{initials(user?.name ?? "")}</span>
-          </div>
+      <section className="home-hero" aria-label="Start">
+        <h1 className="home-title">What are you making today?</h1>
+        <label className="search home-search">
+          <IconSearch />
+          <input type="search" className="inp" aria-label="Search designs and templates" placeholder="Search designs and templates"
+            value={q} onChange={(e) => setQ(e.target.value)} />
+        </label>
+        {viewOnly ? null : (
+          <ul className="shortcuts" aria-label="Create">
+            {SHORTCUTS.map(([label, pane, color, shape]) => (
+              <li key={label}>
+                <button type="button" className="sc" onClick={() => create_.open(pane)}>
+                  <span className="sc-dot" style={{ "--c": color } as CSSProperties} aria-hidden="true">
+                    {shape === "plus" ? <IconPlus /> : shape === "open" ? <IconUpload /> : (
+                      <span className="sc-page" style={{ width: 26 * Math.min(1, shape[0] / shape[1]), height: 26 * Math.min(1, shape[1] / shape[0]) }} />
+                    )}
+                  </span>
+                  {label}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      {useError && <p role="alert" className="field-error">{useError}</p>}
 
-          <div className="home-hero-center">
-            <h1 className="page-title home-title">Start something</h1>
-            <p className="muted home-sub only-d">Create print-ready layouts, vector graphics, and brand-consistent designs.</p>
-            <div className="home-pills only-d">
-              <span className="home-pill home-pill-on">Your designs</span>
-              <Link to="/templates" className="home-pill">Templates</Link>
-            </div>
-            <label className="search home-search">
-              <IconSearch />
-              <input type="search" className="inp" aria-label="Search designs" placeholder="Search your designs…"
-                value={q} onChange={(e) => setQ(e.target.value)} />
-            </label>
-          </div>
-
-          {createError && <p role="alert" className="field-error" style={{ textAlign: "center" }}>{createError}</p>}
-
-          {viewOnly ? null : (
+      {searching ? (
+        <section className="sec" aria-label="Search results">
+          {!found.designs.length && !found.templates.length && <p className="muted">Nothing matches “{q.trim()}”.</p>}
+          {found.designs.length > 0 && (
             <>
-              <ul className="sizes" aria-label="Sizes">
-                {SIZES.map(([label, preset]) => {
-                  const p = PRESETS.find((x) => x.name === preset);
-                  return (
-                    <li key={label}>
-                      <Link to={p ? `/new?preset=${encodeURIComponent(p.name)}` : "/new"} className="size">
-                        <span className="size-box" aria-hidden="true">
-                          {p ? <span style={{ width: p.w * 0.66, height: p.h * 0.66, background: p.bg, borderRadius: 4 }} /> : <IconPlus />}
-                        </span>
-                        {label}
-                      </Link>
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="quick-strip only-d" aria-label="Quick create">
-                <Link to="/templates" className="quick-tile">
-                  <span className="quick-icon quick-icon-tpl" aria-hidden="true"><IconTemplate /></span>
-                  <span className="quick-lbl">Templates</span>
-                </Link>
-                {PRESETS.map((p) => (
-                  <button key={p.name} type="button" className="quick-tile" disabled={busy}
-                    title={`${p.name} · ${p.size}`} onClick={() => create(p.body)}>
-                    <span className="quick-icon" aria-hidden="true">
-                      <PresetArt name={p.name} />
-                    </span>
-                    <span className="quick-lbl">{p.name}</span>
-                  </button>
-                ))}
-                <Link to="/new" className="quick-tile" title="Custom dimensions in px, mm, or in">
-                  <span className="quick-icon quick-icon-new" aria-hidden="true"><IconPlus /></span>
-                  <span className="quick-lbl">Custom size</span>
-                </Link>
-                <Link to="/library" className="quick-tile" title="Upload images, SVGs, or GIFs">
-                  <span className="quick-icon quick-icon-up" aria-hidden="true"><IconUpload /></span>
-                  <span className="quick-lbl">Upload</span>
-                </Link>
-              </div>
+              <h2 className="sec-title">Designs</h2>
+              <ul className="recent">{found.designs.map(card)}</ul>
+            </>
+          )}
+          {found.templates.length > 0 && (
+            <>
+              <h2 className="sec-title">Templates</h2>
+              <ul className="tpl-row">{tiles(templates.filter((t) => found.templates.some((f) => f.id === t.id)))}</ul>
             </>
           )}
         </section>
-
-        <section className="sec">
-          <div className="sec-head">
-            <h2 className="sec-title">Recent<span className="only-d"> designs</span></h2>
-            <Link to="/templates" className="sec-link only-d">Browse templates →</Link>
-          </div>
-          {designs === null ? <p className="muted">Loading…</p> : designs === "error" ? (
-            <div className="card" style={{ alignItems: "flex-start" }}>
-              <p role="alert">Couldn't load your designs.</p>
-              <button className="btn" onClick={() => setDesignsTry((n) => n + 1)}>Retry</button>
-            </div>
-          ) : designs.length === 0 ? (
-            <div className="card" style={{ alignItems: "flex-start" }}>
-              <p className="muted">No designs yet. Pick a format above to start your first one.</p>
-              <Link to="/workspaces" style={{ fontSize: 14 }}>Join or create another workspace</Link>
-            </div>
-          ) : shown.length === 0 ? (
-            <p className="muted">No designs match “{q.trim()}”.</p>
-          ) : (
-            <ul className="recent">
-              {shown.map((d) => (
-                <li key={d.id}>
-                  <Link to={`/d/${d.id}`} className="card recent-card" style={{ ...tile, height: "100%" }}>
-                    <span className="recent-thumb" style={{ ...thumbBox, height: 160, overflow: "hidden", position: "relative" }}>
-                      <span className="recent-badge">{d.colorMode.toUpperCase()}</span>
-                      <span data-testid="design-preview" className="recent-sheet" style={{
-                        background: "#fff", border: "1px solid var(--line)", borderRadius: 6, boxSizing: "border-box",
-                        aspectRatio: `${d.width} / ${d.height}`,
-                        // height never exceeds 80% of the 160px box (128px); width follows from the ratio
-                        width: `min(80%, ${(128 * d.width) / d.height}px)`,
-                      }} />
-                    </span>
-                    <span>
-                      <strong className="ell" style={{ display: "block", fontSize: 14 }}>{d.title}</strong>
-                      <span className="muted" style={{ fontSize: 13 }}>
-                        {d.width} × {d.height} {d.unit} · {edited(d.updatedAt)}
-                      </span>
-                    </span>
-                  </Link>
-                </li>
+      ) : (
+        <>
+          {firstRun && (
+            <p className="home-welcome">No designs yet. Start from a template below, or pick a format above.
+              {" "}<Link to="/workspaces">Join or create another workspace</Link></p>
+          )}
+          {firstRun ? templateRow : <>{continueDesigning}{templateRow}</>}
+          <section className="sec" aria-labelledby="h-cat">
+            <h2 className="sec-title" id="h-cat">Browse by category</h2>
+            <ul className="cats">
+              {CATEGORIES.map(([label, cat, color]) => (
+                <li key={cat}><Link to={`/templates?category=${cat}`} className="cat" style={{ "--c": color } as CSSProperties}>{label}</Link></li>
               ))}
             </ul>
-          )}
-        </section>
-        {viewOnly ? null : <Link to="/new" className="fab" aria-label="New design"><IconPlus /></Link>}
+          </section>
+        </>
+      )}
+      {viewOnly ? null : <button type="button" className="fab" aria-label="New design" onClick={() => create_.open()}><IconPlus /></button>}
     </AppShell>
   );
 }

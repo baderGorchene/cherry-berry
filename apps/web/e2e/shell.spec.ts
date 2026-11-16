@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { createWorkspace, openAsViewer, signUp, unique, uniquePng } from "./helpers";
+import { createWorkspace, openAsViewer, signUp, unique, uniquePng, newDesign } from "./helpers";
 
 const main = (page: import("@playwright/test").Page) => page.getByRole("navigation", { name: "Main" });
 
@@ -18,7 +18,7 @@ test("workspace menu switches workspace and shows its ID", async ({ page }) => {
   await createWorkspace(page, alpha);
   await page.goto("/workspaces");
   await createWorkspace(page, beta);
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\//);
   await page.getByRole("link", { name: "Back to home" }).click();
   const designs = page.getByRole("link", { name: /Untitled design/ });
@@ -110,25 +110,30 @@ test("sign in shows the full welcome panel on wide screens and a band on phones"
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
 });
 
-test("new design lists presets beside the custom form", async ({ page }) => {
-  await signUp(page, unique("new"));
-  await createWorkspace(page, "New Studio");
-  await page.goto("/new");
-  await expect(page.getByLabel("Width")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Close" })).toHaveAttribute("href", "/");
-  await page.getByRole("button", { name: /Social post/ }).click();
-  await expect(page).toHaveURL(/\/d\//);
-});
 
-test("viewers cannot create from presets on the new design page", async ({ page, browser }) => {
-  await signUp(page, unique("owner"));
-  await createWorkspace(page, "View Studio");
-  await page.getByRole("button", { name: /Social post/ }).click();
-  await expect(page).toHaveURL(/\/d\//);
-  const viewer = await openAsViewer(browser, page);
-  await viewer.goto("/new");
-  await expect(viewer.getByText("You have view-only access to this workspace.")).toBeVisible();
-  await expect(viewer.getByRole("button", { name: /Social post/ })).toBeDisabled();
-  await expect(viewer.getByRole("button", { name: /Social post/ })).toHaveCSS("cursor", "default");
-  await expect(viewer.getByRole("button", { name: "Create", exact: true })).toBeDisabled();
+test("home has one create control and, on a phone, one avatar and the search icon inside its box", async ({ page }) => {
+  await signUp(page, unique("once"));
+  await createWorkspace(page, "Once Studio");
+  const create = page.getByRole("button", { name: /^(New design|Create a design)$/ });
+  const avatar = page.getByRole("img", { name: /^Signed in as/ });
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect(page.getByRole("heading", { name: "What are you making today?" })).toBeVisible();
+  await expect(create).toHaveCount(1);
+  await expect(create).toHaveText(/Create a design/);
+  await expect(avatar).toHaveCount(0);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await expect(create).toHaveCount(1);
+  await expect(create).toHaveAccessibleName("New design");
+  await expect(avatar).toHaveCount(1);
+  await expect(avatar).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(375);
+  const input = (await page.getByRole("searchbox").boundingBox())!;
+  const icon = (await page.locator(".home-search svg").boundingBox())!;
+  expect(icon.x).toBeGreaterThanOrEqual(input.x);
+  expect(icon.y).toBeGreaterThanOrEqual(input.y);
+  expect(icon.x + icon.width).toBeLessThanOrEqual(input.x + input.width);
+  expect(icon.y + icon.height).toBeLessThanOrEqual(input.y + input.height);
+  // the shortcuts scroll inside their own row
+  const row = page.getByRole("list", { name: "Create" });
+  expect(await row.evaluate((e) => e.scrollWidth > e.clientWidth)).toBe(true);
 });

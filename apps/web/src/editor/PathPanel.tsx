@@ -2,7 +2,7 @@ import * as Y from "yjs";
 import type { CherryNode, Page } from "@cherry/doc";
 import { moveAnchors, setAnchorKind, setClosed, type Anchor, type AnchorRef, type PathModel } from "@cherry/vector";
 import { anchorAt, commitEdit, editModel, toLocal, toPage, validRefs } from "./pathEdit";
-import { Num } from "./Properties";
+import { Num } from "./PositionPopover";
 
 const KINDS: [Anchor["kind"], string][] = [["corner", "Corner"], ["smooth", "Smooth"], ["symmetric", "Symmetric"]];
 const RULES: ["nonzero" | "evenodd", string][] = [["nonzero", "Non-zero"], ["evenodd", "Even-odd"]];
@@ -38,7 +38,7 @@ export default function PathPanel({ ydoc, page, node, anchors, act }: {
   const fillRule = node.kind === "path" ? node.fillRule ?? "nonzero" : "nonzero";
 
   return (
-    <aside aria-label="Path properties" className="ed-props">
+    <aside aria-label="Path properties" className="ed-pathp">
       <section className="ed-sec">
         <h2 className="ed-ph">Selected point</h2>
         {at ? (

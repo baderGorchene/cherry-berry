@@ -1,42 +1,53 @@
 import * as Y from "yjs";
-import { addPage, movePage, removePage, renamePage, type CherryNode } from "@cherry/doc";
-import { InlineName } from "./Layers";
-import type { Role } from "../api";
-import { hasBrandLock } from "./brandLock";
-import { IconCopy, IconDown, IconTrash, IconUp } from "../icons";
+import { addPage, movePage, type CherryDocument } from "@cherry/doc";
+import DocPreview from "./DocPreview";
+import Modal from "../Modal";
+import { IconDown, IconPlus, IconUp } from "../icons";
 
-type Props = {
-  ydoc: Y.Doc; pages: { id: string; name: string; nodes: CherryNode[] }[]; pageId: string; readOnly: boolean; role: Role;
-  act(fn: () => void): void; onSwitch(pageId: string): void;
+type Props = { ydoc: Y.Doc; doc: CherryDocument; pageId: string; readOnly: boolean; act(fn: () => void): void; onSwitch(pageId: string): void };
+
+const Thumb = ({ doc, pageId, h }: { doc: CherryDocument; pageId: string; h: number }) => {
+  const p = doc.pages.find((x) => x.id === pageId)!;
+  return <DocPreview doc={doc} pageId={pageId} width={Math.min(h * 2, (h * p.width) / p.height)} height={h} />;
 };
 
-export default function Pages({ ydoc, pages, pageId, readOnly, role, act, onSwitch }: Props) {
-  const add = (opts: { after: string; copyOf?: string; keepLocks?: boolean }) => {
-    let id = "";
-    act(() => { id = addPage(ydoc, opts); });
-    onSwitch(id);
-  };
-  const locked = (p: { nodes: CherryNode[] }) => role === "editor" && hasBrandLock(p.nodes);
+/** The bottom bar's page strip: one thumbnail per page (click to switch) and Add page. */
+export default function Pages({ ydoc, doc, pageId, readOnly, act, onSwitch }: Props) {
   return (
-    <section className="ed-sec">
-      <h2 className="ed-ph">Pages</h2>
-      <ul className="ed-list">
-        {pages.map((p, i) => (
-          <li key={p.id} className={`ed-pagerow${p.id === pageId ? " ed-layrow-on" : ""}`}>
-            <span className="ed-pnum" aria-hidden="true">{i + 1}</span>
-            <InlineName name={p.name} label={p.name} editable={!readOnly} pressed={p.id === pageId}
-              className={`ed-lay${p.id === pageId ? " ed-lay-on" : ""}`}
-              onClick={() => onSwitch(p.id)} onRename={(name) => act(() => renamePage(ydoc, p.id, name))} />
-            {p.id === pageId && <>
-              <button className="ed-icon" aria-label="Duplicate" title="Duplicate" disabled={readOnly} onClick={() => add({ after: p.id, copyOf: p.id, keepLocks: role !== "editor" })}><IconCopy /></button>
-              <button className="ed-icon" aria-label="Delete" title={locked(p) ? "Contains brand-locked layers" : "Delete"} disabled={readOnly || pages.length === 1 || locked(p)} onClick={() => act(() => removePage(ydoc, p.id))}><IconTrash /></button>
-              <button className="ed-icon" aria-label="Move up" title="Move up" disabled={readOnly || i === 0} onClick={() => act(() => movePage(ydoc, p.id, i - 1))}><IconUp /></button>
-              <button className="ed-icon" aria-label="Move down" title="Move down" disabled={readOnly || i === pages.length - 1} onClick={() => act(() => movePage(ydoc, p.id, i + 1))}><IconDown /></button>
-            </>}
+    <nav aria-label="Pages" className="ed-strip">
+      {doc.pages.map((p, i) => (
+        <button key={p.id} type="button" className="ed-thumb" aria-label={`Page ${i + 1}`} title={p.name} aria-current={p.id === pageId ? "page" : undefined}
+          onClick={() => onSwitch(p.id)}>
+          <Thumb doc={doc} pageId={p.id} h={36} />
+        </button>
+      ))}
+      <button type="button" className="ed-thumb ed-thumb-add" aria-label="Add page" title="Add page" disabled={readOnly}
+        onClick={() => { let id = ""; act(() => { id = addPage(ydoc, { after: pageId }); }); onSwitch(id); }}><IconPlus /></button>
+    </nav>
+  );
+}
+
+/** Every page at once, to switch to one or reorder them. */
+export function PageGrid({ ydoc, doc, pageId, readOnly, act, onSwitch, onClose }: Props & { onClose(): void }) {
+  const n = doc.pages.length;
+  return (
+    <Modal title="All pages" onClose={onClose} closeButton className="ed-grid-dlg">
+      <ol className="ed-pgrid">
+        {doc.pages.map((p, i) => (
+          <li key={p.id} className={p.id === pageId ? "on" : undefined}>
+            <button type="button" className="ed-gthumb" aria-label={`Page ${i + 1}`} title={p.name} onClick={() => { onSwitch(p.id); onClose(); }}>
+              <Thumb doc={doc} pageId={p.id} h={110} />
+            </button>
+            <div className="ed-gfoot">
+              <span className="ell">{i + 1}. {p.name}</span>
+              <button type="button" className="ed-icon" aria-label={`Move page ${i + 1} earlier`} title="Move earlier" disabled={readOnly || i === 0}
+                onClick={() => act(() => movePage(ydoc, p.id, i - 1))}><IconUp /></button>
+              <button type="button" className="ed-icon" aria-label={`Move page ${i + 1} later`} title="Move later" disabled={readOnly || i === n - 1}
+                onClick={() => act(() => movePage(ydoc, p.id, i + 1))}><IconDown /></button>
+            </div>
           </li>
         ))}
-      </ul>
-      <button className="btn ed-add" disabled={readOnly} onClick={() => add({ after: pageId })}>+ Add page</button>
-    </section>
+      </ol>
+    </Modal>
   );
 }

@@ -1,21 +1,19 @@
 import { expect, test, type Page } from "@playwright/test";
-import { createWorkspace, openAsEditor, signUp, unique } from "./helpers";
+import { addShape, createWorkspace, editorReady, openAsEditor, signUp, toolbar, unique, newDesign } from "./helpers";
 
 async function newPost(page: Page) {
   await signUp(page, unique("pr"));
   await createWorkspace(page, "Presence Lab");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
 }
 
 async function addRect(page: Page) {
-  await page.getByRole("button", { name: "Rectangle (R)" }).click();
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await addShape(page, "Rectangle");
 }
 
-const layer = (page: Page) => page.getByRole("complementary", { name: "Layers" }).getByRole("button", { name: "Rectangle", exact: true });
+const layer = (page: Page) => page.getByRole("complementary", { name: "Layers panel" }).getByRole("button", { name: "Rectangle", exact: true });
 
 async function twoPeople(owner: Page, browser: Parameters<typeof openAsEditor>[0]) {
   await newPost(owner);
@@ -40,7 +38,7 @@ test("a remote delete clears my selection", async ({ page: owner, browser }) => 
   const errors: Error[] = [];
   editor.on("pageerror", (e) => errors.push(e));
   await layer(editor).click();
-  const empty = editor.getByText("Select a layer to edit it", { exact: false });
+  const empty = toolbar(editor).getByLabel("Page width"); // the nothing-selected toolbar
   await expect(empty).toHaveCount(0);
   await layer(owner).click();
   await owner.keyboard.press("Delete");

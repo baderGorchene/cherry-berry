@@ -12,8 +12,8 @@ const LABEL: Record<Exclude<Status, "error">, string> = {
 };
 let nextId = 1;
 
-export default function UploadDialog({ workspaceId, viewer, onClose, onDone }: {
-  workspaceId: string; viewer: boolean; onClose(): void; onDone(asset?: Asset): void;
+export default function UploadDialog({ workspaceId, viewer, files, onClose, onDone }: {
+  workspaceId: string; viewer: boolean; files?: File[]; onClose(): void; onDone(asset?: Asset): void;
 }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -36,8 +36,8 @@ export default function UploadDialog({ workspaceId, viewer, onClose, onDone }: {
     } catch (e) { patch(row.id, { status: "error", error: errorMessage(e) }); }
   };
 
-  const addFiles = (files: FileList | null) => {
-    const fresh: Row[] = Array.from(files ?? [], (file) => ({
+  const addFiles = (picked: ArrayLike<File> | null) => {
+    const fresh: Row[] = Array.from(picked ?? [], (file) => ({
       id: nextId++, file, status: "checking",
       details: { title: titleFromName(file.name), tags: "", license: "", visibility: viewer ? "private" : "workspace", attribution: "", confirmed: false },
     }));
@@ -46,6 +46,9 @@ export default function UploadDialog({ workspaceId, viewer, onClose, onDone }: {
     setSelectedId((s) => s ?? fresh[0]!.id);
     fresh.forEach((r) => void check(r));
   };
+
+  // files dropped on the empty library's drop zone
+  useEffect(() => { if (files?.length) addFiles(files); }, []);
 
   const remove = (id: number) => {
     setRows((rs) => rs.filter((r) => r.id !== id));

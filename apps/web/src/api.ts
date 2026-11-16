@@ -1,4 +1,4 @@
-import type { BrandKitContent, ExportAsset, ExportBody, Paint, Stroke } from "@cherry/doc";
+import type { BrandKitContent, CherryDocument, ExportAsset, ExportBody, Paint, Stroke } from "@cherry/doc";
 
 export class ApiError extends Error {
   constructor(public status: number, public code: string) { super(code); }
@@ -56,6 +56,15 @@ export type NewDesign = { title: string; width: number; height: number; unit: st
 
 export const createDesign = (workspaceId: string, body: NewDesign) =>
   api<{ design: Design }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/designs`, { body });
+export const importDesign = async (workspaceId: string, text: string): Promise<Design> => {
+  try {
+    return (await api<{ design: Design }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/designs/import`, { body: { text } })).design;
+  } catch (e) {
+    // `invalid_document` already means "a save was rejected" in COPY; for a file it has its own copy.
+    if (e instanceof ApiError && e.code === "invalid_document") throw new ApiError(e.status, "invalid_cherry_file");
+    throw e instanceof ApiError && e.code === "too_large" ? new ApiError(e.status, "cherry_file_too_large") : e;
+  }
+};
 export const listDesigns = (workspaceId: string) =>
   api<{ designs: Design[] }>(`/api/workspaces/${encodeURIComponent(workspaceId)}/designs`);
 export const getDesign = (id: string) =>
@@ -229,6 +238,9 @@ export const publishTemplate = (designId: string, body: PublishBody) =>
   api<{ template: Template }>(`/api/designs/${enc(designId)}/template`, { body }).then((r) => r.template);
 export const startFromTemplate = (id: string, workspaceId: string) =>
   api<{ design: Design }>(`/api/templates/${enc(id)}/use`, { body: { workspaceId } }).then((r) => r.design);
+/** The template's document, to add its pages to a design in `workspaceId` (same rules as using it). */
+export const getTemplateDoc = (id: string, workspaceId: string) =>
+  api<{ doc: CherryDocument }>(`/api/templates/${enc(id)}/doc?workspaceId=${enc(workspaceId)}`).then((r) => r.doc);
 export const approveTemplate = (id: string) => api<{ template: Template }>(`/api/templates/${enc(id)}/approve`, { method: "POST" }).then((r) => r.template);
 export const deleteTemplate = (id: string) => api<void>(`/api/templates/${enc(id)}`, { method: "DELETE" });
 
@@ -298,6 +310,8 @@ export function fromBase64(s: string): Uint8Array {
 }
 
 const COPY: Record<string, string> = {
+  invalid_json: "That file isn't a .cherry file.",
+  newer_version: "This file was made with a newer Cherry Berry. Update this server to open it.",
   wrong_password: "That password doesn't match this workspace.",
   not_found: "No workspace with that ID.",
   http_429: "Too many tries. Wait a minute and try again.",
@@ -328,6 +342,8 @@ const COPY: Record<string, string> = {
   invalid_logo: "That logo isn't available to this workspace.",
   invalid_font: "That file isn't a font we can use. Choose WOFF2, WOFF, TTF or OTF.",
   template_private_assets: "Every visual in a public template must be public. Make them public or publish to this workspace.",
+  cherry_file_too_large: "This file is too big to open (10 MB max).",
+  invalid_cherry_file: "This .cherry file is damaged and can't be opened.",
   invalid_document: "This change couldn't be saved because the design became invalid.",
   not_saved: "Couldn't save just now. Your changes are kept, try again.",
   print_unavailable: "The print service isn't reachable right now. Try again, or export a regular PDF.",

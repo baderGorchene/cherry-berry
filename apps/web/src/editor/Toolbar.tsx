@@ -18,42 +18,40 @@ export const SHAPES: { kind: BasicShape; label: string; icon: ReactNode }[] = [
 
 export const PEN = svg(<><path d="M12 19l7-7 3 3-7 7z" /><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18z" /><circle cx="11" cy="11" r="2" /></>);
 
-/** Every button arms a tool; Text and shape tools then place on the canvas (click, or drag out a box). */
-export default function Toolbar({ readOnly, tool, editing, panel, onTool, onPanel }: {
-  readOnly: boolean; tool: Tool; editing: boolean; panel: "layers" | "shapes" | "visuals" | "brand"; onTool(t: Tool): void; onPanel(p: "shapes" | "visuals"): void;
+/** The Draw panel: the pen, and while a path is in point-edit mode the vector tools plus `children` (the path's point properties). */
+export default function DrawPanel({ readOnly, tool, editing, onTool, children }: {
+  readOnly: boolean; tool: Tool; editing: boolean; onTool(t: Tool): void; children?: ReactNode;
 }) {
   const on = (t: Tool, label: string) => ({
-    className: `ed-ib${tool === t ? " ed-ib-on" : ""}`, "aria-pressed": tool === t, disabled: readOnly, onClick: () => onTool(t),
-    "aria-label": label, title: label,
+    className: `ed-ib${tool === t ? " ed-ib-on" : ""}`, "aria-pressed": tool === t, disabled: readOnly,
+    // Clicking the armed pen again puts it down (which also finishes a path in progress).
+    onClick: () => onTool(tool === t && t === "pen" ? "select" : t), "aria-label": label, title: label,
   });
-  if (editing) return (
-    <nav aria-label="Vector tools" className="ed-rail">
-      <button {...on("direct", "Direct select (A)")}>{svg(<path d="M5 3l14 8-6 2-2 6z" fill="currentColor" />)}</button>
-      <button {...on("pen", "Pen (P)")}>{PEN}</button>
-      <button {...on("add-anchor", "Add anchor point (+)")}>
-        {svg(<><rect x="8" y="8" width="8" height="8" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></>)}
-      </button>
-      <button {...on("convert-anchor", "Convert anchor point (Shift+C)")}>{svg(<path d="M3 20L12 4l9 16" />)}</button>
-    </nav>
-  );
   return (
-    <nav aria-label="Tools" className="ed-rail">
-      <div className="ed-rgroup">
-        <span className="ed-rlbl" aria-hidden="true">Tools</span>
-        <button {...on("select", "Select (V)")}>{svg(<path d="M5 3l14 8-6 2-2 6z" />)}</button>
-        <button {...on("text", "Text (T)")}>{svg(<path d="M5 5h14M12 5v14" />)}</button>
-        <button {...on("pen", "Pen (P)")}>{PEN}</button>
-      </div>
-      <hr className="ed-sep" />
-      <div className="ed-rgroup">
-        <span className="ed-rlbl" aria-hidden="true">Library</span>
-        <button className={`ed-ib${panel === "shapes" ? " ed-ib-on" : ""}`} aria-pressed={panel === "shapes"} aria-label="Shapes" title="Shapes" onClick={() => onPanel("shapes")}>
-          {svg(<><rect x="3" y="3" width="8" height="8" rx="1" /><circle cx="17" cy="7" r="4" /><path d="M7 14l4 7H3z" /><rect x="14" y="14" width="7" height="7" rx="1" /></>)}
-        </button>
-        <button className={`ed-ib${panel === "visuals" ? " ed-ib-on" : ""}`} aria-pressed={panel === "visuals"} aria-label="Visuals" title="Visuals" onClick={() => onPanel("visuals")}>
-          {svg(<><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-9 9" /></>)}
-        </button>
-      </div>
-    </nav>
+    <aside aria-label="Draw panel" className="ed-shapes">
+      {editing ? (
+        <>
+          <div role="group" aria-label="Vector tools" className="ed-tools">
+            <button {...on("direct", "Direct select (A)")}>{svg(<path d="M5 3l14 8-6 2-2 6z" fill="currentColor" />)}</button>
+            <button {...on("pen", "Pen (P)")}>{PEN}</button>
+            <button {...on("add-anchor", "Add anchor point (+)")}>
+              {svg(<><rect x="8" y="8" width="8" height="8" /><path d="M12 2v4M12 18v4M2 12h4M18 12h4" /></>)}
+            </button>
+            <button {...on("convert-anchor", "Convert anchor point (Shift+C)")}>{svg(<path d="M3 20L12 4l9 16" />)}</button>
+          </div>
+          {children}
+        </>
+      ) : (
+        <>
+          <div role="group" aria-label="Draw tools" className="ed-tools">
+            <button {...on("pen", "Pen (P)")}>{PEN}</button>
+          </div>
+          <p className="muted" style={{ fontSize: 13, margin: 0 }}>
+            Pick the pen, then click on the page to place points. Drag to pull a curve; click the first point to close the shape.
+            Double-click a shape to edit its points.
+          </p>
+        </>
+      )}
+    </aside>
   );
 }

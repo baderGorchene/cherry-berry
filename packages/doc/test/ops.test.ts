@@ -4,8 +4,8 @@ import { createDocument } from "../src/create";
 import type { CherryNode } from "../src/schema";
 import { docToY, yToDoc, REMOTE } from "../src/y";
 import {
-  addNode, addPage, createUndoManager, duplicateNodes, getPageIds, movePage, nodeInfo,
-  removeNodes, removePage, replaceDocument, reorderNode, updateNode,
+  addNode, addPage, createUndoManager, duplicateNodes, getPageIds, insertPages, movePage, nodeInfo,
+  removeNodes, removePage, replaceDocument, reorderNode, updateNode, updatePage,
 } from "../src/ops";
 
 const base = { rotation: 0, opacity: 1, locked: false, hidden: false, brandLock: "none" as const };
@@ -90,6 +90,14 @@ describe("ops", () => {
     expect(doc().pages).toHaveLength(1);
   });
 
+  it("updatePage changes a page's size, colour mode and background, and nothing else", () => {
+    const { y, doc, pid } = setup([rect("a")]);
+    updatePage(y, pid, { width: 300, colorMode: "cmyk", background: { type: "solid", color: "#FFC0DE", opacity: 1 } });
+    const p = doc().pages[0]!;
+    expect([p.width, p.height, p.colorMode, p.background.color, p.unit]).toEqual([300, 200, "cmyk", "#FFC0DE", "px"]);
+    expect(ids(p.nodes)).toEqual(["a"]);
+  });
+
   it("undo groups one gesture", () => {
     const { y, doc, pid } = setup([rect("a", 1)]);
     const um = createUndoManager(y);
@@ -126,6 +134,29 @@ describe("ops", () => {
       const pid2 = addPage(b.y, { copyOf: b.pid, keepLocks: keep });
       expect(lockOf(b.doc().pages.find((p) => p.id === pid2)!.nodes[0])).toEqual(want);
     }
+  });
+
+  it("insertPages adds pages of their own size after a page, with fresh ids, as one undo step", () => {
+    const a4 = createDocument({ title: "A4", width: 210, height: 297, unit: "mm", colorMode: "cmyk", bleed: 3 });
+    a4.pages[0]!.nodes = [rect("a")];
+    const y = docToY(a4);
+    const um = createUndoManager(y);
+    const story = createDocument({ title: "Story", width: 1080, height: 1920, unit: "px", colorMode: "rgb" }).pages[0]!;
+    story.nodes = [group("g", [rect("r")])];
+    const tail = { ...structuredClone(story), id: "tail", name: "Tail", nodes: [] };
+    const newIds = insertPages(y, [story, tail], a4.pages[0]!.id);
+    const doc = () => { const r = yToDoc(y); if (!r.ok) throw new Error(r.detail); return r.doc; };
+    const pages = doc().pages;
+    expect(pages.map((p) => p.id)).toEqual([a4.pages[0]!.id, ...newIds]);
+    expect(pages[0]).toMatchObject({ width: 210, height: 297, unit: "mm", colorMode: "cmyk", bleed: 3 });
+    expect(pages[1]).toMatchObject({ width: 1080, height: 1920, unit: "px", colorMode: "rgb", bleed: 0, name: story.name });
+    expect(newIds).not.toContain(story.id);
+    expect(newIds).not.toContain("tail");
+    const g = pages[1]!.nodes[0] as Extract<CherryNode, { kind: "group" }>;
+    expect(g.id).not.toBe("g");
+    expect(g.children[0]!.id).not.toBe("r");
+    um.undo();
+    expect(doc().pages.map((p) => p.id)).toEqual([a4.pages[0]!.id]);
   });
 
   it("replaceDocument swaps content in one transaction and keeps the Y.Doc", () => {

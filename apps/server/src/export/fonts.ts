@@ -4,23 +4,23 @@ import { mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { FONTS } from "@cherry/doc";
 import { FontLibrary } from "skia-canvas";
 
-const BUILT_IN = { Inter: "@fontsource/inter", "Space Grotesk": "@fontsource/space-grotesk" };
 let builtIn = false;
 
-/** Inter and Space Grotesk 400–700 (latin + latin-ext woff2 from @fontsource); once per process. */
+/** Every FONTS catalogue family at its listed weights (latin + latin-ext woff2 from @fontsource); once per process. */
 export function registerBuiltInFonts(): void {
   if (builtIn) return;
   builtIn = true;
   const require = createRequire(import.meta.url);
-  for (const [family, pkg] of Object.entries(BUILT_IN)) {
+  for (const { family, pkg, weights } of FONTS) {
     const dir = join(dirname(require.resolve(pkg)), "files"), slug = pkg.split("/")[1]!;
     // For a weight held by two files skia uses the one registered last, and the latin-ext subset has no ASCII glyphs:
     // latin must come last or basic text falls back to a substitute. ponytail: latin-ext-only glyphs (ő, ł…) then
     // fall back too; merge the subsets into one file per weight if that matters.
     FontLibrary.use(family, ["latin-ext", "latin"].flatMap((sub) =>
-      [400, 500, 600, 700].map((w) => join(dir, `${slug}-${sub}-${w}-normal.woff2`))));
+      weights.map((w) => join(dir, `${slug}-${sub}-${w}-normal.woff2`))));
   }
 }
 
@@ -67,5 +67,5 @@ export async function useKitFonts(
 }
 
 export function availableFamilies(kitFamilies: string[]): string[] {
-  return [...new Set([...Object.keys(BUILT_IN), ...kitFamilies])];
+  return [...new Set([...FONTS.map((f) => f.family), ...kitFamilies])];
 }

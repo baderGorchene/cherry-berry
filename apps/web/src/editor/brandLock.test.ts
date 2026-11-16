@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CherryNode } from "@cherry/doc";
 import type { Role } from "../api";
-import { canDelete, canEditContent, canMove, hasBrandLock } from "./brandLock";
+import { canDelete, canEditContent, canMove, groupBlock, hasBrandLock } from "./brandLock";
 
 const node = (brandLock: "none" | "content" | "fixed") => ({ brandLock }) as CherryNode;
 const ROLES: Role[] = ["owner", "admin", "editor", "viewer"];
@@ -17,6 +17,24 @@ describe("brand lock predicates", () => {
       });
     }
   }
+});
+
+describe("groups holding a locked layer", () => {
+  const group = (...children: CherryNode[]) => ({ kind: "group", brandLock: "none", children }) as CherryNode;
+  const locked = group(node("none"), group(node("content")));
+  it("an editor can't move, ungroup or delete them; owners and admins can", () => {
+    expect(canMove(locked, "editor")).toBe(false);
+    expect(canDelete(locked, "editor")).toBe(false);
+    expect(canMove(group(node("none")), "editor")).toBe(true);
+    for (const role of ["owner", "admin"] as Role[]) expect([canMove(locked, role), canDelete(locked, role)]).toEqual([true, true]);
+  });
+  it("an editor can't group a selection holding a locked layer", () => {
+    expect(groupBlock([node("none"), node("fixed")], "editor")).toBe("Brand-locked layers can't be grouped");
+    expect(groupBlock([node("none"), locked], "editor")).not.toBe("");
+    expect(groupBlock([node("none"), node("none")], "editor")).toBe("");
+    expect(groupBlock([node("fixed"), node("content")], "owner")).toBe("");
+    expect(groupBlock([node("fixed"), node("content")], "admin")).toBe("");
+  });
 });
 
 describe("hasBrandLock", () => {

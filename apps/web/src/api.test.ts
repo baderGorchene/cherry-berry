@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { api, ApiError, errorMessage, exportFile, saveFile } from "./api";
+import { api, ApiError, errorMessage, exportFile, importDesign, saveFile } from "./api";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -74,5 +74,20 @@ describe("saveFile", () => {
     expect(a.download).toBe("a.png");
     expect(a.href).toMatch(/^blob:/);
     expect(a.click).toHaveBeenCalled();
+  });
+});
+
+describe("importDesign", () => {
+  const fail = (status: number, error: string) =>
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ error }), { status })));
+  it("gives file-specific codes and copy", async () => {
+    fail(413, "too_large");
+    const big = await importDesign("w", "x").catch((e) => e);
+    expect(big).toMatchObject({ status: 413, code: "cherry_file_too_large" });
+    expect(errorMessage(big)).toBe("This file is too big to open (10 MB max).");
+    fail(400, "invalid_document");
+    const bad = await importDesign("w", "x").catch((e) => e);
+    expect(bad).toMatchObject({ code: "invalid_cherry_file" });
+    expect(errorMessage(bad)).toBe("This .cherry file is damaged and can't be opened.");
   });
 });

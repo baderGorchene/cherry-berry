@@ -1,22 +1,16 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Download, type Page } from "@playwright/test";
-import { createWorkspace, signUp, unique, uniquePng } from "./helpers";
+import { addShape, createWorkspace, editorReady, openPanel, panel, signUp, unique, uniquePng, newDesign } from "./helpers";
 
 async function newSocialPost(page: Page) {
   await signUp(page, unique("exp"));
   await createWorkspace(page, "Export Lab");
-  await page.getByRole("button", { name: /Social post/ }).click();
+  await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("button", { name: "Rectangle (R)" })).toBeEnabled();
+  await editorReady(page);
 }
 
-async function place(page: Page, tool: string) {
-  await page.getByRole("button", { name: tool }).click();
-  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-}
-
-const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
+const layers = (page: Page) => page.getByRole("complementary", { name: "Layers panel" });
 const dialog = (page: Page) => page.getByRole("dialog", { name: /^Export/ });
 const saved = (page: Page) => expect(page.getByText("Saved", { exact: true })).toBeVisible();
 const bytes = async (d: Download) => readFileSync((await d.path())!);
@@ -34,7 +28,7 @@ async function download(page: Page, label: string) {
 
 test("exports a png", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
   await saved(page);
   await exportAs(page, "PNG");
@@ -55,7 +49,7 @@ test("exports a print pdf with a bleed warning", async ({ page }) => {
 
 test("exports .cherry offline", async ({ page, context }) => {
   await newSocialPost(page);
-  await place(page, "Rectangle (R)");
+  await addShape(page, "Rectangle");
   await saved(page);
   await context.setOffline(true);
   await expect(page.getByText("Offline — retrying")).toBeVisible();
@@ -104,11 +98,11 @@ test("credits for a cc-by visual", async ({ page }) => {
     },
   });
   expect(res.status()).toBe(201);
-  await page.getByRole("button", { name: "Visuals" }).click();
-  const visuals = page.getByRole("complementary", { name: "Visuals panel" });
+  await openPanel(page, "Uploads");
+  const visuals = panel(page, "Uploads");
   await visuals.getByRole("button", { name: "Workspace", exact: true }).click();
   await visuals.getByRole("button", { name: "Dot" }).click();
-  await page.getByRole("tab", { name: "Layers", exact: true }).click();
+  await openPanel(page, "Layers");
   await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toBeVisible();
   await saved(page);
   await page.getByRole("button", { name: "Export", exact: true }).click();
@@ -118,14 +112,14 @@ test("credits for a cc-by visual", async ({ page }) => {
 
 test("show on page selects the offending layer", async ({ page }) => {
   await newSocialPost(page);
-  await place(page, "Text (T)");
+  await addShape(page, "Text");
   await expect(page.getByLabel("Edit text")).toBeFocused();
   await page.keyboard.type("Hello");
   await page.keyboard.press("Escape");
   const layer = layers(page).getByRole("button", { name: "Hello", exact: true });
   await expect(layer).toBeVisible();
   await layer.click();
-  await page.getByRole("complementary", { name: "Properties" }).getByRole("combobox", { name: "Font" }).selectOption("Georgia");
+  await page.getByRole("toolbar", { name: "Selection", exact: true }).getByRole("combobox", { name: "Font" }).selectOption("Georgia");
   await saved(page);
   await page.keyboard.press("Escape");
   await expect(layer).toHaveAttribute("aria-pressed", "false");

@@ -9,24 +9,21 @@ import { KIND_BADGE, LICENSES, VISIBILITY, formatBytes, useAssetList, type Asset
 import ReportDialog from "../library/ReportDialog";
 import UploadDialog from "../library/UploadDialog";
 import AppShell from "../AppShell";
+import FileMenu, { type FileItem } from "../editor/FileMenu";
 import { IconUpload } from "../icons";
 
 const TYPES: [AssetKind | undefined, string][] = [[undefined, "All"], ["image", "Images"], ["gif", "GIFs"], ["svg", "SVG"]];
-const SOURCES: [AssetScope, string][] = [["mine", "Mine"], ["workspace", "Workspace"], ["public", "Public"]];
+const SOURCES: [AssetScope, string][] = [["workspace", "Workspace"], ["mine", "Mine"], ["public", "Public"]];
 const LICENSE_CHIPS: [License | undefined, string][] = [[undefined, "Any"], ["cc0", "CC0"], ["cc-by", "CC-BY"], ["own", "Own work"]];
 
 const license = (l: License) => LICENSES.find((x) => x.value === l)!;
 
-function Chips<T>({ label, options, value, onPick }: { label: string; options: [T, string][]; value: T; onPick(v: T): void }) {
+/** A dropdown chip ("Type: All"): opens a menu of the options; Escape closes it and focus returns to the chip. */
+function FilterChip<T>({ label, options, value, onPick }: { label: string; options: [T, string][]; value: T; onPick(v: T): void }) {
+  const current = options.find(([v]) => v === value)![1];
   return (
-    <div role="group" aria-label={label} className="ph-row">
-      <span className="ph">{label}</span>
-      <div className="chips">
-        {options.map(([v, text]) => (
-          <button key={text} type="button" className="chip" aria-pressed={v === value} onClick={() => onPick(v)}>{text}</button>
-        ))}
-      </div>
-    </div>
+    <FileMenu label={label} button={`${label}: ${current}`} className="chip chip-dd"
+      items={options.map(([v, text]) => [text, () => onPick(v)] as FileItem)} />
   );
 }
 
@@ -127,6 +124,7 @@ export default function Library() {
   const [text, setText] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [dropped, setDropped] = useState<File[]>([]);
 
   useEffect(() => {
     myWorkspaces().then((r) => setList(r.workspaces), (e) => {
@@ -138,6 +136,7 @@ export default function Library() {
 
   if (list === null) return <p className="muted" style={{ padding: 24 }}>Loading…</p>;
   if (!ws) return <Navigate to="/workspaces" replace />;
+  const filtered = !!(kind || lic || text.trim());
   const selected = res && "assets" in res ? res.assets.find((a) => a.id === selectedId) : undefined;
 
   return (
@@ -154,13 +153,27 @@ export default function Library() {
           <input className="inp" type="search" aria-label="Search visuals" placeholder="Search by title, tag or uploader"
             value={text} onChange={(e) => setText(e.target.value)} />
           <div className="filters">
-            <Chips label="Type" options={TYPES} value={kind} onPick={setKind} />
-            <Chips label="Source" options={SOURCES} value={scope} onPick={setScope} />
-            <Chips label="License" options={LICENSE_CHIPS} value={lic} onPick={setLic} />
+            <FilterChip label="Type" options={TYPES} value={kind} onPick={setKind} />
+            <FilterChip label="Source" options={SOURCES} value={scope} onPick={setScope} />
+            <FilterChip label="License" options={LICENSE_CHIPS} value={lic} onPick={setLic} />
           </div>
           {!res ? <p className="muted">Loading…</p> : "error" in res ? (
             <div><p role="alert" className="field-error">{res.error}</p><button className="btn" onClick={retry}>Retry</button></div>
-          ) : !res.assets.length ? <p className="muted">No visuals yet. Upload the first one.</p> : (
+          ) : !res.assets.length ? (
+            filtered || scope === "public" ? <p className="muted">No visuals match.</p> : (
+              <div className="empty">
+                <h2 className="sec-title">Upload your first image</h2>
+                <p className="muted">PNG, JPG, WEBP, GIF and SVG files you add here can go into any design.</p>
+                <div role="button" tabIndex={0} className="drop" onClick={() => setUploading(true)}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setUploading(true); } }}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => { e.preventDefault(); setDropped(Array.from(e.dataTransfer.files)); setUploading(true); }}>
+                  <strong>Drop files here or click to browse</strong>
+                </div>
+                <button type="button" className="btn btn-p" onClick={() => setUploading(true)}><IconUpload />Upload your first image</button>
+              </div>
+            )
+          ) : (
             <ul className="tiles">
               {res.assets.map((a) => (
                 <li key={a.id}>
@@ -175,7 +188,7 @@ export default function Library() {
           )}
         </section>
 
-        <aside aria-label="Selected visual" className="aside">
+        <aside aria-label="Selected visual" className={`aside${selected ? "" : " aside-idle"}`}>
           <h2 style={{ fontSize: 18 }}>Selected visual</h2>
           {selected ? (
             <Details a={selected} ws={ws} onEdited={retry} onError={(error) => setRes({ error })}
@@ -185,7 +198,7 @@ export default function Library() {
       </div>
       <button type="button" className="fab" aria-label="Upload visuals" onClick={() => setUploading(true)}><IconUpload /></button>
       {uploading && (
-        <UploadDialog workspaceId={ws.id} viewer={ws.role === "viewer"} onClose={() => setUploading(false)}
+        <UploadDialog workspaceId={ws.id} viewer={ws.role === "viewer"} files={dropped} onClose={() => { setUploading(false); setDropped([]); }}
           onDone={(a) => { if (a) setSelectedId(a.id); retry(); }} />
       )}
     </AppShell>

@@ -86,3 +86,87 @@ export async function openAsEditor(browser: Browser, owner: Page): Promise<Page>
   await expect(editor).toHaveURL(/\/$/);
   return editor;
 }
+
+/** Waits until the editor is loaded and editable (Undo is enabled for anyone who can edit). */
+export async function editorReady(page: Page) {
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
+}
+
+const SHAPE_KEYS = { Rectangle: "r", Ellipse: "o", Line: "l", Text: "t" } as const;
+export type PanelName = "Templates" | "Elements" | "Text" | "Uploads" | "Brand" | "Draw" | "Layers";
+
+/** The editor's panel rail (left column on desktop, bottom bar on phones) and one of its buttons. */
+export const rail = (page: Page) => page.getByRole("navigation", { name: "Editor panels" });
+export const railButton = (page: Page, name: PanelName) => rail(page).getByRole("button", { name: new RegExp(`^${name}`) });
+/** A rail panel by name (on phones it sits inside a sheet). */
+export const panel = (page: Page, name: PanelName) => page.getByRole("complementary", { name: `${name} panel` });
+
+/** Opens a rail panel (a no-op when it is already open). The only place that knows the rail and panel names. */
+export async function openPanel(page: Page, name: PanelName) {
+  const b = railButton(page, name);
+  if ((await b.getAttribute("aria-pressed")) !== "true") await b.click();
+  await expect(panel(page, name)).toBeVisible();
+}
+
+/** Adds a shape the way a user does: arms it with its keyboard shortcut, then clicks the canvas centre (offset by dx, dy px).
+ *  The only place that knows how shapes are added (the Elements panel is not needed, and Layers stays visible).
+ *  When the Layers panel is showing, fails unless exactly one layer appeared (so an ignored key is loud). */
+export async function addShape(page: Page, shape: keyof typeof SHAPE_KEYS, dx = 0, dy = 0, canvas = page.getByLabel(/^Page \d+ canvas$/)) {
+  const rows = panel(page, "Layers").locator("li.ed-layrow");
+  const watch = await panel(page, "Layers").isVisible();
+  const before = watch ? await rows.count() : 0;
+  // Commit a pending text edit (Escape) instead of discarding it; other fields just lose focus, since shortcuts are ignored while typing.
+  if (await page.getByLabel("Edit text").isVisible()) await page.keyboard.press("Escape");
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press(SHAPE_KEYS[shape]);
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2 + dy);
+  if (watch && shape !== "Text") await expect(rows).toHaveCount(before + 1);
+}
+
+/** Creates a design from Home the way a user does: a shortcut opens the Create dialog, then a size card opens the editor. */
+export async function newDesign(page: Page, size: "Social post" | "Presentation" | "Story" = "Social post") {
+  await page.getByRole("button", { name: size, exact: true }).click();
+  await page.getByRole("dialog", { name: "Create a design" }).getByRole("button", { name: new RegExp(`^${size}`) }).first().click();
+  await expect(page).toHaveURL(/\/d\//);
+}
+
+/** The bottom bar's page strip and the thumbnail of page `n` (1-based). */
+export const pageStrip = (page: Page) => page.getByRole("navigation", { name: "Pages" });
+export const pageThumb = (page: Page, n: number) => pageStrip(page).getByRole("button", { name: `Page ${n}`, exact: true });
+/** Adds a page after the current one from the page strip. */
+export const addPage = (page: Page) => pageStrip(page).getByRole("button", { name: "Add page" }).click();
+
+/** Runs an item of the editor's File menu. */
+export async function fileMenu(page: Page, item: string) {
+  await page.getByRole("button", { name: "File", exact: true }).click();
+  await page.getByRole("menu", { name: "File" }).getByRole("menuitem", { name: item }).click();
+}
+
+/** The context toolbar above the canvas (above the page strip on phones). */
+export const toolbar = (page: Page) => page.getByRole("toolbar", { name: "Selection", exact: true });
+/** The small menu floating above the selection. */
+export const selectionMenu = (page: Page) => page.getByRole("toolbar", { name: "Selection actions" });
+
+/** Opens one of the toolbar's popovers by its button (a no-op when it is already open) and returns the dialog. */
+export async function popover(page: Page, button: string, name = button) {
+  const dialog = page.getByRole("dialog", { name, exact: true });
+  if (!(await dialog.isVisible())) await toolbar(page).getByRole("button", { name: button, exact: true }).click();
+  await expect(dialog).toBeVisible();
+  return dialog;
+}
+/** The Position popover (X, Y, W, H, rotation, align, distribute, arrange). */
+export const position = (page: Page) => popover(page, "Position");
+/** Reads one Position field of the selection, then closes the popover. */
+export async function positionValue(page: Page, label: string) {
+  const v = await (await position(page)).getByLabel(label, { exact: true }).inputValue();
+  await page.keyboard.press("Escape");
+  return v;
+}
+/** Commits one Position field (one undo step), then closes the popover. */
+export async function setPosition(page: Page, label: string, value: string) {
+  const field = (await position(page)).getByLabel(label, { exact: true });
+  await field.fill(value);
+  await field.press("Enter");
+  await page.keyboard.press("Escape");
+}
