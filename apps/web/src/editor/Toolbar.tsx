@@ -38,19 +38,22 @@ export default function Toolbar({ readOnly, tool, editing, panel, onTool, onPane
   );
   return (
     <nav aria-label="Tools" className="ed-rail">
-      <button {...on("select", "Select (V)")}>{svg(<path d="M5 3l14 8-6 2-2 6z" />)}</button>
-      <button {...on("text", "Text (T)")}>{svg(<path d="M5 5h14M12 5v14" />)}</button>
-      <button {...on("pen", "Pen (P)")}>{PEN}</button>
-      {SHAPES.map((s) => (
-        <button key={s.kind} {...on(s.kind, s.label)}>{s.icon}</button>
-      ))}
+      <div className="ed-rgroup">
+        <span className="ed-rlbl" aria-hidden="true">Tools</span>
+        <button {...on("select", "Select (V)")}>{svg(<path d="M5 3l14 8-6 2-2 6z" />)}</button>
+        <button {...on("text", "Text (T)")}>{svg(<path d="M5 5h14M12 5v14" />)}</button>
+        <button {...on("pen", "Pen (P)")}>{PEN}</button>
+      </div>
       <hr className="ed-sep" />
-      <button className={`ed-ib${panel === "shapes" ? " ed-ib-on" : ""}`} aria-pressed={panel === "shapes"} aria-label="Shapes" title="Shapes" onClick={() => onPanel("shapes")}>
-        {svg(<><rect x="3" y="3" width="8" height="8" rx="1" /><circle cx="17" cy="7" r="4" /><path d="M7 14l4 7H3z" /><rect x="14" y="14" width="7" height="7" rx="1" /></>)}
-      </button>
-      <button className={`ed-ib${panel === "visuals" ? " ed-ib-on" : ""}`} aria-pressed={panel === "visuals"} aria-label="Visuals" title="Visuals" onClick={() => onPanel("visuals")}>
-        {svg(<><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-9 9" /></>)}
-      </button>
+      <div className="ed-rgroup">
+        <span className="ed-rlbl" aria-hidden="true">Library</span>
+        <button className={`ed-ib${panel === "shapes" ? " ed-ib-on" : ""}`} aria-pressed={panel === "shapes"} aria-label="Shapes" title="Shapes" onClick={() => onPanel("shapes")}>
+          {svg(<><rect x="3" y="3" width="8" height="8" rx="1" /><circle cx="17" cy="7" r="4" /><path d="M7 14l4 7H3z" /><rect x="14" y="14" width="7" height="7" rx="1" /></>)}
+        </button>
+        <button className={`ed-ib${panel === "visuals" ? " ed-ib-on" : ""}`} aria-pressed={panel === "visuals"} aria-label="Visuals" title="Visuals" onClick={() => onPanel("visuals")}>
+          {svg(<><rect x="3" y="4" width="18" height="16" rx="2" /><circle cx="9" cy="10" r="2" /><path d="M21 16l-5-5-9 9" /></>)}
+        </button>
+      </div>
     </nav>
   );
 }

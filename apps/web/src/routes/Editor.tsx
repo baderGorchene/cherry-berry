@@ -146,6 +146,7 @@ function Shell({ d }: { d: Ready }) {
   useEffect(() => setMessage(""), [sel.selected.join()]);
   const [tool, setTool] = useState<Tool>("select");
   const [panel, setPanel] = useState<Panel>("layers");
+  const [drawerOpen, setDrawerOpen] = useState(true);
   const phone = usePhone();
   const [sheet, setSheet] = useState<SheetId | null>(null);
   const toggleSheet = (s: SheetId) => setSheet((cur) => (cur === s ? null : s));
@@ -390,17 +391,34 @@ function Shell({ d }: { d: Ready }) {
         {done}
       </header>
       <div className="ed-body">
-        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} panel={panel} onTool={setTool} onPanel={(p) => setPanel(panel === p ? "layers" : p)} />
-        <div className="ed-left">
-          {/* Enter/Space on a focused tab activate it; keep them from the editor's global shortcuts. */}
-          <div role="tablist" aria-label="Left panel" className="ed-ltabs" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>
-            {TABS.map(([id, label]) => (
-              <button key={id} role="tab" aria-selected={left === id} className="ed-tab" disabled={!!editNode && id !== "layers"}
-                onClick={(e) => { setPanel(id); if (e.detail > 0) e.currentTarget.blur(); }}>{id === "brand" && issueCount ? `${label} (${issueCount})` : label}</button>
-            ))}
+        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} panel={panel} onTool={setTool}
+          onPanel={(p) => {
+            if (!drawerOpen) { setPanel(p); setDrawerOpen(true); }
+            else setPanel(panel === p ? "layers" : p);
+          }} />
+        {drawerOpen || editNode ? (
+          <div className="ed-left">
+            <div className="ed-lhead">
+              {/* Enter/Space on a focused tab activate it; keep them from the editor's global shortcuts. */}
+              <div role="tablist" aria-label="Left panel" className="ed-ltabs" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>
+                {TABS.map(([id, label]) => (
+                  <button key={id} role="tab" aria-selected={left === id} className="ed-tab" disabled={!!editNode && id !== "layers"}
+                    onClick={(e) => { setPanel(id); if (e.detail > 0) e.currentTarget.blur(); }}>{id === "brand" && issueCount ? `${label} (${issueCount})` : label}</button>
+                ))}
+              </div>
+              {!editNode && (
+                <button type="button" className="ed-lcollapse" aria-label="Collapse sidebar" title="Collapse sidebar"
+                  onClick={() => setDrawerOpen(false)}>‹</button>
+              )}
+            </div>
+            {panelBody(left)}
           </div>
-          {panelBody(left)}
-        </div>
+        ) : (
+          <div className="ed-left-closed">
+            <button type="button" className="ed-lcollapse" aria-label="Expand sidebar" title="Expand sidebar"
+              onClick={() => setDrawerOpen(true)}>›</button>
+          </div>
+        )}
         {canvas}
         {properties(false)}
       </div>
