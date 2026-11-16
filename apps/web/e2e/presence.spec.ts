@@ -13,7 +13,7 @@ async function addRect(page: Page) {
   await addShape(page, "Rectangle");
 }
 
-const layer = (page: Page) => page.getByRole("complementary", { name: "Layers" }).getByRole("button", { name: "Rectangle", exact: true });
+const layer = (page: Page) => page.getByRole("complementary", { name: "Layers panel" }).getByRole("button", { name: "Rectangle", exact: true });
 
 async function twoPeople(owner: Page, browser: Parameters<typeof openAsEditor>[0]) {
   await newPost(owner);

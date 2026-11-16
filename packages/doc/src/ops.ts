@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import type { CherryDocument, CherryNode } from "./schema";
+import type { CherryDocument, CherryNode, Page } from "./schema";
 import { LOCAL, docToY, fromYNode, ordered, toYList, toYNode } from "./y";
 
 type YMap = Y.Map<unknown>;
@@ -155,6 +155,26 @@ export function addPage(ydoc: Y.Doc, opts: { after?: string; copyOf?: string; ke
     insertAt(pages, id, page, afterIdx >= 0 ? afterIdx + 1 : sorted.length);
   }, LOCAL);
   return id;
+}
+
+/**
+ * Copies `pages` (e.g. a template's) in after page `after`, in order, with fresh page and node ids and no brand locks.
+ * Each page keeps its own size, unit, colour mode, bleed and background. One transaction (one undo step); returns the new page ids.
+ */
+export function insertPages(ydoc: Y.Doc, pages: Page[], after: string): string[] {
+  const ids = pages.map(() => crypto.randomUUID());
+  ydoc.transact(() => {
+    const list = pagesOf(ydoc);
+    const at = ordered(list).findIndex((p) => p.get("id") === after);
+    pages.forEach((p, i) => {
+      const page = new Y.Map<unknown>();
+      page.set("id", ids[i]);
+      for (const k of ["name", "width", "height", "unit", "colorMode", "bleed", "background"] as const) page.set(k, structuredClone(p[k]));
+      page.set("nodes", toYList(p.nodes.map((n) => cloneFresh(n, false)), toYNode));
+      insertAt(list, ids[i]!, page, (at < 0 ? list.size : at + 1) + i);
+    });
+  }, LOCAL);
+  return ids;
 }
 
 export function removePage(ydoc: Y.Doc, pageId: string): boolean {

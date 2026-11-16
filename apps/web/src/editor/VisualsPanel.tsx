@@ -65,7 +65,7 @@ export default function VisualsPanel({ ydoc, page, designId, workspaceId, readOn
   };
 
   return (
-    <aside aria-label="Visuals panel" className="ed-shapes">
+    <aside aria-label="Uploads panel" className="ed-shapes">
       <Chips label="Source" options={SOURCES} value={scope} onPick={setScope} />
       <Chips label="Type" options={TYPES} value={kind} onPick={setKind} />
       <button className="ed-mini" disabled={readOnly} onClick={() => setUploading(true)}>Upload…</button>

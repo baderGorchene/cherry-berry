@@ -5,13 +5,14 @@ import type { KonvaEventObject } from "konva/lib/Node";
 import * as Y from "yjs";
 import type { AnchorRef } from "@cherry/vector";
 import {
-  PT_PX, UNIT_PX, addNode, createShape, createText, duplicateNodes, removeNodes, reorderNode, toPx, updateNode,
+  PT_PX, UNIT_PX, addNode, createShape, duplicateNodes, removeNodes, reorderNode, toPx, updateNode,
   type BasicShape, type CherryNode, type Page,
 } from "@cherry/doc";
 import { fromKonvaTransform, toKonvaAttrs } from "./geometry";
 import { snapBox, type Guides } from "./layout";
 import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
 import TextEditor from "./TextEditor";
+import { presetText } from "./textPresets";
 import type { BrandKit, Role } from "../api";
 import { useAssetImage } from "./useAssetImage";
 import { pinch } from "./gestures";
@@ -38,6 +39,14 @@ export function withTextHeight(n: CherryNode, patch: Partial<CherryNode>, unit: 
   const height = t.height();
   t.destroy();
   return { ...patch, height };
+}
+
+/** One line's width at `size` (page units), for sizing new text boxes to their text. */
+export function measureText(text: string, fontFamily: string, size: number, weight: number): number {
+  const t = new Konva.Text({ text, fontFamily, fontSize: size, fontStyle: String(weight) });
+  const w = t.width();
+  t.destroy();
+  return w;
 }
 
 export const paint = (p?: { color: string; opacity: number }) => p && (p.opacity < 1 ? hexA(p.color, p.opacity) : p.color);
@@ -237,8 +246,9 @@ export default function Canvas({
     }
     onTool("select");
     if (tool === "text") {
-      const t = (moved ? createText(r, r.width) : createText(from, page.width * 0.6)) as TextNode;
-      setDraft(t);
+      // Body-text size; a click centres the box on the point, a drag sets its width.
+      const t = presetText("body", page, from, measureText) as TextNode;
+      setDraft(moved ? { ...t, x: r.x, y: r.y, width: r.width } : t);
       return setEditing(t.id);
     }
     const s = Math.min(page.width, page.height) * 0.25;

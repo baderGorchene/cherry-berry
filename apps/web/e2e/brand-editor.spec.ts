@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, signUp, unique, newDesign } from "./helpers";
+import { addShape, createWorkspace, editorReady, newDesign, openPanel, panel as railPanel, railButton, signUp, unique } from "./helpers";
 
 const content = (colors: [string, string, string, string][], rules: Record<string, boolean> = {}) => ({
   colors: colors.map(([id, name, role, hex]) => ({ id, name, role, hex })),
@@ -26,13 +26,14 @@ async function start(page: Page, colors: [string, string, string, string][], rul
   return kit.id as string;
 }
 
-const brandTab = (page: Page) => page.getByRole("tab", { name: /^Brand/ });
-const panel = (page: Page) => page.getByRole("complementary", { name: "Brand panel" });
+const brandTab = (page: Page) => railButton(page, "Brand");
+const showBrand = (page: Page) => openPanel(page, "Brand");
+const panel = (page: Page) => railPanel(page, "Brand");
 const props = (page: Page) => page.getByRole("complementary", { name: "Properties" });
-const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
+const layers = (page: Page) => railPanel(page, "Layers");
 
 async function link(page: Page) {
-  await brandTab(page).click();
+  await showBrand(page);
   await panel(page).getByLabel("Link a brand kit").selectOption({ label: "Lab kit" });
   await expect(panel(page).getByRole("heading", { name: "Colors" })).toBeVisible();
 }
@@ -41,16 +42,16 @@ const COLORS: [string, string, string, string][] = [["a", "Berry", "primary", "#
 
 test("links a kit and applies its styles", async ({ page }) => {
   await start(page, COLORS);
-  await brandTab(page).click();
+  await showBrand(page);
   await expect(panel(page).getByText("This design isn't linked to a brand kit.")).toBeVisible();
   await link(page);
 
   await panel(page).getByRole("button", { name: "Heading", exact: true }).click();
-  await page.getByRole("tab", { name: "Layers", exact: true }).click();
+  await openPanel(page, "Layers");
   await expect(layers(page).getByRole("button", { name: "Heading", exact: true })).toBeVisible();
 
   await addShape(page, "Rectangle");
-  await brandTab(page).click();
+  await showBrand(page);
   await panel(page).getByRole("button", { name: "Ink" }).click();
   await expect(props(page).getByText("#22142A", { exact: true })).toBeVisible();
 });
@@ -61,7 +62,7 @@ test("flags low contrast and off-brand fonts", async ({ page }) => {
   await expect(panel(page).getByText("No brand issues on this page.")).toBeVisible();
   await panel(page).getByRole("button", { name: "Body", exact: true }).click();
   await panel(page).getByRole("button", { name: "Petal" }).click();
-  await expect(brandTab(page)).toHaveText("Brand (1)");
+  await expect(brandTab(page)).toHaveAccessibleName("Brand, 1 issue");
   const issue = panel(page).getByRole("button", { name: /Contrast/ });
   await expect(issue).toBeVisible();
 
@@ -72,7 +73,7 @@ test("flags low contrast and off-brand fonts", async ({ page }) => {
 
   await props(page).getByRole("combobox", { name: "Font" }).selectOption("Georgia");
   await expect(panel(page).getByRole("button", { name: /Georgia is not a brand font/ })).toBeVisible();
-  await expect(brandTab(page)).toHaveText("Brand (2)");
+  await expect(brandTab(page)).toHaveAccessibleName("Brand, 2 issues");
 });
 
 test("kit colors only replaces the picker", async ({ page }) => {
@@ -91,7 +92,7 @@ test("kit deleted while linked", async ({ page }) => {
   expect((await page.request.delete(`/api/brand-kits/${kitId}`)).ok()).toBe(true);
   await page.reload();
   await editorReady(page);
-  await brandTab(page).click();
+  await showBrand(page);
   await expect(panel(page).getByText("This design isn't linked to a brand kit.")).toBeVisible();
   await expect(panel(page).getByLabel("Link a brand kit")).toHaveValue("");
   await expect(page.getByRole("alert")).toHaveCount(0);
@@ -101,13 +102,13 @@ test("a locked text layer is left alone by text styles and colors", async ({ pag
   await start(page, COLORS);
   await link(page);
   await panel(page).getByRole("button", { name: "Heading", exact: true }).click();
-  await page.getByRole("tab", { name: "Layers", exact: true }).click();
+  await openPanel(page, "Layers");
   await layers(page).getByRole("button", { name: "Lock Heading" }).click();
-  await brandTab(page).click();
+  await showBrand(page);
   await panel(page).getByRole("button", { name: "Heading", exact: true }).click();
   await expect(panel(page).getByText("Selected layers are locked")).toBeVisible();
   await panel(page).getByRole("button", { name: "Berry" }).click();
   await expect(panel(page).getByText("Selected layers are locked")).toBeVisible();
-  await page.getByRole("tab", { name: "Layers", exact: true }).click();
+  await openPanel(page, "Layers");
   await expect(layers(page).getByRole("button", { name: "Heading", exact: true })).toHaveCount(1);
 });

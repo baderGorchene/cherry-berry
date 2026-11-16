@@ -13,7 +13,7 @@ async function addRect(page: Page) {
   await addShape(page, "Rectangle");
 }
 
-const rects = (page: Page) => page.getByRole("complementary", { name: "Layers" }).getByRole("button", { name: "Rectangle", exact: true });
+const rects = (page: Page) => page.getByRole("complementary", { name: "Layers panel" }).getByRole("button", { name: "Rectangle", exact: true });
 const status = (page: Page) => page.getByRole("status");
 
 test("two people edit live", async ({ page: owner, browser }) => {
@@ -52,7 +52,7 @@ test("a viewer watches changes but cannot edit", async ({ page: owner, browser }
   const viewer = await openAsViewer(browser, owner);
   await addRect(owner);
   await expect(rects(viewer)).toBeVisible({ timeout: 5000 });
-  await expect(viewer.getByRole("button", { name: "Select (V)" })).toBeDisabled();
+  await expect(viewer.getByRole("button", { name: "Undo" })).toBeDisabled();
   // the R shortcut and a canvas click add nothing
   await viewer.keyboard.press("r");
   const box = (await viewer.getByLabel("Page 1 canvas").boundingBox())!;

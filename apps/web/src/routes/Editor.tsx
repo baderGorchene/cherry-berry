@@ -1,33 +1,40 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import * as Y from "yjs";
 import type { AnchorRef, BoolOp } from "@cherry/vector";
 import {
-  brandIssues, duplicateNodes, fromPx, removeNodes, reorderNode, setTitle, updateNode, yToDoc, type CherryDocument, type CherryNode,
+  brandIssues, duplicateNodes, fromPx, insertPages, removeNodes, reorderNode, setTitle, toPx, updateNode, yToDoc,
+  type CherryDocument, type CherryNode, type Page,
 } from "@cherry/doc";
-import { getKit, myWorkspaces, type BrandKit } from "../api";
+import { getKit, myWorkspaces, startFromTemplate, type BrandKit } from "../api";
 import { useSession } from "../App";
+import { useCreateDialog } from "../create/CreateDialog";
 import { canDelete, canEditContent, canMove } from "../editor/brandLock";
 import { useKitFonts } from "../brand/fonts";
 import "../editor/editor.css";
 import BrandPanel from "../editor/BrandPanel";
-import { IconBack, IconBrand, IconImage, IconLayers, IconMore, IconRedo, IconShapes, IconText, IconUndo } from "../icons";
+import { IconBack, IconMore, IconRedo, IconUndo } from "../icons";
+import BottomBar from "../editor/BottomBar";
 import Canvas, { type Tool } from "../editor/Canvas";
 import { NUDGE, allIds, clampZoom, fitZoom } from "../editor/geometry";
 import ExportDialog from "../editor/ExportDialog";
+import FileMenu from "../editor/FileMenu";
 import Layers from "../editor/Layers";
+import PageHeader from "../editor/PageHeader";
 import PublishDialog from "../editor/PublishDialog";
-import Pages from "../editor/Pages";
 import type { PathKeys } from "../editor/PathEditor";
 import { combinable, combine, convertToPath, editModel } from "../editor/pathEdit";
 import PathPanel from "../editor/PathPanel";
+import Rail, { RAIL_LABEL, type RailItem } from "../editor/Rail";
 import ShapesPanel from "../editor/ShapesPanel";
+import TemplatesPanel from "../editor/TemplatesPanel";
+import TextPanel from "../editor/TextPanel";
 import VisualsPanel from "../editor/VisualsPanel";
 import Properties from "../editor/Properties";
 import { Avatars, SharePopover } from "../editor/PresenceBar";
 import { colorFor, usePeers, type PresenceUser } from "../editor/presence";
 import Sheet from "../editor/Sheet";
-import Toolbar, { PEN } from "../editor/Toolbar";
+import DrawPanel from "../editor/Toolbar";
 import { useDesign, type DesignState } from "../editor/useDesign";
 import { useYValue } from "../editor/useYValue";
 
@@ -36,11 +43,8 @@ const TOOL_KEYS: Record<string, Tool> = { v: "select", t: "text", r: "rect", o: 
 // In path edit mode only the vector tools are armed by key; Shift+C (convert) is checked separately.
 const EDIT_KEYS: Record<string, Tool> = { a: "direct", p: "pen", "+": "add-anchor", "=": "add-anchor" };
 
-type Panel = "layers" | "shapes" | "visuals" | "brand";
-const TABS: [Panel, string][] = [["layers", "Layers"], ["shapes", "Shapes"], ["visuals", "Visuals"], ["brand", "Brand"]];
-
-type SheetId = Panel | "properties";
-const SHEET_LABEL: Record<SheetId, string> = { layers: "Layers", shapes: "Shapes", visuals: "Visuals", brand: "Brand", properties: "Properties" };
+type SheetId = RailItem | "properties";
+const clamp = (v: number, hi: number) => Math.min(hi, Math.max(0, v));
 
 // The phone layout (bottom tool bar and sheets) follows the theme's phone breakpoint.
 const phoneQuery = () => matchMedia("(max-width: 759px)");
@@ -145,8 +149,7 @@ function Shell({ d }: { d: Ready }) {
   const [message, setMessage] = useState("");
   useEffect(() => setMessage(""), [sel.selected.join()]);
   const [tool, setTool] = useState<Tool>("select");
-  const [panel, setPanel] = useState<Panel>("layers");
-  const [drawerOpen, setDrawerOpen] = useState(true);
+  const [panel, setPanel] = useState<RailItem | null>("layers");
   const phone = usePhone();
   const [sheet, setSheet] = useState<SheetId | null>(null);
   const toggleSheet = (s: SheetId) => setSheet((cur) => (cur === s ? null : s));
@@ -259,47 +262,76 @@ function Shell({ d }: { d: Ready }) {
     if (canCombine) setMessage(combine(ydoc, page.id, op, operands, act, select) ?? "");
   };
   const runConvert = (n: CherryNode) => setMessage(convertToPath(ydoc, page.id, n, act) ?? "");
-  const left: Panel = editNode ? "layers" : panel; // path edit mode always shows Layers
+  const left: RailItem | null = editNode ? "draw" : panel; // path edit mode always shows Draw (its point tools)
   const status = d.status === "error" ? `Not saved: ${d.statusMessage ?? ""}` : STATUS[d.status];
+  const navigate = useNavigate();
+  const createDialog = useCreateDialog();
+  const titleRef = useRef<HTMLInputElement>(null);
+  // The visible middle of the page, in page units: new text and pairings land there.
+  const scale = toPx(1, page.unit) * zoom;
+  const center = { x: clamp(page.width / 2 - pan.x / scale, page.width), y: clamp(page.height / 2 - pan.y / scale, page.height) };
+  const switchPage = (pageId: string) => setSel({ pageId, selected: [] });
+  const insertTemplate = (pages: Page[]) => {
+    let ids: string[] = [];
+    act(() => { ids = insertPages(ydoc, pages, page.id); });
+    if (ids[0]) { switchPage(ids[0]); zoomTo(null); }
+    if (phone) setSheet(null);
+  };
+  const pickRail = (p: RailItem) => (phone ? toggleSheet(p) : setPanel(panel === p ? null : p));
 
   const titleInput = (
-    <input aria-label="Design title" key={doc.title} defaultValue={doc.title} disabled={readOnly} maxLength={120}
+    <input ref={titleRef} aria-label="Design title" key={doc.title} defaultValue={doc.title} disabled={readOnly} maxLength={120}
       onBlur={(e) => { const t = e.currentTarget.value.trim(); if (t && t !== doc.title) act(() => setTitle(ydoc, t)); else e.currentTarget.value = doc.title; }}
       onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
   );
   const statusLine = (
     <span className="muted ell">
-      {page.width} × {page.height} {page.unit} · {page.colorMode.toUpperCase()} · {readOnly ? <span>View only</span> : <span role="status">{status}</span>}
+      {readOnly ? <span>View only</span> : <span role="status">{status}</span>}
       {(d.statusCode === "invalid_document" || d.statusCode === "brand_locked") && <> <button className="ed-mini" onClick={d.reload}>Reload to get the latest version</button></>}
     </span>
   );
   const undoBtn = <button className="ed-ib" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={readOnly} onClick={() => undo.undo()}><IconUndo /></button>;
   const redoBtn = <button className="ed-ib" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={readOnly} onClick={() => undo.redo()}><IconRedo /></button>;
-  const zoomGroup = (
-    <div className="ed-zoom" role="group" aria-label="Zoom">
-      <button className="ed-mini" aria-label="Zoom out" title="Zoom out (Ctrl+-)" onClick={() => zoomTo(zoom / 1.2)}>−</button>
-      <span className="ed-f" title="Zoom level">{Math.round(zoom * 100)}%</span>
-      <button className="ed-mini" aria-label="Zoom in" title="Zoom in (Ctrl+=)" onClick={() => zoomTo(zoom * 1.2)}>+</button>
-      <button className="ed-mini" title="Fit (Ctrl+0)" onClick={() => zoomTo(null)}>Fit</button>
-    </div>
+  const fileMenu = (
+    <FileMenu items={[
+      ["Rename", () => { titleRef.current?.focus(); titleRef.current?.select(); }, readOnly],
+      ["Page size and colour mode", () => {
+        select([]);
+        if (phone) setSheet("properties");
+        // ponytail: finds the Properties page section by class; Task 7 moves page settings into the context toolbar.
+        else requestAnimationFrame(() => { const el = document.querySelector<HTMLElement>(".ed-props"); if (el) { el.tabIndex = -1; el.focus(); } });
+      }],
+      ["History", () => navigate(`/d/${d.design.id}/history`)],
+      ["Publish as template", () => setPublishing(true), role === "viewer" || !!editNode],
+      ["Open a .cherry file", () => createDialog.open("open"), role === "viewer"],
+      ["Export", () => setExporting(true)],
+    ]} />
   );
-  const history = <Link className="btn" to={`/d/${d.design.id}/history`}>History</Link>;
-  const publish = role !== "viewer" && !editNode && <button className="btn" onClick={() => { setMore(false); setPublishing(true); }}>Publish</button>;
   const done = editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>;
-  const panelBody = (p: Panel) => ({
-    layers: (
-      <aside aria-label="Layers" className="ed-pane">
-        <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} role={role} act={act} onSelect={select} />
-        <Pages ydoc={ydoc} pages={doc.pages} pageId={page.id} readOnly={readOnly} role={role} act={act} onSwitch={(pageId) => setSel({ pageId, selected: [] })} />
-      </aside>
+  const panelBody = (p: RailItem) => ({
+    templates: (
+      <TemplatesPanel page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} onInsert={insertTemplate}
+        onOpen={async (id) => navigate(`/d/${(await startFromTemplate(id, d.design.workspaceId)).id}`)} />
     ),
     // On phones an armed tool closes the sheet so the canvas can take the tap.
-    shapes: <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} readOnly={readOnly} act={act} onSelect={select}
+    elements: <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} readOnly={readOnly} act={act} onSelect={select}
       onTool={(t) => { setTool(t); if (phone) setSheet(null); }} />,
-    visuals: <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role} selected={sel.selected} act={act} onSelect={select} />,
+    text: <TextPanel ydoc={ydoc} page={page} center={center} kit={kit} readOnly={readOnly} role={role} selected={sel.selected} act={act} onSelect={select} />,
+    uploads: <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role} selected={sel.selected} act={act} onSelect={select} />,
     brand: (
       <BrandPanel ydoc={ydoc} page={page} kit={kit} loading={kitLoading} issues={issues} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role}
         act={act} selected={sel.selected} onSelect={select} onLinked={setKitId} />
+    ),
+    draw: (
+      <DrawPanel readOnly={readOnly} tool={tool} editing={!!editNode} onTool={(t) => { setTool(t); if (phone && !editNode) setSheet(null); }}>
+        {/* Desktop keeps the point properties in the right column (as before), so the canvas doesn't move under the pointer. */}
+        {editNode && phone && <PathPanel ydoc={ydoc} page={page} node={editNode} anchors={anchors} act={act} />}
+      </DrawPanel>
+    ),
+    layers: (
+      <aside aria-label="Layers panel" className="ed-pane">
+        <Layers ydoc={ydoc} pageId={page.id} nodes={page.nodes} selected={sel.selected} readOnly={readOnly} role={role} act={act} onSelect={select} />
+      </aside>
     ),
   })[p];
   const properties = (tabs: boolean) => editNode
@@ -313,6 +345,9 @@ function Shell({ d }: { d: Ready }) {
       act={act} onSelect={select} onTool={setTool} onPan={setPan} onZoom={zoomTo} onViewport={setVp}
       onAnchors={setAnchors} onEditPath={enterEdit} />
   );
+  const pageHeader = <PageHeader ydoc={ydoc} pages={doc.pages} page={page} readOnly={readOnly} role={role} act={act} onSwitch={switchPage} />;
+  const bottomBar = <BottomBar ydoc={ydoc} doc={doc} pageId={page.id} readOnly={readOnly} act={act} onSwitch={switchPage} zoom={zoom} onZoom={zoomTo} />;
+  const rail = (value: RailItem | null) => <Rail value={value} issues={issueCount} only={editNode && !phone ? "draw" : undefined} onPick={pickRail} />;
   const dialogs = (
     <>
       {publishing && (
@@ -331,40 +366,32 @@ function Shell({ d }: { d: Ready }) {
   );
 
   if (phone) {
-    const tl = (label: string, icon: ReactNode, pressed: boolean, onClick: () => void, disabled = false) => (
-      <button className="ed-tl" aria-pressed={pressed} disabled={disabled} onClick={onClick}>{icon}{label}</button>
-    );
-    const arm = (t: Tool) => { setTool(tool === t ? "select" : t); setSheet(null); };
+    const sheetBody = sheet === "properties" ? properties(true) : sheet && panelBody(sheet);
     return (
       <div className="ed ed-m">
         <header className="ed-head">
           <Link className="ed-ib" to="/" aria-label="Back to home"><IconBack /></Link>
           <div className="ed-title">{titleInput}</div>
           {undoBtn}
-          <button className={`ed-ib${sheet === "layers" ? " ed-ib-on" : ""}`} aria-label="Layers" aria-pressed={sheet === "layers"} onClick={() => toggleSheet("layers")}><IconLayers /></button>
+          {fileMenu}
           {done || <button className="btn btn-p" onClick={() => setExporting(true)}>Export</button>}
           <div className="ed-more-w" ref={moreRef}>
             <button ref={moreBtn} className="ed-ib" aria-label="More" aria-expanded={more} onClick={() => setMore(!more)}><IconMore /></button>
             {more && (
               <div className="ed-pop ed-more" role="dialog" aria-label="More" tabIndex={-1} ref={morePop}>
                 {statusLine}
-                {zoomGroup}
                 <Avatars people={people} />
-                <div className="ed-more-row">{redoBtn}{history}{publish}</div>
+                <div className="ed-more-row">{redoBtn}</div>
                 <SharePopover workspace={workspaceName} />
               </div>
             )}
           </div>
         </header>
+        {pageHeader}
         <div className="ed-body">{canvas}</div>
-        {sheet && <Sheet key={sheet} label={SHEET_LABEL[sheet]} onClose={() => setSheet(null)}>{sheet === "properties" ? properties(true) : panelBody(sheet)}</Sheet>}
-        <nav aria-label="Tools" className="ed-mtools">
-          {tl("Text", <IconText />, tool === "text", () => arm("text"), readOnly)}
-          {tl("Shapes", <IconShapes />, sheet === "shapes", () => toggleSheet("shapes"))}
-          {tl("Visuals", <IconImage />, sheet === "visuals", () => toggleSheet("visuals"))}
-          {tl("Draw", PEN, tool === "pen", () => arm("pen"), readOnly || !!editNode)}
-          {tl(issueCount ? `Brand (${issueCount})` : "Brand", <IconBrand />, sheet === "brand", () => toggleSheet("brand"))}
-        </nav>
+        {bottomBar}
+        {sheet && <Sheet key={sheet} label={sheet === "properties" ? "Properties" : RAIL_LABEL[sheet]} onClose={() => setSheet(null)}>{sheetBody}</Sheet>}
+        {rail(sheet === "properties" ? null : sheet)}
         {dialogs}
       </div>
     );
@@ -374,6 +401,7 @@ function Shell({ d }: { d: Ready }) {
     <div className="ed">
       <header className="ed-head">
         <Link className="ed-ib" to="/" aria-label="Back to home"><IconBack /></Link>
+        {fileMenu}
         <div className="ed-title">
           {titleInput}
           {statusLine}
@@ -382,44 +410,26 @@ function Shell({ d }: { d: Ready }) {
         {redoBtn}
         {editNode && <span className="ed-pill">Editing path</span>}
         <span style={{ flex: 1 }} />
-        {zoomGroup}
         <Avatars people={people} />
-        {history}
-        <button className="btn" onClick={() => setExporting(true)}>Export</button>
         <SharePopover workspace={workspaceName} />
-        {publish}
-        {done}
+        {done || <button className="btn btn-p" onClick={() => setExporting(true)}>Export</button>}
       </header>
       <div className="ed-body">
-        <Toolbar readOnly={readOnly} tool={tool} editing={!!editNode} panel={panel} onTool={setTool}
-          onPanel={(p) => {
-            if (!drawerOpen) { setPanel(p); setDrawerOpen(true); }
-            else setPanel(panel === p ? "layers" : p);
-          }} />
-        {drawerOpen || editNode ? (
+        {rail(left)}
+        {left && (
           <div className="ed-left">
             <div className="ed-lhead">
-              {/* Enter/Space on a focused tab activate it; keep them from the editor's global shortcuts. */}
-              <div role="tablist" aria-label="Left panel" className="ed-ltabs" onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") e.stopPropagation(); }}>
-                {TABS.map(([id, label]) => (
-                  <button key={id} role="tab" aria-selected={left === id} className="ed-tab" disabled={!!editNode && id !== "layers"}
-                    onClick={(e) => { setPanel(id); if (e.detail > 0) e.currentTarget.blur(); }}>{id === "brand" && issueCount ? `${label} (${issueCount})` : label}</button>
-                ))}
-              </div>
-              {!editNode && (
-                <button type="button" className="ed-lcollapse" aria-label="Collapse sidebar" title="Collapse sidebar"
-                  onClick={() => setDrawerOpen(false)}>‹</button>
-              )}
+              <h2 className="ed-lt">{RAIL_LABEL[left]}</h2>
+              {!editNode && <button type="button" className="ed-lcollapse" aria-label="Close panel" title="Close panel" onClick={() => setPanel(null)}>‹</button>}
             </div>
             {panelBody(left)}
           </div>
-        ) : (
-          <div className="ed-left-closed">
-            <button type="button" className="ed-lcollapse" aria-label="Expand sidebar" title="Expand sidebar"
-              onClick={() => setDrawerOpen(true)}>›</button>
-          </div>
         )}
-        {canvas}
+        <div className="ed-center">
+          {pageHeader}
+          {canvas}
+          {bottomBar}
+        </div>
         {properties(false)}
       </div>
       {dialogs}

@@ -1,10 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, openAsEditor, signUp, unique, uniquePng, newDesign } from "./helpers";
+import { addPage, addShape, createWorkspace, editorReady, newDesign, openAsEditor, openPanel, pageThumb, panel, signUp, unique, uniquePng } from "./helpers";
 
-const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
+const layers = (page: Page) => panel(page, "Layers");
 const props = (page: Page) => page.getByRole("complementary", { name: "Properties" });
 const canvas = (page: Page) => page.getByLabel("Page 1 canvas");
-const showLayers = (page: Page) => page.getByRole("tab", { name: "Layers", exact: true }).click();
+const showLayers = (page: Page) => openPanel(page, "Layers");
 
 async function seedVisual(page: Page, title: string) {
   const { workspaces } = await (await page.request.get("/api/workspaces/mine")).json();
@@ -36,9 +36,9 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await page.keyboard.press("Escape");
   await seedVisual(page, "Dot");
   await seedVisual(page, "Dash");
-  await page.getByRole("button", { name: "Visuals" }).click();
-  await page.getByRole("complementary", { name: "Visuals panel" }).getByRole("button", { name: "Workspace", exact: true }).click();
-  await page.getByRole("complementary", { name: "Visuals panel" }).getByRole("button", { name: "Dot" }).click();
+  await openPanel(page, "Uploads");
+  await panel(page, "Uploads").getByRole("button", { name: "Workspace", exact: true }).click();
+  await panel(page, "Uploads").getByRole("button", { name: "Dot" }).click();
   await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toBeVisible();
 
@@ -46,8 +46,8 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await setLock(page, "Hello", "Content editable");
   await setLock(page, "Dot", "Content editable");
   // A second page, so deleting the first isn't blocked just for being the only one.
-  await page.getByRole("button", { name: "+ Add page" }).click();
-  await page.getByRole("button", { name: /Page 1$/ }).click();
+  await addPage(page);
+  await pageThumb(page, 1).click();
   await expect(page.getByRole("status")).toHaveText("Saved");
   const url = page.url();
 
@@ -60,15 +60,15 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   await expect(layers(editor).getByText("Brand", { exact: true })).toHaveCount(3);
 
   // The page holding locked layers can't be deleted by an editor.
-  const del = editor.locator(".ed-pagerow").getByRole("button", { name: "Delete" });
+  const del = editor.getByRole("button", { name: "Delete page" });
   await expect(del).toBeDisabled();
   await expect(del).toHaveAttribute("title", "Contains brand-locked layers");
 
   // Duplicating the page copies the layers without their locks, and the save is accepted.
-  await editor.locator(".ed-pagerow").getByRole("button", { name: "Duplicate" }).click();
+  await editor.getByRole("button", { name: "Duplicate page" }).click();
   await expect(editor.getByRole("status")).toHaveText("Saved");
   await expect(editor.getByText("Not saved")).toHaveCount(0);
-  await editor.getByRole("button", { name: /Page 1$/ }).click();
+  await pageThumb(editor, 1).click();
 
   // Fixed: a click on the rectangle doesn't select it.
   const box = (await canvas(editor).boundingBox())!;
@@ -93,9 +93,9 @@ test("editors can't move, delete or select brand-locked layers", async ({ page, 
   // A visual placed with a content-locked image selected replaces its picture.
   await layers(editor).getByRole("button", { name: "Dot", exact: true }).click();
   const count = await layers(editor).getByRole("listitem").count();
-  await editor.getByRole("button", { name: "Visuals" }).click();
-  await editor.getByRole("complementary", { name: "Visuals panel" }).getByRole("button", { name: "Workspace", exact: true }).click();
-  await editor.getByRole("complementary", { name: "Visuals panel" }).getByRole("button", { name: "Dash" }).click();
+  await openPanel(editor, "Uploads");
+  await panel(editor, "Uploads").getByRole("button", { name: "Workspace", exact: true }).click();
+  await panel(editor, "Uploads").getByRole("button", { name: "Dash" }).click();
   await showLayers(editor);
   await expect(editor.getByRole("status")).toHaveText("Saved");
   await expect(layers(editor).getByRole("listitem")).toHaveCount(count);

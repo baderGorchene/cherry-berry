@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Download, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, signUp, unique, uniquePng, newDesign } from "./helpers";
+import { addShape, createWorkspace, editorReady, openPanel, panel, signUp, unique, uniquePng, newDesign } from "./helpers";
 
 async function newSocialPost(page: Page) {
   await signUp(page, unique("exp"));
@@ -10,7 +10,7 @@ async function newSocialPost(page: Page) {
   await editorReady(page);
 }
 
-const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
+const layers = (page: Page) => page.getByRole("complementary", { name: "Layers panel" });
 const dialog = (page: Page) => page.getByRole("dialog", { name: /^Export/ });
 const saved = (page: Page) => expect(page.getByText("Saved", { exact: true })).toBeVisible();
 const bytes = async (d: Download) => readFileSync((await d.path())!);
@@ -98,11 +98,11 @@ test("credits for a cc-by visual", async ({ page }) => {
     },
   });
   expect(res.status()).toBe(201);
-  await page.getByRole("button", { name: "Visuals" }).click();
-  const visuals = page.getByRole("complementary", { name: "Visuals panel" });
+  await openPanel(page, "Uploads");
+  const visuals = panel(page, "Uploads");
   await visuals.getByRole("button", { name: "Workspace", exact: true }).click();
   await visuals.getByRole("button", { name: "Dot" }).click();
-  await page.getByRole("tab", { name: "Layers", exact: true }).click();
+  await openPanel(page, "Layers");
   await expect(layers(page).getByRole("button", { name: "Dot", exact: true })).toBeVisible();
   await saved(page);
   await page.getByRole("button", { name: "Export", exact: true }).click();

@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, createWorkspace, editorReady, openAsEditor, openAsViewer, signUp, unique, newDesign } from "./helpers";
+import { addShape, createWorkspace, editorReady, fileMenu, openAsEditor, openAsViewer, signUp, unique, newDesign } from "./helpers";
 
-const rects = (page: Page) => page.getByRole("complementary", { name: "Layers" }).getByRole("button", { name: "Rectangle", exact: true });
+const rects = (page: Page) => page.getByRole("complementary", { name: "Layers panel" }).getByRole("button", { name: "Rectangle", exact: true });
 const versions = (page: Page) => page.getByRole("complementary", { name: "Versions" });
 
 async function addRect(page: Page, dx = 0) {
@@ -19,7 +19,7 @@ async function withNamedVersion(page: Page) {
   await expect(rects(page)).toHaveCount(1);
   await expect(page.getByText("Saved", { exact: true })).toBeVisible();
   const editorUrl = page.url();
-  await page.getByRole("link", { name: "History" }).click();
+  await fileMenu(page, "History");
   await expect(page).toHaveURL(/\/history$/);
   await page.getByRole("button", { name: "Name this version" }).click();
   await page.getByRole("dialog").getByLabel("Name").fill("Client review v1");
@@ -40,7 +40,7 @@ async function addSecondRect(page: Page) {
 test("name a version, change the design, compare side by side", async ({ page }) => {
   await withNamedVersion(page);
   await addSecondRect(page);
-  await page.getByRole("link", { name: "History" }).click();
+  await fileMenu(page, "History");
   await versions(page).getByRole("button", { name: /Client review v1/ }).click();
   await expect(page.getByText("Current · 1 change outlined")).toBeVisible();
   await expect(page.locator("canvas")).toHaveCount(2);
@@ -59,7 +59,7 @@ test("restore brings the old design back for everyone", async ({ page: owner, br
   await editor.goto(new URL(url).pathname);
   await expect(rects(editor)).toHaveCount(2, { timeout: 10_000 });
 
-  await owner.getByRole("link", { name: "History" }).click();
+  await fileMenu(owner, "History");
   await versions(owner).getByRole("button", { name: /Client review v1/ }).click();
   const rowRestore = owner.getByRole("button", { name: "Restore", exact: true });
   await rowRestore.click();

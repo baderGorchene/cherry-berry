@@ -87,24 +87,33 @@ export async function openAsEditor(browser: Browser, owner: Page): Promise<Page>
   return editor;
 }
 
-/** Waits until the editor is loaded and editable (its Select tool is enabled). */
+/** Waits until the editor is loaded and editable (Undo is enabled for anyone who can edit). */
 export async function editorReady(page: Page) {
-  await expect(page.getByRole("button", { name: "Select (V)" })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
 }
 
 const SHAPE_KEYS = { Rectangle: "r", Ellipse: "o", Line: "l", Text: "t" } as const;
+export type PanelName = "Templates" | "Elements" | "Text" | "Uploads" | "Brand" | "Draw" | "Layers";
 
-/** Opens a tab of the editor's left panel (Layers, Shapes, Visuals, Brand). The only place that knows the tab names. */
-export async function openPanel(page: Page, name: "Layers" | "Shapes" | "Visuals" | "Brand") {
-  await page.getByRole("tab", { name, exact: true }).click();
+/** The editor's panel rail (left column on desktop, bottom bar on phones) and one of its buttons. */
+export const rail = (page: Page) => page.getByRole("navigation", { name: "Editor panels" });
+export const railButton = (page: Page, name: PanelName) => rail(page).getByRole("button", { name: new RegExp(`^${name}`) });
+/** A rail panel by name (on phones it sits inside a sheet). */
+export const panel = (page: Page, name: PanelName) => page.getByRole("complementary", { name: `${name} panel` });
+
+/** Opens a rail panel (a no-op when it is already open). The only place that knows the rail and panel names. */
+export async function openPanel(page: Page, name: PanelName) {
+  const b = railButton(page, name);
+  if ((await b.getAttribute("aria-pressed")) !== "true") await b.click();
+  await expect(panel(page, name)).toBeVisible();
 }
 
 /** Adds a shape the way a user does: arms it with its keyboard shortcut, then clicks the canvas centre (offset by dx, dy px).
- *  The only place that knows how shapes are added (the Shapes panel is not needed, and Layers stays visible).
+ *  The only place that knows how shapes are added (the Elements panel is not needed, and Layers stays visible).
  *  When the Layers panel is showing, fails unless exactly one layer appeared (so an ignored key is loud). */
 export async function addShape(page: Page, shape: keyof typeof SHAPE_KEYS, dx = 0, dy = 0, canvas = page.getByLabel(/^Page \d+ canvas$/)) {
-  const rows = page.getByRole("complementary", { name: "Layers" }).locator("li.ed-layrow");
-  const watch = await page.getByRole("complementary", { name: "Layers" }).isVisible();
+  const rows = panel(page, "Layers").locator("li.ed-layrow");
+  const watch = await panel(page, "Layers").isVisible();
   const before = watch ? await rows.count() : 0;
   // Commit a pending text edit (Escape) instead of discarding it; other fields just lose focus, since shortcuts are ignored while typing.
   if (await page.getByLabel("Edit text").isVisible()) await page.keyboard.press("Escape");
@@ -120,4 +129,16 @@ export async function newDesign(page: Page, size: "Social post" | "Presentation"
   await page.getByRole("button", { name: size, exact: true }).click();
   await page.getByRole("dialog", { name: "Create a design" }).getByRole("button", { name: new RegExp(`^${size}`) }).first().click();
   await expect(page).toHaveURL(/\/d\//);
+}
+
+/** The bottom bar's page strip and the thumbnail of page `n` (1-based). */
+export const pageStrip = (page: Page) => page.getByRole("navigation", { name: "Pages" });
+export const pageThumb = (page: Page, n: number) => pageStrip(page).getByRole("button", { name: `Page ${n}`, exact: true });
+/** Adds a page after the current one from the page strip. */
+export const addPage = (page: Page) => pageStrip(page).getByRole("button", { name: "Add page" }).click();
+
+/** Runs an item of the editor's File menu. */
+export async function fileMenu(page: Page, item: string) {
+  await page.getByRole("button", { name: "File", exact: true }).click();
+  await page.getByRole("menu", { name: "File" }).getByRole("menuitem", { name: item }).click();
 }

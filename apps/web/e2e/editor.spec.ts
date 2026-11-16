@@ -1,19 +1,21 @@
 import { expect, test, type Page } from "@playwright/test";
-import { addShape, openPanel, createWorkspace, editorReady, openAsViewer, signUp, unique, uniquePng, newDesign } from "./helpers";
+import {
+  addPage, addShape, createWorkspace, editorReady, newDesign, openAsViewer, openPanel, pageStrip, pageThumb, panel, rail, railButton, signUp, unique, uniquePng,
+  type PanelName,
+} from "./helpers";
 
-async function newSocialPost(page: Page) {
+async function newSocialPost(page: Page, size: "Social post" | "Presentation" = "Social post") {
   await signUp(page, unique("ed"));
   await createWorkspace(page, "Editor Lab");
-  await newDesign(page, "Social post");
+  await newDesign(page, size);
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
   await editorReady(page);
 }
 
-const layers = (page: Page) => page.getByRole("complementary", { name: "Layers" });
-/** Shapes and Visuals share the left panel with Layers; switch back to see the layers. */
+const layers = (page: Page) => panel(page, "Layers");
+/** Every rail panel shares the one left panel; switch back to see the layers. */
 const showLayers = (page: Page) => openPanel(page, "Layers");
-/** The Pages-list row whose name button is exactly `name`. */
-const pageRow = (p: Page, name: string) => p.getByRole("listitem").filter({ has: p.getByRole("button", { name, exact: true }) });
+const pageAction = (page: Page, name: string) => page.getByRole("button", { name, exact: true });
 const status = (page: Page) => page.getByRole("status");
 
 /** Pen-draws a closed triangle around the canvas center; returns its first anchor and an inside point (screen px). */
@@ -128,13 +130,12 @@ test("undo and redo", async ({ page }) => {
 
 test("pages", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "+ Add page" }).click();
-  const page2 = pageRow(page, "Page 2");
-  await expect(page2).toBeVisible();
-  await page2.getByRole("button", { name: "Delete" }).click();
-  await expect(page2).toHaveCount(0);
-  const page1 = pageRow(page, "Page 1");
-  await expect(page1.getByRole("button", { name: "Delete" })).toBeDisabled();
+  await addPage(page);
+  await expect(pageThumb(page, 2)).toBeVisible();
+  await expect(page.getByLabel("Page 2 canvas")).toBeVisible(); // the new page is current
+  await pageAction(page, "Delete page").click();
+  await expect(pageThumb(page, 2)).toHaveCount(0);
+  await expect(pageAction(page, "Delete page")).toBeDisabled();
 });
 
 test("properties show page info when nothing is selected", async ({ page }) => {
@@ -149,20 +150,34 @@ test("properties show page info when nothing is selected", async ({ page }) => {
   await expect(props.getByRole("heading", { name: "Page", exact: true })).toBeVisible();
 });
 
-test("page actions show only on the current page", async ({ page }) => {
+test("the page header renames, duplicates and moves the current page", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "+ Add page" }).click();
-  await expect(pageRow(page, "Page 2")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Duplicate" })).toHaveCount(1);
-  await expect(page.getByRole("button", { name: "Duplicate" })).toBeVisible();
+  const name = page.getByRole("textbox", { name: "Page name" });
+  await name.fill("Cover");
+  await name.press("Enter");
+  await expect(page.getByLabel("Cover canvas")).toBeVisible();
+  await expect(pageThumb(page, 1)).toHaveAttribute("title", "Cover");
+  await expect(page.getByRole("status")).toHaveText("Saved");
+  await page.reload();
+  await expect(page.getByRole("textbox", { name: "Page name" })).toHaveValue("Cover");
+
+  await pageAction(page, "Duplicate page").click();
+  await expect(page.getByLabel("Cover copy canvas")).toBeVisible();
+  await expect(pageThumb(page, 2)).toHaveAttribute("aria-current", "page");
+  await pageAction(page, "Move page up").click();
+  await expect(pageThumb(page, 1)).toHaveAttribute("title", "Cover copy");
+  await expect(pageAction(page, "Move page up")).toBeDisabled();
+  await page.locator(".ed-phead").getByRole("button", { name: "Add page" }).click();
+  await expect(pageStrip(page).getByRole("button", { name: /^Page \d$/ })).toHaveCount(3);
+  await expect(pageThumb(page, 2)).toHaveAttribute("aria-current", "page");
 });
 
 test("viewer is read-only", async ({ browser }) => {
   const owner = await (await browser.newContext()).newPage();
   await newSocialPost(owner);
   const viewer = await openAsViewer(browser, owner);
-  await expect(viewer.getByRole("button", { name: "Select (V)" })).toBeDisabled();
-  await openPanel(viewer, "Shapes");
+  await expect(viewer.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await openPanel(viewer, "Elements");
   await expect(viewer.getByRole("button", { name: "Import SVG…" })).toBeDisabled();
   // the R shortcut and a canvas click add nothing
   await openPanel(viewer, "Layers");
@@ -173,28 +188,183 @@ test("viewer is read-only", async ({ browser }) => {
   await expect(layers(viewer).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(0);
 });
 
-test("left panel tabs switch between layers, shapes and visuals", async ({ page }) => {
+test("each rail button opens its panel, and clicking it again closes it", async ({ page }) => {
   await newSocialPost(page);
-  const tab = (name: string) => page.getByRole("tab", { name, exact: true });
-  await expect(tab("Layers")).toHaveAttribute("aria-selected", "true");
-  await page.getByRole("button", { name: "Shapes", exact: true }).click();
-  await expect(tab("Shapes")).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("complementary", { name: "Shapes panel" })).toBeVisible();
-  await expect(layers(page)).not.toBeVisible();
-  await openPanel(page, "Visuals");
-  await expect(page.getByRole("complementary", { name: "Visuals panel" })).toBeVisible();
-  await openPanel(page, "Layers");
-  // R arms the rectangle tool (focus stays on the Layers tab): a click on the canvas then adds one.
-  await page.keyboard.press("r");
-  await expect(page.getByRole("button", { name: "Select (V)" })).toHaveAttribute("aria-pressed", "false");
-  const cbox = (await page.getByLabel("Page 1 canvas").boundingBox())!;
-  await page.mouse.click(cbox.x + cbox.width / 2, cbox.y + cbox.height / 2);
-  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toBeVisible();
-  // Keyboard activation keeps focus on the tab.
-  await tab("Visuals").focus();
+  await expect(railButton(page, "Layers")).toHaveAttribute("aria-pressed", "true");
+  for (const name of ["Templates", "Elements", "Text", "Uploads", "Brand", "Draw", "Layers"] as PanelName[]) {
+    const b = railButton(page, name);
+    if ((await b.getAttribute("aria-pressed")) === "true") await b.click(); // Layers starts open
+    await expect(panel(page, name)).toHaveCount(0);
+    await b.click();
+    await expect(b).toHaveAttribute("aria-pressed", "true");
+    await expect(panel(page, name)).toBeVisible();
+    await expect(page.getByRole("complementary", { name: / panel$/ })).toHaveCount(1); // one panel at a time
+    await b.click();
+    await expect(panel(page, name)).toHaveCount(0);
+  }
+  // The collapse handle closes it too, and keyboard activation keeps focus on the rail button.
+  await railButton(page, "Uploads").click();
+  await page.getByRole("button", { name: "Close panel" }).click();
+  await expect(panel(page, "Uploads")).toHaveCount(0);
+  await railButton(page, "Text").focus();
   await page.keyboard.press("Enter");
-  await expect(tab("Visuals")).toHaveAttribute("aria-selected", "true");
-  await expect(tab("Visuals")).toBeFocused();
+  await expect(panel(page, "Text")).toBeVisible();
+  await expect(railButton(page, "Text")).toBeFocused();
+});
+
+test("the old single-key shortcuts still work", async ({ page }) => {
+  await newSocialPost(page);
+  await openPanel(page, "Layers");
+  const box = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  const click = (dx: number) => page.mouse.click(box.x + box.width / 2 + dx, box.y + box.height / 2 - 200);
+  for (const [key, name] of [["r", "Rectangle"], ["o", "Ellipse"], ["l", "Line"]] as const) {
+    await page.keyboard.press(key);
+    await click(0);
+    await expect(layers(page).getByRole("button", { name, exact: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(450);
+  }
+  // V puts an armed tool down: the next click adds nothing.
+  await page.keyboard.press("r");
+  await page.keyboard.press("v");
+  await click(-250);
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(1);
+  // T places body text at the click point; P arms the pen in the Draw panel.
+  await page.keyboard.press("t");
+  await click(0);
+  await expect(page.getByLabel("Edit text")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("p");
+  await openPanel(page, "Draw");
+  await expect(panel(page, "Draw").getByRole("button", { name: "Pen (P)" })).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("v");
+  await expect(panel(page, "Draw").getByRole("button", { name: "Pen (P)" })).toHaveAttribute("aria-pressed", "false");
+});
+
+/** X, Y, W and H of the selected layer, from Properties. */
+const box = async (page: Page) => {
+  const v = async (l: string) => Number(await page.getByRole("complementary", { name: "Properties" }).getByLabel(l, { exact: true }).inputValue());
+  return { x: await v("X"), y: await v("Y"), w: await v("W"), h: await v("H") };
+};
+
+test("Add a heading inserts a page-sized heading fully inside the page", async ({ page }) => {
+  await newSocialPost(page);
+  await openPanel(page, "Text");
+  await panel(page, "Text").getByRole("button", { name: "Add a heading" }).click();
+  await expect(page.getByRole("complementary", { name: "Properties" }).getByLabel("Size", { exact: true })).toBeVisible();
+  // 8% of a 1080 px page is 86.4 px, stored in points (x 72/96).
+  await expect(page.getByLabel("Size", { exact: true })).toHaveValue("64.8");
+  const b = await box(page);
+  expect(b.x).toBeGreaterThanOrEqual(0);
+  expect(b.y).toBeGreaterThanOrEqual(0);
+  expect(b.x + b.w).toBeLessThanOrEqual(1080);
+  expect(b.y + b.h).toBeLessThanOrEqual(1080);
+  expect(b.w).toBeLessThan(1080 * 0.9); // fitted to the text, not 60% of the page
+  expect(Math.abs(b.x + b.w / 2 - 540)).toBeLessThan(2);
+  await openPanel(page, "Text");
+  await panel(page, "Text").getByRole("button", { name: "Playfair Display and Inter" }).click();
+  await showLayers(page);
+  await expect(layers(page).getByRole("button", { name: "Playfair Display and Inter", exact: true })).toBeVisible();
+});
+
+test("templates that fit come first; another size adds its own pages", async ({ page }) => {
+  await newSocialPost(page, "Presentation");
+  await openPanel(page, "Templates");
+  const tpl = panel(page, "Templates");
+  const headings = await tpl.getByRole("heading").allInnerTexts();
+  expect(headings.map((h) => h.toLowerCase())).toEqual(["fits this page", "other sizes"]);
+  await expect(tpl.getByRole("region", { name: "Fits this page" }).getByRole("button", { name: "Insert Brand kickoff deck" })).toBeVisible();
+  await expect(tpl.getByRole("region", { name: "Other sizes" }).getByRole("button", { name: "Insert Jazz night flyer" })).toBeVisible();
+
+  // An A4 mm CMYK flyer after a 1920 x 1080 px page: each keeps its own size, and Fit works on each.
+  await tpl.getByRole("button", { name: "Insert Jazz night flyer" }).click();
+  await expect(pageStrip(page).getByRole("button", { name: /^Page \d$/ })).toHaveCount(2);
+  await expect(pageThumb(page, 2)).toHaveAttribute("aria-current", "page");
+  const header = page.locator(".ed-phead");
+  await expect(header).toContainText("210 × 297 mm");
+  const zoom = page.getByTitle("Zoom level");
+  const fit = async () => {
+    await page.getByRole("button", { name: "Fit", exact: true }).click();
+    const c = (await page.getByLabel(/ canvas$/).boundingBox())!;
+    return { pct: await zoom.innerText(), c };
+  };
+  const a4 = await fit();
+  await pageThumb(page, 1).click();
+  await expect(header).toContainText("1920 × 1080 px");
+  const wide = await fit();
+  expect(a4.pct).not.toBe(wide.pct);
+  await page.keyboard.press("Control+Z");
+  await expect(pageStrip(page).getByRole("button", { name: /^Page \d$/ })).toHaveCount(1); // one undo step
+  await page.keyboard.press("Control+Shift+Z");
+  await expect(pageStrip(page).getByRole("button", { name: /^Page \d$/ })).toHaveCount(2);
+  await expect(page.getByRole("status")).toHaveText("Saved");
+
+  // Export of all pages succeeds with mixed sizes.
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: /^Export/ });
+  await dialog.getByRole("radio", { name: /^PDF · Print/ }).check();
+  await expect(dialog.getByText("All pages (2)")).toBeVisible();
+  const started = page.waitForEvent("download");
+  await dialog.getByRole("button", { name: "Export PDF · Print", exact: true }).click();
+  expect((await started).suggestedFilename()).toMatch(/\.pdf$/);
+});
+
+test("the zoom slider changes the zoom", async ({ page }) => {
+  await newSocialPost(page);
+  const zoom = page.getByTitle("Zoom level");
+  const before = await zoom.innerText();
+  const slider = page.getByRole("slider", { name: "Zoom" });
+  await slider.fill("100"); // log2 x 100: 200%
+  await expect(zoom).toHaveText("200%");
+  expect(before).not.toBe("200%");
+  await page.getByRole("button", { name: "Fit", exact: true }).click();
+  await expect(zoom).toHaveText(before);
+});
+
+test("the File menu opens with the keyboard and Escape returns focus", async ({ page }) => {
+  await newSocialPost(page);
+  const file = page.getByRole("button", { name: "File", exact: true });
+  await file.focus();
+  await page.keyboard.press("Enter");
+  const menu = page.getByRole("menu", { name: "File" });
+  for (const item of ["Rename", "Page size and colour mode", "History", "Publish as template", "Open a .cherry file", "Export"]) {
+    await expect(menu.getByRole("menuitem", { name: item, exact: true })).toBeVisible();
+  }
+  await expect(menu.getByRole("menuitem", { name: "Rename" })).toBeFocused();
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("menuitem", { name: "Page size and colour mode" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(file).toBeFocused();
+  await file.click();
+  await menu.getByRole("menuitem", { name: "Rename" }).click();
+  await expect(page.getByLabel("Design title")).toBeFocused();
+  await file.click();
+  await menu.getByRole("menuitem", { name: "Open a .cherry file" }).click();
+  await expect(page.getByRole("dialog", { name: "Create a design" }).getByRole("tab", { name: "Open a .cherry file" })).toHaveAttribute("aria-selected", "true");
+});
+
+test("a viewer can open every panel, but cannot insert from them", async ({ browser }) => {
+  const owner = await (await browser.newContext()).newPage();
+  await newSocialPost(owner);
+  const viewer = await openAsViewer(browser, owner);
+  for (const name of ["Templates", "Elements", "Text", "Uploads", "Brand", "Draw", "Layers"] as PanelName[]) await openPanel(viewer, name);
+  await openPanel(viewer, "Templates");
+  await expect(panel(viewer, "Templates").getByRole("button", { name: "Insert Brand kickoff deck" })).toBeDisabled();
+  await openPanel(viewer, "Elements");
+  await expect(panel(viewer, "Elements").getByRole("button", { name: "Triangle", exact: true })).toBeDisabled();
+  await openPanel(viewer, "Text");
+  for (const name of ["Add a heading", "Add a subheading", "Add a little body text", "Pacifico and Montserrat"]) {
+    await expect(panel(viewer, "Text").getByRole("button", { name })).toBeDisabled();
+  }
+  await openPanel(viewer, "Uploads");
+  await expect(panel(viewer, "Uploads").getByRole("button", { name: "Upload…" })).toBeDisabled();
+  await openPanel(viewer, "Draw");
+  await expect(panel(viewer, "Draw").getByRole("button", { name: "Pen (P)" })).toBeDisabled();
+  for (const name of ["Add page", "Delete page", "Duplicate page"]) await expect(viewer.locator(".ed-phead").getByRole("button", { name })).toBeDisabled();
+  await expect(viewer.getByRole("textbox", { name: "Page name" })).toBeDisabled();
+  await expect(pageStrip(viewer).getByRole("button", { name: "Add page" })).toBeDisabled();
 });
 
 test("pen draws a closed path", async ({ page }) => {
@@ -226,7 +396,7 @@ test("editing a point is one undo step", async ({ page }) => {
   await expect.poll(async () => Number(await x.inputValue())).toBeGreaterThan(Number(x0));
   await page.keyboard.press("Control+Z");
   await expect(x).toHaveValue(x0);
-  await expect(layers(page).getByRole("button", { name: "Path", exact: true })).toBeVisible();
+  await expect(panel(page, "Draw").getByRole("group", { name: "Vector tools" })).toBeVisible(); // still editing the path
 });
 
 test("viewer cannot edit paths", async ({ browser }) => {
@@ -282,32 +452,32 @@ test("broken design id", async ({ page }) => {
 });
 
 test("a save rejected as invalid offers a reload to the latest version", async ({ page, context, browser }) => {
-  const row = pageRow;
   await newSocialPost(page);
-  await page.getByRole("button", { name: "+ Add page" }).click();
+  await addPage(page);
   await expect(status(page)).toHaveText("Saved");
   // A second tab of the same user, in its own context so it can go offline alone.
   const ctx2 = await browser.newContext({ storageState: await context.storageState() });
   const other = await ctx2.newPage();
   await other.goto(page.url());
-  await expect(row(other, "Page 2")).toBeVisible();
+  await expect(pageThumb(other, 2)).toBeVisible();
   await expect(status(other)).toHaveText("Saved");
 
   // Each tab deletes a different page; merged, the design would have no pages.
-  // Page actions only show on the current page, so switch to it first.
-  await row(page, "Page 1").getByRole("button", { name: "Page 1" }).click();
-  await row(other, "Page 2").getByRole("button", { name: "Page 2" }).click();
+  // Page actions act on the current page, so switch to it first.
+  await pageThumb(page, 1).click();
+  await pageThumb(other, 2).click();
   await ctx2.setOffline(true);
   await expect(status(other)).toHaveText(/^Offline/, { timeout: 15_000 });
-  await row(page, "Page 1").getByRole("button", { name: "Delete" }).click();
+  await pageAction(page, "Delete page").click();
   await expect(status(page)).toHaveText("Saved");
-  await row(other, "Page 2").getByRole("button", { name: "Delete" }).click();
+  await pageAction(other, "Delete page").click();
   await ctx2.setOffline(false);
   const reload = other.getByRole("button", { name: "Reload to get the latest version" });
   await expect(reload).toBeVisible({ timeout: 30_000 });
   await reload.click();
-  await expect(row(other, "Page 2")).toBeVisible();
-  await expect(row(other, "Page 1")).toHaveCount(0);
+  await expect(pageThumb(other, 1)).toBeVisible();
+  await expect(pageThumb(other, 2)).toHaveCount(0);
+  await expect(other.getByLabel("Page 2 canvas")).toBeVisible(); // the page the other tab deleted is gone
   await expect(status(other)).toHaveText("Saved");
   await ctx2.close();
 });
@@ -338,8 +508,8 @@ test("union combines two shapes", async ({ page }) => {
 
 test("disjoint intersect explains itself", async ({ page }) => {
   await newSocialPost(page);
-  await placeAt(page, -300);
-  await placeAt(page, 300);
+  await placeAt(page, -250);
+  await placeAt(page, 250);
   await page.keyboard.press("Control+A");
   await page.getByRole("button", { name: "Intersect" }).click();
   await expect(page.getByText("These shapes don't overlap.")).toBeVisible();
@@ -401,9 +571,9 @@ test("save a shape and drop it into another design", async ({ page }) => {
   await page.goto("/");
   await newDesign(page, "Social post");
   await expect(page).toHaveURL(/\/d\/[0-9a-f-]{36}$/);
-  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await openPanel(page, "Elements");
   await page.getByRole("tab", { name: "My shapes" }).click();
-  await page.getByRole("complementary", { name: "Shapes panel" }).getByRole("button", { name: "Peak" }).click();
+  await panel(page, "Elements").getByRole("button", { name: "Peak" }).click();
   await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Peak", exact: true })).toBeVisible();
 });
@@ -414,14 +584,14 @@ test("workspace shapes are shared", async ({ browser }) => {
   await drawTriangle(owner);
   await saveSelectedShape(owner, "Badge", "This workspace");
   const viewer = await openAsViewer(browser, owner);
-  await viewer.getByRole("button", { name: "Shapes", exact: true }).click();
+  await openPanel(viewer, "Elements");
   await viewer.getByRole("tab", { name: "Workspace" }).click();
-  await expect(viewer.getByRole("complementary", { name: "Shapes panel" }).getByRole("button", { name: "Badge", exact: true })).toBeVisible();
+  await expect(panel(viewer, "Elements").getByRole("button", { name: "Badge", exact: true })).toBeVisible();
 });
 
 test("import an SVG into a design", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await openPanel(page, "Elements");
   await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/berry.svg");
   await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Imported 1", exact: true })).toBeVisible();
@@ -432,7 +602,7 @@ test("import an SVG into a design", async ({ page }) => {
 
 test("import keeps the SVG's transforms", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await openPanel(page, "Elements");
   await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/transformed.svg");
   await showLayers(page);
   const width = async (name: string) => {
@@ -447,7 +617,7 @@ test("hostile SVG imports only its plain shapes", async ({ page }) => {
   const requests: string[] = [];
   page.on("request", (r) => requests.push(r.url()));
   await newSocialPost(page);
-  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await openPanel(page, "Elements");
   await page.getByLabel("Import SVG file").setInputFiles("e2e/fixtures/hostile.svg");
   await showLayers(page);
   await expect(layers(page).getByRole("button", { name: "Imported 1", exact: true })).toBeVisible();
@@ -460,7 +630,7 @@ test("hostile SVG imports only its plain shapes", async ({ page }) => {
 
 test("too-large file is refused", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "Shapes", exact: true }).click();
+  await openPanel(page, "Elements");
   const body = '<rect width="1" height="1"/>'.repeat(Math.ceil(1_100_000 / 27));
   await page.getByLabel("Import SVG file").setInputFiles({
     name: "big.svg", mimeType: "image/svg+xml",
@@ -483,13 +653,13 @@ async function seedVisual(page: Page, title: string, visibility: "private" | "wo
   expect(res.status()).toBe(201);
   return (await res.json()).asset.id as string;
 }
-const visualsPanel = (page: Page) => page.getByRole("complementary", { name: "Visuals panel" });
+const visualsPanel = (page: Page) => panel(page, "Uploads");
 const fileUrl = (id: string) => new RegExp(`/api/assets/${id}/file$`);
 
 test("insert a visual into a design", async ({ page }) => {
   await newSocialPost(page);
   const id = await seedVisual(page, "Dot", "workspace");
-  await page.getByRole("button", { name: "Visuals" }).click();
+  await openPanel(page, "Uploads");
   await visualsPanel(page).getByRole("button", { name: "Workspace", exact: true }).click();
   const loaded = page.waitForResponse((r) => fileUrl(id).test(r.url()));
   await visualsPanel(page).getByRole("button", { name: "Dot" }).click();
@@ -514,7 +684,7 @@ test("insert a visual into a design", async ({ page }) => {
 test("a teammate sees a private visual used in the design", async ({ page, browser }) => {
   await newSocialPost(page);
   const id = await seedVisual(page, "Secret dot", "private");
-  await page.getByRole("button", { name: "Visuals" }).click();
+  await openPanel(page, "Uploads");
   await visualsPanel(page).getByRole("button", { name: "Mine", exact: true }).click();
   const linked = page.waitForResponse((r) => r.url().includes("/assets") && r.url().includes("/api/designs/") && r.request().method() === "POST");
   await visualsPanel(page).getByRole("button", { name: "Secret dot" }).click();
@@ -532,7 +702,7 @@ test("a failed link adds no layer and leaves nothing to redo", async ({ page }) 
   await newSocialPost(page);
   await seedVisual(page, "Unlinked dot", "workspace");
   await page.route("**/api/designs/*/assets", (r) => r.fulfill({ status: 500, contentType: "application/json", body: '{"error":"server_error"}' }));
-  await page.getByRole("button", { name: "Visuals" }).click();
+  await openPanel(page, "Uploads");
   await visualsPanel(page).getByRole("button", { name: "Workspace", exact: true }).click();
   await visualsPanel(page).getByRole("button", { name: "Unlinked dot" }).click();
   await expect(visualsPanel(page).getByRole("alert")).toHaveText("Couldn't link this visual to the design. Try again.");
@@ -547,7 +717,7 @@ test("a missing visual shows a placeholder, not a crash", async ({ page }) => {
   await newSocialPost(page);
   await seedVisual(page, "Gone dot", "workspace");
   await page.route("**/api/assets/*/file", (r) => r.fulfill({ status: 404, body: "" }));
-  await page.getByRole("button", { name: "Visuals" }).click();
+  await openPanel(page, "Uploads");
   await visualsPanel(page).getByRole("button", { name: "Workspace", exact: true }).click();
   await visualsPanel(page).getByRole("button", { name: "Gone dot" }).click();
   await showLayers(page);
@@ -561,7 +731,7 @@ test("a missing visual shows a placeholder, not a crash", async ({ page }) => {
 
 test("upload from the editor", async ({ page }) => {
   await newSocialPost(page);
-  await page.getByRole("button", { name: "Visuals" }).click();
+  await openPanel(page, "Uploads");
   await visualsPanel(page).getByRole("button", { name: "Upload…" }).click();
   const dialog = page.getByRole("dialog", { name: "Upload visuals" });
   await dialog.locator('input[type="file"]').setInputFiles({ name: "dot2.png", mimeType: "image/png", buffer: uniquePng() });
