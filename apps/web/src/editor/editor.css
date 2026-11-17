@@ -324,14 +324,14 @@ button.ed-tpl:hover:not(:disabled) { border-color: var(--blush); background: var
 
 /* Export dialog */
 .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: -8px -8px 0 0; }
-.exp-dlg { width: min(880px, 100%); max-height: 100%; overflow: auto; }
+.hist-dlg.exp-dlg { width: min(880px, 100%); max-height: 100%; overflow: auto; }
 .exp-body { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; }
 .exp-form { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .exp-set { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.exp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.exp-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(140px, 100%), 1fr)); gap: 8px; }
 .exp-card {
   position: relative; display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line);
-  border-radius: 12px; background: #fff; font-size: 13px; cursor: pointer;
+  border-radius: 12px; background: #fff; font-size: 13px; cursor: pointer; min-width: 0;
 }
 .exp-card b { font: 600 14px "Space Grotesk", sans-serif; color: var(--ink); }
 .exp-card { padding-right: 32px; }

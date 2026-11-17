@@ -2,12 +2,14 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { Navigate, Route, Routes } from "react-router";
 import { CreateDialogProvider } from "./create/CreateDialog";
 import { getSession, type User, type Workspace } from "./api";
+import { shell } from "./native";
 import Admin from "./routes/Admin";
 import Brand from "./routes/Brand";
 import StyleGuide from "./routes/StyleGuide";
 import Editor from "./routes/Editor";
 import History from "./routes/History";
 import Home from "./routes/Home";
+import Landing from "./routes/Landing";
 import Library from "./routes/Library";
 import Shapes from "./routes/Shapes";
 import SignIn from "./routes/SignIn";
@@ -42,8 +44,9 @@ export default function App() {
       <CreateDialogProvider>
       <Routes>
         <Route path="/sign-in" element={user ? <Navigate to="/" replace /> : <SignIn />} />
+        <Route path="/landing" element={<Landing />} />
         <Route path="/workspaces" element={<RequireUser><Workspaces /></RequireUser>} />
-        <Route path="/" element={<RequireUser><Home /></RequireUser>} />
+        <Route path="/" element={user ? <Home /> : shell() ? <Navigate to="/sign-in" replace /> : <Landing />} />
         <Route path="/library" element={<RequireUser><Library /></RequireUser>} />
         <Route path="/shapes" element={<RequireUser><Shapes /></RequireUser>} />
         <Route path="/brand" element={<RequireUser><Brand /></RequireUser>} />

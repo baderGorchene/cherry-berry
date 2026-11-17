@@ -3,7 +3,7 @@ export function BrandLogo({ size = 28 }: { size?: number }) {
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
       <img
-        src="/favicon.png"
+        src="/logo.png"
         alt=""
         aria-hidden="true"
         width={size}

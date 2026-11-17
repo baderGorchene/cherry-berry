@@ -5,7 +5,7 @@ const DESKTOP = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (K
 
 test.describe("plain browser", () => {
   test("picker shows only in a shell", async ({ page }) => {
-    await page.goto("/");
+    await page.goto("/sign-in");
     await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
     await expect(page.getByRole("group", { name: "Server" })).toHaveCount(0);
   });

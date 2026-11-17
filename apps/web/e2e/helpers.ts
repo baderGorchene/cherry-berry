@@ -5,7 +5,7 @@ import { expect, type Browser, type Page } from "@playwright/test";
 export const unique = (name: string) => `${name}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`;
 
 export async function signUp(page: Page, email: string) {
-  await page.goto("/");
+  await page.goto("/sign-in");
   await expect(page).toHaveURL(/\/sign-in$/);
   await page.getByRole("button", { name: "Create an account" }).click();
   await page.getByLabel("Name").fill("Tester");
