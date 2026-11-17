@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
+import { BrandLogo } from "./BrandLogo";
 import { ApiError, instanceInfo, myWorkspaces, signOut, type Workspace } from "./api";
 import { useCreateDialog } from "./create/CreateDialog";
 import { currentWorkspace, useSession } from "./App";
@@ -29,7 +30,7 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
   const btn = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     myWorkspaces().then((r) => setList(r.workspaces), (e) => { if (e instanceof ApiError && e.status === 401) setUser(null); });
-    instanceInfo().then((i) => setAdmin(i.admin), () => {});
+    instanceInfo().then((i) => setAdmin(i.admin), () => { });
   }, []);
   useEffect(() => {
     if (!open) return;
@@ -49,12 +50,12 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
     btn.current?.focus();
     onSwitch?.(id);
   };
-  const out = async () => { await signOut().catch(() => {}); setUser(null); };
+  const out = async () => { await signOut().catch(() => { }); setUser(null); };
 
   return (
     <div className="shell">
       <nav aria-label="Main" className="side">
-        <p className="brand">Cherry Berry</p>
+        <p className="brand"><BrandLogo /></p>
         <div className="ws" ref={wrap}>
           <button ref={btn} type="button" className="ws-btn" aria-haspopup="true" aria-expanded={open}
             aria-label={`Workspace: ${current?.name ?? ""}`} onClick={() => setOpen((o) => !o)}>

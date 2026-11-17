@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
+import { BrandLogo } from "../BrandLogo";
 import { errorMessage, signIn, signUp } from "../api";
 import { useSession } from "../App";
 import { shell, switchServerUrl } from "../native";
@@ -73,7 +74,7 @@ export default function SignIn() {
       <section className="auth-hero">
         <span className="blob blob-a only-m" aria-hidden="true" />
         <span className="blob blob-b only-m" aria-hidden="true" />
-        <p className="brand auth-brand">Cherry Berry</p>
+        <p className="brand auth-brand"><BrandLogo size={32} /></p>
         <div className="auth-copy">
           <h1><span>Design freely.</span> <span>Own every file.</span></h1>
           <p className="only-d" style={{ fontSize: 18, lineHeight: 1.5, color: "#FFE3F1" }}>

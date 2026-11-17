@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, NavLink, useParams } from "react-router";
+import { BrandLogo } from "../BrandLogo";
 import { instanceInfo } from "../api";
 import Moderation from "../admin/Moderation";
 import Overview from "../admin/Overview";
@@ -28,7 +29,7 @@ export default function Admin() {
   return (
     <div className="adm">
       <div className="adm-side">
-        <p className="brand">Cherry Berry</p>
+        <p className="brand"><BrandLogo /></p>
         <nav aria-label="Instance admin" className="adm-nav">
           <Link to="/" className="nav">Home</Link>
           <p className="ph adm-ph">Instance</p>

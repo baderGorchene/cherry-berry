@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
+import { BrandLogo } from "../BrandLogo";
 import {
   acceptInvitation, createWorkspace, errorMessage, instanceInfo, joinOpen, joinWithPassword, openWorkspaces,
   type AccessMode, type Workspace,
@@ -28,7 +29,7 @@ export default function Workspaces() {
   const [open, setOpen] = useState<Workspace[]>([]);
   const [canCreate, setCanCreate] = useState(true);
   const [admin, setAdmin] = useState(false);
-  useEffect(() => { instanceInfo().then((i) => { setCanCreate(i.canCreateWorkspace); setAdmin(i.admin); }, () => {}); }, []);
+  useEffect(() => { instanceInfo().then((i) => { setCanCreate(i.canCreateWorkspace); setAdmin(i.admin); }, () => { }); }, []);
 
   useEffect(() => {
     const t = setTimeout(() => openWorkspaces(q).then((r) => setOpen(r.workspaces), () => setOpen([])), 200);
@@ -53,7 +54,7 @@ export default function Workspaces() {
     <div style={{ minHeight: "100vh", padding: "48px clamp(16px, 4vw, 48px)" }}>
       <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
-          <Link to="/" className="brand" style={{ textDecoration: "none" }}>Cherry Berry</Link>
+          <Link to="/" className="brand" style={{ textDecoration: "none" }}><BrandLogo /></Link>
           <span className="muted" style={{ fontSize: 14 }}>
             {admin && <><Link to="/admin">Instance admin</Link> · </>}Signed in as {user?.email}
           </span>
