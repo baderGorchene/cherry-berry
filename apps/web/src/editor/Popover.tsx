@@ -7,15 +7,15 @@ const FOCUSABLE = "input:not(:disabled), select:not(:disabled), button:not(:disa
  * Focus moves into the dialog; Escape closes it and returns focus to the button; a press outside closes it.
  * Keys inside belong to the dialog, not to the editor's shortcuts. Fixed positioning, so a scrolling toolbar never clips it.
  */
-export default function Popover({ label, button, buttonLabel, title, className = "ed-tbb", disabled, children }: {
-  label: string; button: ReactNode; buttonLabel?: string; title?: string; className?: string; disabled?: boolean; children: ReactNode;
+export default function Popover({ label, button, buttonLabel, title, className = "ed-tbb", disabled, onClose, children }: {
+  label: string; button: ReactNode; buttonLabel?: string; title?: string; className?: string; disabled?: boolean; onClose?(): void; children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<CSSProperties | null>(null);
   const wrap = useRef<HTMLSpanElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
-  const close = (refocus: boolean) => { setOpen(false); setPos(null); if (refocus) btn.current?.focus(); };
+  const close = (refocus: boolean) => { setOpen(false); setPos(null); onClose?.(); if (refocus) btn.current?.focus(); };
 
   useLayoutEffect(() => {
     if (!open) return;

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CherryNode, Page } from "@cherry/doc";
 import { alignBoxes, distributeBoxes, type AlignOp } from "./layout";
 import Popover from "./Popover";
@@ -11,7 +11,9 @@ export function Num({ label, value, unit, disabled, onCommit }: {
   label: string; value: number; unit?: string; disabled: boolean; onCommit(v: number): void;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
+  const cancelling = useRef(false);
   const commit = () => {
+    if (cancelling.current) { cancelling.current = false; setDraft(null); return; }
     if (draft === null) return;
     setDraft(null);
     const v = parseNum(draft.trim());
@@ -22,7 +24,10 @@ export function Num({ label, value, unit, disabled, onCommit }: {
       <b>{label}</b>
       <input aria-label={label} inputMode="decimal" value={draft ?? round2(value)} disabled={disabled}
         onChange={(e) => setDraft(e.target.value)} onBlur={commit}
-        onKeyDown={(e) => { if (e.key === "Enter") commit(); if (e.key === "Escape") setDraft(null); }} />
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+          if (e.key === "Escape") { cancelling.current = true; setDraft(null); }
+        }} />
       {unit && <span aria-hidden="true" className="ed-unit">{unit}</span>}
     </label>
   );

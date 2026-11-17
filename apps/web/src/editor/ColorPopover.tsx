@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { BrandKit } from "../api";
 import Popover from "./Popover";
 
@@ -33,11 +33,13 @@ export default function ColorPopover({ label, dialog, color, disabled, kit, docC
 }) {
   const [hex, setHex] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const cancelling = useRef(false);
   const kitColors = (kit?.content.colors ?? []).map((c) => ({ hex: c.hex, label: c.name }));
   const kitOnly = !!kit?.content.rules.kitColorsOnly && kitColors.length > 0;
   const plain = (list: string[]) => list.map((h) => ({ hex: h, label: h }));
   const pick = (h: string) => { setError(""); setHex(null); if (h !== color) onCommit(h); };
   const commitHex = () => {
+    if (cancelling.current) { cancelling.current = false; setHex(null); setError(""); return; }
     if (hex === null) return;
     const m = HEX.exec(hex.trim());
     if (!m) return setError("Use six hex digits, like #8E1EA2.");
@@ -45,6 +47,7 @@ export default function ColorPopover({ label, dialog, color, disabled, kit, docC
   };
   return (
     <Popover label={dialog} buttonLabel={label} title={`${label}: ${color || "none"}`} className="ed-tbb ed-tbcolor" disabled={disabled}
+      onClose={() => { setHex(null); setError(""); }}
       button={<span className={`ed-chip${color ? "" : " ed-chip-none"}`} style={color ? { background: color } : undefined} aria-hidden="true" />}>
       <Swatches name="Document" colors={kitOnly ? [] : plain(docColors)} current={color} disabled={disabled} onPick={pick} />
       <Swatches name="Brand kit" colors={kitColors} current={color} disabled={disabled} onPick={pick} />
@@ -62,7 +65,10 @@ export default function ColorPopover({ label, dialog, color, disabled, kit, docC
           <label className="ed-f"><b>Hex</b>
             <input aria-label="Hex" value={hex ?? color} disabled={disabled} spellCheck={false} maxLength={7} aria-invalid={!!error}
               onChange={(e) => { setHex(e.target.value); setError(""); }} onBlur={commitHex}
-              onKeyDown={(e) => { if (e.key === "Enter") commitHex(); }} />
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitHex();
+                if (e.key === "Escape") { cancelling.current = true; setHex(null); setError(""); }
+              }} />
           </label>
         </div>
         {error && <p role="alert" className="ed-err">{error}</p>}

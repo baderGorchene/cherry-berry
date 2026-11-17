@@ -12,6 +12,18 @@ export function toKonvaAttrs(node: CherryNode) {
   return { x: node.x + w, y: node.y + h, offsetX: w, offsetY: h, rotation: node.rotation };
 }
 
+/** Scales group children proportionally when the group box is resized. */
+export function scaleChildren(children: CherryNode[], sx: number, sy: number): CherryNode[] {
+  return children.map((c) => {
+    const base = { ...c, x: c.x * sx, y: c.y * sy, width: c.width * sx, height: c.height * sy };
+    if (base.kind === "path") return { ...base, d: scalePath(base.d, sx, sy) };
+    if (base.kind === "rect") return { ...base, cornerRadius: base.cornerRadius * Math.min(sx, sy) };
+    if (base.kind === "text") return { ...base, fontSize: Math.max(1, base.fontSize * sy) };
+    if (base.kind === "group") return { ...base, children: scaleChildren(base.children, sx, sy) };
+    return base;
+  });
+}
+
 /** Bake a Konva drag/transform back into page-unit geometry (the caller resets the Konva scale). */
 export function fromKonvaTransform(
   node: CherryNode, t: { x: number; y: number; rotation: number; scaleX: number; scaleY: number },
@@ -22,6 +34,10 @@ export function fromKonvaTransform(
     x: t.x - width / 2, y: t.y - height / 2, width, height, rotation: ((t.rotation % 360) + 360) % 360,
   };
   if (node.kind === "path" && (t.scaleX !== 1 || t.scaleY !== 1)) out.d = scalePath(node.d, t.scaleX, t.scaleY);
+  if (node.kind === "group" && (t.scaleX !== 1 || t.scaleY !== 1)) {
+    const sx = node.width ? width / node.width : 1, sy = node.height ? height / node.height : 1;
+    out.children = scaleChildren(node.children, sx, sy);
+  }
   return out as Partial<CherryNode>;
 }
 

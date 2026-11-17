@@ -7,6 +7,7 @@ import { BUILT_IN_FONTS, kitFamilies } from "../brand/fonts";
 import { LICENSES } from "../library/assets";
 import { KitSelect } from "./BrandPanel";
 import { withTextHeight } from "./Canvas";
+import { scaleChildren } from "./geometry";
 import ColorPopover from "./ColorPopover";
 import { boldWeight, fontWeights, toolbarKind } from "./selection";
 import { canMove } from "./brandLock";
@@ -119,6 +120,7 @@ export default function ContextToolbar({
     w = Math.max(0, w); h = Math.max(0, h);
     const patch: Patch = { width: w, height: h };
     if (n.kind === "path") patch.d = scalePath(n.d, n.width ? w / n.width : 1, n.height ? h / n.height : 1);
+    if (n.kind === "group") patch.children = scaleChildren(n.children, n.width ? w / n.width : 1, n.height ? h / n.height : 1);
     set(patch);
   };
   const colour = (label: string, dialog: string, color: string, onCommit: (c: string) => void, allowNone = true) => (

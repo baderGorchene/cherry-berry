@@ -127,12 +127,13 @@ describe("STARTER_TEMPLATES", () => {
       }
     });
 
-    // Page background paints all the way to the bleed edge, so print starters must not cover it with a locked Background shape.
-    it("uses an opaque page background with no locked full-page cover rect", () => {
+    // Page background paints all the way to the bleed edge, so print starters must not cover it with a locked full-page shape.
+    it("uses an opaque page background with no locked full-page cover node", () => {
       for (const p of t.doc.pages) {
         expect(p.background.opacity, p.id).toBe(1);
-        const hasLockedBg = p.nodes.some((n) => n.kind === "rect" && n.locked && n.name === "Background");
-        expect(hasLockedBg, p.id).toBe(false);
+        const hasLockedCover = walk(p.nodes).some(({ n }) =>
+          n.locked && n.x <= 0 && n.y <= 0 && n.x + n.width >= p.width && n.y + n.height >= p.height);
+        expect(hasLockedCover, p.id).toBe(false);
       }
     });
 

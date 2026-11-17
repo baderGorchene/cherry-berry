@@ -987,3 +987,43 @@ test("at 1280 x 800 with a panel open, every text toolbar control is reachable",
   await expect(lock).toHaveValue("fixed");
   await expect(status(page)).toHaveText("Saved");
 });
+
+test("Escape cancels popover input drafts without committing and clears stale hex errors", async ({ page }) => {
+  await newSocialPost(page);
+  await addShape(page, "Rectangle");
+  const bar = toolbar(page);
+  await bar.getByRole("button", { name: "Position", exact: true }).click();
+  const posDlg = page.getByRole("dialog", { name: "Position", exact: true });
+  const xInput = posDlg.getByLabel("X", { exact: true });
+  const beforeX = await xInput.inputValue();
+  await xInput.fill("999");
+  await page.keyboard.press("Escape");
+  await expect(posDlg).toHaveCount(0);
+  await bar.getByRole("button", { name: "Position", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Position", exact: true }).getByLabel("X", { exact: true })).toHaveValue(beforeX);
+  await page.keyboard.press("Escape");
+
+  await bar.getByRole("button", { name: "Fill", exact: true }).click();
+  const fillDlg = page.getByRole("dialog", { name: "Fill colour", exact: true });
+  await fillDlg.getByLabel("Hex").fill("#ZZZZZZ");
+  await fillDlg.getByLabel("Hex").press("Enter");
+  await expect(fillDlg.getByRole("alert")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await bar.getByRole("button", { name: "Fill", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Fill colour", exact: true }).getByRole("alert")).toHaveCount(0);
+});
+
+test("global editor shortcuts do not fire while a modal dialog is open", async ({ page }) => {
+  await newSocialPost(page);
+  await addShape(page, "Rectangle");
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Grid view", exact: true }).click();
+  const grid = page.getByRole("dialog", { name: "All pages", exact: true });
+  await expect(grid).toBeVisible();
+  await grid.getByRole("button", { name: "Close", exact: true }).focus();
+  await page.keyboard.press("Delete");
+  await expect(grid).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(grid).toHaveCount(0);
+  await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(1);
+});

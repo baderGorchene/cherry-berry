@@ -9,6 +9,7 @@ import {
   type BasicShape, type CherryNode, type Page,
 } from "@cherry/doc";
 import { fromKonvaTransform, toKonvaAttrs } from "./geometry";
+import { loadPageFonts } from "./canvasFonts";
 import { snapBox, type Guides } from "./layout";
 import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
 import TextEditor from "./TextEditor";
@@ -126,9 +127,16 @@ export default function Canvas({
   const [draft, setDraft] = useState<TextNode | null>(null);
   // The edited path as it follows an anchor or handle drag, drawn in place of the stored node.
   const [edited, setEdited] = useState<CherryNode | null>(null);
+  const [fontsReady, setFontsReady] = useState(0);
   const [guides, setGuides] = useState<Guides>({});
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    let live = true;
+    void loadPageFonts(page.nodes).then(() => { if (live) setFontsReady((c) => c + 1); });
+    return () => { live = false; };
+  }, [page.nodes]);
   // Fingers on the canvas (px from its centre) and what the gesture is doing; `last` is the latest touch time.
   const touch = useRef({
     pts: new Map<number, Pt>(), last: 0, start: { x: 0, y: 0 }, moved: false,
@@ -443,13 +451,13 @@ export default function Canvas({
       <Stage ref={stageRef} width={vp.width} height={vp.height} onMouseDown={onDown} onMouseMove={onMove}
         onContextMenu={onContextMenu}
         onMouseLeave={() => { pathInput.current?.hover(null); onCursor(null); }} onWheel={onWheel}>
-        <Layer key={fontsVersion}>
+        <Layer key={`${fontsVersion}-${fontsReady}`}>
           <Group ref={pageRef} x={origin.x} y={origin.y} scaleX={scale} scaleY={scale}>
             <Rect x={-page.bleed} y={-page.bleed} width={page.width + 2 * page.bleed} height={page.height + 2 * page.bleed}
               fill={paint(page.background)}
               shadowColor="rgba(34,20,42,.22)" shadowBlur={50} shadowOffsetY={20} shadowForStrokeEnabled={false} />
             {page.bleed > 0 && (
-              <Rect x={-page.bleed} y={-page.bleed} width={page.width + 2 * page.bleed} height={page.height + 2 * page.bleed}
+              <Rect x={0} y={0} width={page.width} height={page.height}
                 stroke="#ED96D7" strokeWidth={1} strokeScaleEnabled={false} dash={[6, 4]} listening={false} />
             )}
             <Group ref={nodesRef}>

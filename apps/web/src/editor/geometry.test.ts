@@ -52,4 +52,19 @@ describe("allIds", () => {
     const g = { ...createShape("rect", { x: 0, y: 0, width: 1, height: 1 }), kind: "group", children: [b] } as unknown as CherryNode;
     expect(allIds([a, g])).toEqual([a.id, g.id, b.id]);
   });
+
+  test("fromKonvaTransform scales group children proportionally", () => {
+    const r = createShape("rect", { x: 10, y: 20, width: 30, height: 40 });
+    const g = {
+      ...createShape("rect", { x: 100, y: 200, width: 50, height: 60 }),
+      kind: "group",
+      children: [r],
+    } as unknown as CherryNode;
+    const patch = fromKonvaTransform(g, { x: 150, y: 260, rotation: 0, scaleX: 2, scaleY: 2 }) as {
+      width: number; height: number; children: CherryNode[];
+    };
+    expect(patch.width).toBe(100);
+    expect(patch.height).toBe(120);
+    expect(patch.children[0]).toMatchObject({ x: 20, y: 40, width: 60, height: 80 });
+  });
 });

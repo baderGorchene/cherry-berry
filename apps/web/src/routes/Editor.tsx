@@ -199,7 +199,7 @@ function Shell({ d }: { d: Ready }) {
 
   const onKey = useRef<(e: KeyboardEvent) => void>(null);
   onKey.current = (e) => {
-    if (exporting || typing(e.target) || ownsActivation(e)) return; // the export dialog is modal
+    if (exporting || document.querySelector('[aria-modal="true"]') || typing(e.target) || ownsActivation(e)) return;
     if (pathKeys.current?.(e)) return e.preventDefault(); // pen finish, anchor delete/nudge
     const mod = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
