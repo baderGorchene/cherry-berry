@@ -10,9 +10,10 @@ export function pageFontFaces(nodes: CherryNode[], into = new Set<string>()): st
 
 export async function loadPageFonts(
   nodes: CherryNode[],
-  fonts: { load(font: string): Promise<unknown> } = document.fonts,
-): Promise<void> {
-  const faces = pageFontFaces(nodes);
-  if (!faces.length) return;
+  fonts: { load(font: string): Promise<unknown>; check?(font: string): boolean } = document.fonts,
+): Promise<boolean> {
+  const faces = pageFontFaces(nodes).filter((f) => !(fonts.check?.(f) ?? false));
+  if (!faces.length) return false;
   await Promise.all(faces.map((f) => fonts.load(f).catch(() => [])));
+  return true;
 }

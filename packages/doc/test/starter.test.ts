@@ -131,8 +131,8 @@ describe("STARTER_TEMPLATES", () => {
     it("uses an opaque page background with no locked full-page cover node", () => {
       for (const p of t.doc.pages) {
         expect(p.background.opacity, p.id).toBe(1);
-        const hasLockedCover = walk(p.nodes).some(({ n }) =>
-          n.locked && n.x <= 0 && n.y <= 0 && n.x + n.width >= p.width && n.y + n.height >= p.height);
+        const hasLockedCover = walk(p.nodes).some(({ n, x, y }) =>
+          n.locked && x <= 0 && y <= 0 && x + n.width >= p.width && y + n.height >= p.height);
         expect(hasLockedCover, p.id).toBe(false);
       }
     });

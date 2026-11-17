@@ -9,7 +9,7 @@ import {
   type BasicShape, type CherryNode, type Page,
 } from "@cherry/doc";
 import { fromKonvaTransform, toKonvaAttrs } from "./geometry";
-import { loadPageFonts } from "./canvasFonts";
+import { loadPageFonts, pageFontFaces } from "./canvasFonts";
 import { snapBox, type Guides } from "./layout";
 import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
 import TextEditor from "./TextEditor";
@@ -132,11 +132,13 @@ export default function Canvas({
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
+  const fontKey = pageFontFaces(page.nodes).sort().join("\0");
   useEffect(() => {
+    if (!fontKey) return;
     let live = true;
-    void loadPageFonts(page.nodes).then(() => { if (live) setFontsReady((c) => c + 1); });
+    void loadPageFonts(page.nodes).then((loaded) => { if (live && loaded) setFontsReady((c) => c + 1); });
     return () => { live = false; };
-  }, [page.nodes]);
+  }, [fontKey]);
   // Fingers on the canvas (px from its centre) and what the gesture is doing; `last` is the latest touch time.
   const touch = useRef({
     pts: new Map<number, Pt>(), last: 0, start: { x: 0, y: 0 }, moved: false,

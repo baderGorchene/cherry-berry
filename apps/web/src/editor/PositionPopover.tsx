@@ -23,7 +23,8 @@ export function Num({ label, value, unit, disabled, onCommit }: {
     <label className="ed-f">
       <b>{label}</b>
       <input aria-label={label} inputMode="decimal" value={draft ?? round2(value)} disabled={disabled}
-        onChange={(e) => setDraft(e.target.value)} onBlur={commit}
+        onFocus={() => { cancelling.current = false; }}
+        onChange={(e) => { cancelling.current = false; setDraft(e.target.value); }} onBlur={commit}
         onKeyDown={(e) => {
           if (e.key === "Enter") commit();
           if (e.key === "Escape") { cancelling.current = true; setDraft(null); }

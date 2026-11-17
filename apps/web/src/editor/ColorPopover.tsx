@@ -47,7 +47,7 @@ export default function ColorPopover({ label, dialog, color, disabled, kit, docC
   };
   return (
     <Popover label={dialog} buttonLabel={label} title={`${label}: ${color || "none"}`} className="ed-tbb ed-tbcolor" disabled={disabled}
-      onClose={() => { setHex(null); setError(""); }}
+      onClose={() => { cancelling.current = true; setHex(null); setError(""); }}
       button={<span className={`ed-chip${color ? "" : " ed-chip-none"}`} style={color ? { background: color } : undefined} aria-hidden="true" />}>
       <Swatches name="Document" colors={kitOnly ? [] : plain(docColors)} current={color} disabled={disabled} onPick={pick} />
       <Swatches name="Brand kit" colors={kitColors} current={color} disabled={disabled} onPick={pick} />
@@ -64,7 +64,8 @@ export default function ColorPopover({ label, dialog, color, disabled, kit, docC
             }} />
           <label className="ed-f"><b>Hex</b>
             <input aria-label="Hex" value={hex ?? color} disabled={disabled} spellCheck={false} maxLength={7} aria-invalid={!!error}
-              onChange={(e) => { setHex(e.target.value); setError(""); }} onBlur={commitHex}
+              onFocus={() => { cancelling.current = false; }}
+              onChange={(e) => { cancelling.current = false; setHex(e.target.value); setError(""); }} onBlur={commitHex}
               onKeyDown={(e) => {
                 if (e.key === "Enter") commitHex();
                 if (e.key === "Escape") { cancelling.current = true; setHex(null); setError(""); }

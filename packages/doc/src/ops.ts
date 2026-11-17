@@ -94,7 +94,11 @@ export function updateNode(ydoc: Y.Doc, pageId: string, nodeId: string, patch: P
     const hit = locate(nodesOf(page), nodeId);
     if (!hit) return;
     for (const [k, v] of Object.entries(patch)) {
-      if (k === "id" || k === "kind" || k === "children" || k === "order") continue;
+      if (k === "id" || k === "kind" || k === "order") continue;
+      if (k === "children") {
+        if (Array.isArray(v)) hit.node.set("children", toYList(v as CherryNode[], toYNode));
+        continue;
+      }
       if (v === undefined) hit.node.delete(k);
       else hit.node.set(k, v);
     }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { createShape, createText, type CherryNode } from "@cherry/doc";
+import { createDocument, createShape, createText, docToY, updateNode, yToDoc, type CherryNode } from "@cherry/doc";
 import { scalePath } from "@cherry/vector";
 import { allIds, fitZoom, fromKonvaTransform, toKonvaAttrs } from "./geometry";
 
@@ -53,18 +53,24 @@ describe("allIds", () => {
     expect(allIds([a, g])).toEqual([a.id, g.id, b.id]);
   });
 
-  test("fromKonvaTransform scales group children proportionally", () => {
+  test("fromKonvaTransform scales group children proportionally and persists through updateNode", () => {
     const r = createShape("rect", { x: 10, y: 20, width: 30, height: 40 });
     const g = {
       ...createShape("rect", { x: 100, y: 200, width: 50, height: 60 }),
       kind: "group",
       children: [r],
     } as unknown as CherryNode;
-    const patch = fromKonvaTransform(g, { x: 150, y: 260, rotation: 0, scaleX: 2, scaleY: 2 }) as {
-      width: number; height: number; children: CherryNode[];
-    };
-    expect(patch.width).toBe(100);
-    expect(patch.height).toBe(120);
-    expect(patch.children[0]).toMatchObject({ x: 20, y: 40, width: 60, height: 80 });
+    const doc = createDocument({ title: "G", width: 800, height: 600, unit: "px", colorMode: "rgb" });
+    doc.pages[0]!.nodes.push(g);
+    const ydoc = docToY(doc);
+    const patch = fromKonvaTransform(g, { x: 150, y: 260, rotation: 0, scaleX: 2, scaleY: 2 });
+    updateNode(ydoc, doc.pages[0]!.id, g.id, patch);
+    const parsed = yToDoc(ydoc);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const updated = parsed.doc.pages[0]!.nodes[0]!;
+    expect(updated.width).toBe(100);
+    expect(updated.height).toBe(120);
+    expect(updated.kind === "group" && updated.children[0]).toMatchObject({ x: 20, y: 40, width: 60, height: 80 });
   });
 });
