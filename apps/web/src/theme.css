@@ -17,7 +17,8 @@
   --deep: #4A0E56;
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; }
 body { margin: 0; font-family: Inter, system-ui, sans-serif; color: var(--ink); background: var(--surface); }
 h1, h2, h3 { font-family: "Space Grotesk", Inter, sans-serif; margin: 0; }
 p { margin: 0; }
@@ -268,7 +269,23 @@ button.row:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px;
   position: absolute; top: 8px; right: 8px; padding: 2px 7px; border-radius: 999px;
   background: rgba(255, 255, 255, .92); border: 1px solid var(--line); font: 700 10px Inter, sans-serif; color: var(--muted);
 }
-.tpl-row { display: flex; gap: 16px; overflow-x: auto; list-style: none; padding: 4px 2px 12px; margin: 0; }
+.tpl-row { display: flex; gap: 16px; overflow-x: auto; list-style: none; padding: 4px 2px 12px; margin: 0; scroll-behavior: smooth; }
+.hscroll { position: relative; display: flex; align-items: center; min-width: 0; flex: 1; }
+.hscroll > :not(.hscroll-btn) { flex: 1; min-width: 0; }
+.hscroll-btn {
+  position: absolute; z-index: 5; top: 50%; transform: translateY(-50%);
+  width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 999px;
+  background: rgba(255, 255, 255, .94); color: var(--ink); font: 600 20px/1 Inter, sans-serif;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  box-shadow: 0 4px 14px rgba(34, 20, 42, .14);
+}
+.hscroll-btn:hover { background: var(--tint); color: var(--berry); border-color: var(--blush); }
+.hscroll-btn:focus-visible { outline: 3px solid var(--blush); outline-offset: 2px; }
+.hscroll-l { left: 6px; }
+.hscroll-r { right: 6px; }
+.hscroll-sm .hscroll-btn { width: 26px; height: 26px; font-size: 16px; }
+.hscroll-sm .hscroll-l { left: 2px; }
+.hscroll-sm .hscroll-r { right: 2px; }
 .tpl-item { flex: none; width: 180px; }
 .tpl-btn { width: 100%; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 8px; border-radius: 14px; }
 .tpl-btn:disabled { opacity: .55; cursor: default; }

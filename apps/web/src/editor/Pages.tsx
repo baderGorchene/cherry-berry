@@ -1,6 +1,7 @@
 import * as Y from "yjs";
 import { addPage, movePage, type CherryDocument } from "@cherry/doc";
 import DocPreview from "./DocPreview";
+import HScroll from "../HScroll";
 import Modal from "../Modal";
 import { IconDown, IconPlus, IconUp } from "../icons";
 
@@ -14,7 +15,7 @@ const Thumb = ({ doc, pageId, h }: { doc: CherryDocument; pageId: string; h: num
 /** The bottom bar's page strip: one thumbnail per page (click to switch) and Add page. */
 export default function Pages({ ydoc, doc, pageId, readOnly, act, onSwitch }: Props) {
   return (
-    <nav aria-label="Pages" className="ed-strip">
+    <HScroll as="nav" label="Pages" className="ed-strip" step={160} compact>
       {doc.pages.map((p, i) => (
         <button key={p.id} type="button" className="ed-thumb" aria-label={`Page ${i + 1}`} title={p.name} aria-current={p.id === pageId ? "page" : undefined}
           onClick={() => onSwitch(p.id)}>
@@ -23,7 +24,7 @@ export default function Pages({ ydoc, doc, pageId, readOnly, act, onSwitch }: Pr
       ))}
       <button type="button" className="ed-thumb ed-thumb-add" aria-label="Add page" title="Add page" disabled={readOnly}
         onClick={() => { let id = ""; act(() => { id = addPage(ydoc, { after: pageId }); }); onSwitch(id); }}><IconPlus /></button>
-    </nav>
+    </HScroll>
   );
 }
 

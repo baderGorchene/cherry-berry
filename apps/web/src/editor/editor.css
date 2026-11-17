@@ -127,7 +127,7 @@ button.ed-tpl:hover:not(:disabled) { border-color: var(--blush); background: var
 /* Context toolbar: one row above the canvas (a scrolling row above the bottom bar on phones). */
 .ed-tb {
   flex: none; display: flex; align-items: center; gap: 6px; min-height: 52px; padding: 8px 12px; overflow-x: auto;
-  background: #fff; border-bottom: 1px solid var(--line); overscroll-behavior-x: contain; scrollbar-width: thin; scrollbar-color: #D9CCDD transparent;
+  background: #fff; border-bottom: 1px solid var(--line); overscroll-behavior-x: contain;
 }
 .ed-tb > * { flex: none; }
 .ed-tb .ed-f { flex: none; padding: 0 8px; }

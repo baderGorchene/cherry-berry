@@ -9,6 +9,7 @@ import { type CreatePane } from "../create/sizes";
 import { useCreateDialog } from "../create/CreateDialog";
 import { currentWorkspace, useSession } from "../App";
 import AppShell from "../AppShell";
+import HScroll from "../HScroll";
 import RecentCard from "../home/RecentCard";
 import { TemplateTile, type Pick } from "../home/TemplateRow";
 import { IconPlus, IconSearch, IconUpload } from "../icons";
@@ -139,7 +140,7 @@ export default function Home() {
         <Link to="/templates" className="sec-link">See all</Link>
       </div>
       {viewOnly && <p className="muted">Viewers can't create designs.</p>}
-      <ul className="tpl-row">{tiles(templates)}</ul>
+      <HScroll as="ul" className="tpl-row">{tiles(templates)}</HScroll>
     </section>
   );
 
@@ -198,7 +199,7 @@ export default function Home() {
           {found.templates.length > 0 && (
             <>
               <h2 className="sec-title">Templates</h2>
-              <ul className="tpl-row">{tiles(templates.filter((t) => found.templates.some((f) => f.id === t.id)))}</ul>
+              <HScroll as="ul" className="tpl-row">{tiles(templates.filter((t) => found.templates.some((f) => f.id === t.id)))}</HScroll>
             </>
           )}
         </section>
