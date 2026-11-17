@@ -76,20 +76,11 @@ export default function Landing() {
               </div>
             </div>
 
-            <div className="land-stage" aria-label="Cherry Berry studio preview">
-              <div className="land-stage-bar">
-                <span>Cherry Berry Studio</span>
-                <div className="land-stage-pills">
-                  <span className="land-pill">Vector &amp; Print</span>
-                  <span className="land-pill">.cherry</span>
-                </div>
-              </div>
-              <img
-                src="/hero.png"
-                alt="Cherry Berry illustration"
-                className="land-hero-img"
-              />
-            </div>
+            <img
+              src="/hero.png"
+              alt="Cherry Berry illustration"
+              className="land-hero-img"
+            />
           </div>
         </section>
 
