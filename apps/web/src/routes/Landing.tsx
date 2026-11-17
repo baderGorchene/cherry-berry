@@ -75,12 +75,13 @@ export default function Landing() {
                 <span><i className="land-dot" aria-hidden="true" /> Export PDF, PNG, SVG, PPTX &amp; .cherry</span>
               </div>
             </div>
-
-            <img
-              src="/hero.png"
-              alt="Cherry Berry illustration"
-              className="land-hero-img"
-            />
+            <div className="land-stage" aria-label="Cherry Berry studio preview">
+              <img
+                src="/hero.png"
+                alt="Cherry Berry illustration"
+                className="land-hero-img"
+              />
+            </div>
           </div>
         </section>
 
