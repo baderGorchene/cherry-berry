@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { BrandLogo } from "../BrandLogo";
+import { ThemeToggle } from "../ThemeToggle";
 import { errorMessage, signIn, signUp } from "../api";
 import { useSession } from "../App";
 import { shell, switchServerUrl } from "../native";
@@ -89,6 +90,9 @@ export default function SignIn() {
       </section>
 
       <section className="auth-main">
+        <div style={{ width: "100%", maxWidth: 420, display: "flex", justifyContent: "flex-end" }}>
+          <ThemeToggle />
+        </div>
         {shell() && <ServerPicker />}
         <form onSubmit={submit} style={{ width: "100%", maxWidth: 420, display: "flex", flexDirection: "column", gap: 22 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>

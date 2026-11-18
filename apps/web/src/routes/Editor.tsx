@@ -8,6 +8,7 @@ import {
 } from "@cherry/doc";
 import { getKit, myWorkspaces, startFromTemplate, type BrandKit } from "../api";
 import { useSession } from "../App";
+import { ThemeToggle } from "../ThemeToggle";
 import { useCreateDialog } from "../create/CreateDialog";
 import { canDelete, canEditContent, canMove, groupBlock } from "../editor/brandLock";
 import { useKitFonts } from "../brand/fonts";
@@ -439,7 +440,7 @@ function Shell({ d }: { d: Ready }) {
               <div className="ed-pop ed-more" role="dialog" aria-label="More" tabIndex={-1} ref={morePop}>
                 {statusLine}
                 <Avatars people={people} />
-                <div className="ed-more-row">{redoBtn}</div>
+                <div className="ed-more-row">{redoBtn}<ThemeToggle compact /></div>
                 <SharePopover workspace={workspaceName} />
               </div>
             )}
@@ -468,6 +469,7 @@ function Shell({ d }: { d: Ready }) {
         {undoBtn}
         {redoBtn}
         <span style={{ flex: 1 }} />
+        <ThemeToggle compact />
         <Avatars people={people} />
         <SharePopover workspace={workspaceName} />
         <button className="btn btn-p" onClick={() => setExporting(true)}>Export</button>

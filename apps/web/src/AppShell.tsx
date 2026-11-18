@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { BrandLogo } from "./BrandLogo";
+import { ThemeToggle } from "./ThemeToggle";
 import { ApiError, instanceInfo, myWorkspaces, signOut, type Workspace } from "./api";
 import { useCreateDialog } from "./create/CreateDialog";
 import { currentWorkspace, useSession } from "./App";
@@ -78,6 +79,7 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
               <Link to="/workspaces" className="nav">Join or create another workspace</Link>
               {admin && <Link to="/admin" className="nav">Instance admin</Link>}
               {switchServerUrl(null) && <button type="button" className="nav" onClick={() => { location.href = switchServerUrl(null)!; }}>Switch server</button>}
+              <ThemeToggle className="nav only-m" />
               <button type="button" className="nav only-m" onClick={out}>Sign out</button>
             </div>
           )}
@@ -103,6 +105,7 @@ export default function AppShell({ active, onSwitch, bleed, children }: { active
         <span style={{ flex: 1 }} className="only-d" />
         <div className="side-foot only-d">
           {admin && <Link to="/admin" className="nav">Instance admin</Link>}
+          <ThemeToggle className="nav" />
           <Link to="/workspaces" className="nav">Workspaces</Link>
           <button type="button" className="nav" onClick={out}>Sign out</button>
         </div>

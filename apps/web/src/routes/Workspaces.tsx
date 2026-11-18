@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router";
 import { BrandLogo } from "../BrandLogo";
+import { ThemeToggle } from "../ThemeToggle";
 import {
   acceptInvitation, createWorkspace, errorMessage, instanceInfo, joinOpen, joinWithPassword, openWorkspaces,
   type AccessMode, type Workspace,
@@ -55,9 +56,12 @@ export default function Workspaces() {
       <div style={{ maxWidth: 1180, margin: "0 auto", display: "flex", flexDirection: "column", gap: 32 }}>
         <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 16 }}>
           <Link to="/" className="brand" style={{ textDecoration: "none" }}><BrandLogo /></Link>
-          <span className="muted" style={{ fontSize: 14 }}>
-            {admin && <><Link to="/admin">Instance admin</Link> · </>}Signed in as {user?.email}
-          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <ThemeToggle />
+            <span className="muted" style={{ fontSize: 14 }}>
+              {admin && <><Link to="/admin">Instance admin</Link> · </>}Signed in as {user?.email}
+            </span>
+          </div>
         </header>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           <h1 style={{ fontSize: 40, letterSpacing: "-0.02em", overflowWrap: "anywhere" }}>Pick a workspace</h1>

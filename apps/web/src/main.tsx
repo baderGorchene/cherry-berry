@@ -5,7 +5,10 @@ import App from "./App";
 import { openOffOriginLinksOutside } from "./links";
 import "./fonts.css";
 import "./theme.css";
+import "./polish.css";
+import { initTheme } from "./ThemeToggle";
 
+initTheme();
 openOffOriginLinksOutside();
 
 createRoot(document.getElementById("root")!).render(

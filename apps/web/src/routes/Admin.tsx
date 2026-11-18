@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, Navigate, NavLink, useParams } from "react-router";
 import { BrandLogo } from "../BrandLogo";
+import { ThemeToggle } from "../ThemeToggle";
 import { instanceInfo } from "../api";
 import Moderation from "../admin/Moderation";
 import Overview from "../admin/Overview";
@@ -34,6 +35,7 @@ export default function Admin() {
           <Link to="/" className="nav">Home</Link>
           <p className="ph adm-ph">Instance</p>
           {SECTIONS.map(([id, label]) => <NavLink key={id} to={id ? `/admin/${id}` : "/admin"} end className="nav">{label}</NavLink>)}
+          <ThemeToggle className="nav" />
         </nav>
       </div>
       <main className="page adm-main">
