@@ -10,6 +10,10 @@ test("landing page renders all assets, walkthrough tabs, custom inputs, dark mod
     await expect(page.locator(`img[src='${img}']`)).toBeVisible();
   }
 
+  // Animated editor preview and highlights marquee
+  await expect(page.getByRole("img", { name: /editor building a market flyer/i })).toBeVisible();
+  await expect(page.getByLabel("Highlights").getByText("Live cursors").first()).toBeVisible();
+
   // Interactive studio walkthrough tabs
   await page.getByRole("tab", { name: /02 · Design/i }).click();
   await expect(page.locator(".sim-lock")).toHaveText("Brand lock · Fixed");
