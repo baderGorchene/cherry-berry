@@ -304,7 +304,6 @@ input[type="search"]::-webkit-search-cancel-button {
 .sz-card,
 .opt,
 .land-card,
-.land-step,
 .land-link {
   transition: transform 0.16s cubic-bezier(0.22, 1, 0.36, 1), background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
 }
@@ -426,13 +425,7 @@ input[type="search"]::-webkit-search-cancel-button {
 [data-theme="dark"] .ed-shapes input[type="search"],
 [data-theme="dark"] .ed-color input[type="color"],
 [data-theme="dark"] .exp-card,
-[data-theme="dark"] .land-card,
-[data-theme="dark"] .land-step,
-[data-theme="dark"] .land-stage,
-[data-theme="dark"] .sim-starter,
-[data-theme="dark"] .sim-canvas,
-[data-theme="dark"] .sim-check,
-[data-theme="dark"] .sim-exp-pill {
+[data-theme="dark"] .land-card {
   background-color: var(--elevated);
   color: var(--ink);
   border-color: var(--line);
@@ -459,8 +452,6 @@ input[type="search"]::-webkit-search-cancel-button {
 [data-theme="dark"] .ed-layrow-on:hover,
 [data-theme="dark"] .opt:has(input:checked),
 [data-theme="dark"] .exp-card:has(input:checked),
-[data-theme="dark"] .land-step[aria-selected="true"],
-[data-theme="dark"] .sim-exp-pill-on,
 [data-theme="dark"] .hist-on,
 [data-theme="dark"] .nav-on,
 [data-theme="dark"] .nav[aria-current],
@@ -578,14 +569,9 @@ input[type="search"]::-webkit-search-cancel-button {
 }
 
 [data-theme="dark"] .land-kicker,
-[data-theme="dark"] .land-card-badge,
-[data-theme="dark"] .sim-lock {
+[data-theme="dark"] .land-card-badge {
   background-color: var(--tint);
   border-color: var(--petal);
-  color: var(--blush);
-}
-
-[data-theme="dark"] .land-step-num {
   color: var(--blush);
 }
 

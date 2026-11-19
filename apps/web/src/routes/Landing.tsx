@@ -9,31 +9,70 @@ const WORKFLOW_STEPS = [
     num: "01 · Start",
     title: "Pick a starter or custom size",
     body: "Launch social posts, presentation decks, or print-ready flyers with built-in 3 mm bleed and safe margins.",
-    rail: "Templates",
-    toolbar: ["Page · 210 × 297 mm", "Bleed · 3 mm", "Print · CMYK"],
+    lead: "Start with a",
+    words: ["social post", "pitch deck", "print flyer", "custom canvas"],
+    lines: ["Page · 210 × 297 mm", "Bleed · 3 mm", "Print · CMYK"],
   },
   {
     num: "02 · Design",
     title: "Edit vectors, type & brand locks",
     body: "Shape bezier paths, swap brand swatches in live popovers, and lock approved layers so teams stay on brand.",
-    rail: "Design",
-    toolbar: ["Space Grotesk · 64 pt", "B · I", "#8E1EA2", "Brand lock · Fixed"],
+    lead: "Shape your",
+    words: ["bezier paths", "headlines", "brand swatches", "locked layers"],
+    lines: ["Space Grotesk · 64 pt", "Fill · #8E1EA2", "Brand lock · Fixed"],
   },
   {
     num: "03 · Review",
     title: "Collaborate live & run preflight",
     body: "Edit side by side with live teammate cursors while automated preflight checks fonts, bleed, and image sharpness.",
-    rail: "Preflight",
-    toolbar: ["Live sync · 2 editors", "Preflight · 5/5 Clear"],
+    lead: "Review with",
+    words: ["live cursors", "your team", "preflight", "version history"],
+    lines: ["✓ Fonts available", "✓ Bleed filled", "✓ Text inside safe area", "✓ Images sharp · 300 DPI", "✓ Licenses & attribution"],
   },
   {
     num: "04 · Export",
     title: "Ship to web, press, or .cherry",
     body: "Export print PDFs with crop marks, crisp SVGs, PNGs, PPTX decks, or open-source .cherry project files.",
-    rail: "Export",
-    toolbar: ["PDF · Print", "300 DPI", "Crop marks"],
+    lead: "Ship it as a",
+    words: ["print PDF", "crisp SVG", "PNG", "PPTX deck", ".cherry file"],
+    lines: ["PDF · Print · crop marks", "300 DPI · CMYK", "saturday-market-flyer.pdf ready"],
   },
 ] as const;
+
+const STEP_MS = 6000;
+const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+/** Splits text into per-letter spans for staggered CSS animation; screen readers get the plain text. */
+function Letters({ text }: { text: string }) {
+  let i = 0;
+  return (
+    <>
+      <span className="sr-only">{text}</span>
+      <span aria-hidden="true">
+        {text.split(" ").map((word, w) => (
+          <span key={w}>
+            <span className="hiw-word">
+              {[...word].map((ch) => (
+                <span key={i} className="hiw-ch" style={{ "--i": i++ } as React.CSSProperties}>{ch}</span>
+              ))}
+            </span>{" "}
+          </span>
+        ))}
+      </span>
+    </>
+  );
+}
+
+/** Cycles through words, each one rolling in. Holds the first word under reduced motion. */
+function Rotator({ words }: { words: readonly string[] }) {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (reducedMotion()) return;
+    const id = setInterval(() => setN((x) => (x + 1) % words.length), 1500);
+    return () => clearInterval(id);
+  }, [words]);
+  return <span key={n} className="hiw-rot">{words[n]}</span>;
+}
 
 const STORIES = [
   {
@@ -79,23 +118,6 @@ const FORMATS = [
   { name: "Custom canvas", size: "px · mm · cm · in", note: "Any dimensions you need" },
 ];
 
-const SIM_EXPORT_FORMATS = [
-  { id: "pdf-print", label: "PDF · Print", hint: "Bleed, crop marks" },
-  { id: "pdf-digital", label: "PDF · Digital", hint: "Smallest PDF" },
-  { id: "png", label: "PNG", hint: "Transparent" },
-  { id: "svg", label: "SVG", hint: "True vectors" },
-  { id: "pptx", label: "PPTX", hint: "Editable slides" },
-  { id: "cherry", label: ".cherry", hint: "Open-source file" },
-] as const;
-
-const PREFLIGHT_CHECKS = [
-  ["Fonts available", "All document fonts loaded"],
-  ["Bleed filled", "3 mm background edge to edge"],
-  ["Text inside safe area", "All headlines inside trim margin"],
-  ["Images sharp", "All visuals >= 300 DPI"],
-  ["Licenses & attribution", "Team assets verified"],
-] as const;
-
 const MARQUEE = [
   "Vector booleans", "Bezier pen", "Multi-page layouts", "Brand kits", "Live cursors", "Version history",
   "Preflight checks", "3 mm bleed", "PDF · Print", "SVG", "PNG", "PPTX", ".cherry files", "Self-hostable",
@@ -120,7 +142,7 @@ function AppPreview() {
           <span className="pv-dots"><i /><i /><i /></span>
           <span className="pv-crumb"><b>Saturday Market Flyer</b><em>Saved</em></span>
           <span className="pv-url">cherry.local/d/saturday-market</span>
-          <span className="sim-ed-avs"><i style={{ background: "#8E1EA2" }}>M</i><i style={{ background: "#C654C3" }}>L</i></span>
+          <span className="pv-avs"><i style={{ background: "#8E1EA2" }}>M</i><i style={{ background: "#C654C3" }}>L</i></span>
           <span className="pv-export">Export</span>
         </div>
         <div className="pv-body" aria-hidden="true">
@@ -196,12 +218,10 @@ function spotlight(e: React.PointerEvent<HTMLElement>) {
 export default function Landing() {
   const [step, setStep] = useState(0);
   const [paused, setPaused] = useState(false);
-  const [simFmt, setSimFmt] = useState<string>("pdf-print");
-  const [simCropMarks, setSimCropMarks] = useState(true);
 
   useEffect(() => {
     if (paused) return;
-    const id = setInterval(() => setStep((s) => (s + 1) % WORKFLOW_STEPS.length), 4600);
+    const id = setInterval(() => setStep((s) => (s + 1) % WORKFLOW_STEPS.length), STEP_MS);
     return () => clearInterval(id);
   }, [paused]);
 
@@ -284,12 +304,12 @@ export default function Landing() {
               <span className="land-card-badge">Interactive studio walkthrough</span>
               <h2>From blank page to press-ready in minutes</h2>
               <p className="muted">
-                Watch the Cherry Berry editor move from starter templates and vector anchor editing to live preflight and export. Hover or click any step to inspect it.
+                Four steps from first idea to finished file. Hover to pause, or pick any step.
               </p>
             </div>
 
             <div
-              className="land-demo rv"
+              className="hiw"
               onMouseEnter={() => setPaused(true)}
               onMouseLeave={() => setPaused(false)}
               onFocus={() => setPaused(true)}
@@ -297,23 +317,24 @@ export default function Landing() {
                 if (!e.currentTarget.contains(e.relatedTarget)) setPaused(false);
               }}
             >
-              <div className="land-steps" role="tablist" aria-label="Workflow steps">
+              <div className="hiw-tabs rv" role="tablist" aria-label="Workflow steps">
                 {WORKFLOW_STEPS.map((item, i) => (
                   <button
                     key={item.num}
+                    id={`hiw-tab-${i}`}
                     type="button"
                     role="tab"
                     aria-selected={step === i}
-                    className="land-step"
+                    aria-controls="hiw-panel"
+                    className="hiw-tab"
                     onClick={() => setStep(i)}
                   >
-                    <span className="land-step-num">{item.num}</span>
-                    <strong>{item.title}</strong>
-                    <span>{item.body}</span>
+                    <span className="hiw-tab-num">{item.num}</span>
+                    <span className="hiw-tab-title">{item.title}</span>
                     {step === i && (
                       <span
-                        key={`prog-${step}`}
-                        className={paused ? "land-step-prog land-step-prog-paused" : "land-step-prog"}
+                        className={paused ? "hiw-prog hiw-prog-paused" : "hiw-prog"}
+                        style={{ animationDuration: `${STEP_MS}ms` }}
                         aria-hidden="true"
                       />
                     )}
@@ -321,184 +342,27 @@ export default function Landing() {
                 ))}
               </div>
 
-              <div className="land-stage" aria-live="polite">
-                {/* Miniature Editor Header */}
-                <div className="sim-ed-head">
-                  <div className="sim-ed-left-head">
-                    <span className="sim-ed-back" aria-hidden="true">‹</span>
-                    <span className="sim-ed-pill">File</span>
-                    <span className="sim-ed-title">Saturday Market Flyer</span>
-                    <span className="sim-ed-saved">Saved</span>
-                  </div>
-                  <div className="sim-ed-right-head">
-                    <span className="sim-ed-avs" aria-hidden="true">
-                      <i style={{ background: "#8E1EA2" }}>M</i>
-                      <i style={{ background: "#C654C3" }}>L</i>
-                    </span>
-                    <span className="sim-ed-export-btn">Export</span>
-                  </div>
-                </div>
-
-                {/* Miniature Context Toolbar */}
-                <div className="sim-ed-tb">
-                  {activeStep.toolbar.map((t) => (
-                    <span key={t} className="sim-ed-tbb">{t}</span>
+              <div
+                id="hiw-panel"
+                key={step}
+                className="hiw-stage"
+                role="tabpanel"
+                aria-labelledby={`hiw-tab-${step}`}
+                aria-live="polite"
+              >
+                <span className="hiw-ghost" aria-hidden="true">{activeStep.num.slice(0, 2)}</span>
+                <h3 className="hiw-title"><Letters text={activeStep.title} /></h3>
+                <p className="hiw-lead">
+                  {activeStep.lead} <Rotator words={activeStep.words} />
+                </p>
+                <p className="hiw-body">{activeStep.body}</p>
+                <ul className="hiw-lines">
+                  {activeStep.lines.map((line, i) => (
+                    <li key={line} style={{ "--i": i, "--c": line.length } as React.CSSProperties}>
+                      <span>{line}</span>
+                    </li>
                   ))}
-                </div>
-
-                {/* Miniature Editor Body */}
-                <div className="sim-ed-body">
-                  <div className="sim-ed-rail" aria-hidden="true">
-                    {(["Templates", "Design", "Preflight", "Export"] as const).map((r) => (
-                      <span key={r} className={activeStep.rail === r ? "sim-rail-item sim-rail-on" : "sim-rail-item"}>
-                        {r.slice(0, 3)}
-                      </span>
-                    ))}
-                  </div>
-
-                  <div className="sim-sim" key={`stage-${step}`}>
-                    {step === 0 && (
-                      <div className="sim-step0">
-                        <div className="sim-drawer">
-                          <span className="sim-drawer-h">Print Starters</span>
-                          <div className="sim-starter sim-starter-active">
-                            <strong>Saturday Market</strong>
-                            <span>A4 · 3 mm bleed</span>
-                          </div>
-                          <div className="sim-starter">
-                            <strong>Jazz Night Poster</strong>
-                            <span>A3 · 3 mm bleed</span>
-                          </div>
-                          <div className="sim-starter">
-                            <strong>Brand Deck</strong>
-                            <span>1920 × 1080 px</span>
-                          </div>
-                        </div>
-                        <div className="sim-page-wrap">
-                          <div className="sim-page">
-                            <span className="sim-bleed-box" aria-hidden="true" />
-                            <span className="sim-bleed-tag">3 mm bleed trim</span>
-                            <h4>Saturday Market</h4>
-                            <p>Fresh berries · Local print</p>
-                            <span className="sim-insert-btn">Insert as new page</span>
-                          </div>
-                          <span className="sim-pointer sim-pointer-s0" aria-hidden="true">▲</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {step === 1 && (
-                      <div className="sim-step1">
-                        <div className="sim-vec-stage">
-                          <span className="sim-hud">X: 105 mm · Y: 148 mm</span>
-                          <svg className="sim-vec-svg" viewBox="0 0 220 140" aria-hidden="true">
-                            <path
-                              className="sim-vec-path"
-                              d="M 40 95 C 55 25, 165 25, 180 95 C 145 125, 75 125, 40 95 Z"
-                            />
-                            <line className="sim-vec-handle-line" x1="40" y1="95" x2="55" y2="25" />
-                            <line className="sim-vec-handle-line" x1="180" y1="95" x2="165" y2="25" />
-                            <circle className="sim-vec-pt" cx="40" cy="95" r="4.5" />
-                            <circle className="sim-vec-pt sim-vec-pt-drag" cx="180" cy="95" r="4.5" />
-                            <circle className="sim-vec-cp" cx="55" cy="25" r="3.5" />
-                            <circle className="sim-vec-cp sim-vec-cp-drag" cx="165" cy="25" r="3.5" />
-                          </svg>
-                          <span className="sim-pointer sim-pointer-s1" aria-hidden="true">▲</span>
-                        </div>
-                        <div className="sim-popover">
-                          <span className="sim-drawer-h">Brand Palette</span>
-                          <div className="sim-swatch-row">
-                            <span className="sim-swatch sim-sw-a" style={{ background: "#8E1EA2" }} />
-                            <span className="sim-swatch sim-sw-b" style={{ background: "#C654C3" }} />
-                            <span className="sim-swatch" style={{ background: "#ED96D7" }} />
-                            <span className="sim-swatch" style={{ background: "#FFC0DE" }} />
-                          </div>
-                          <span className="sim-lock">Brand lock · Fixed</span>
-                        </div>
-                      </div>
-                    )}
-
-                    {step === 2 && (
-                      <div className="sim-step2">
-                        <div className="sim-collab-canvas">
-                          <div className="sim-sel-box sim-sel-maya">
-                            <span>Hero Title</span>
-                          </div>
-                          <div className="sim-sel-box sim-sel-leo">
-                            <span>Berry Badge</span>
-                          </div>
-                          <span className="sim-cursor sim-cursor-maya" aria-hidden="true">Maya</span>
-                          <span className="sim-cursor sim-cursor-leo" aria-hidden="true">Leo</span>
-                        </div>
-                        <div className="sim-preflight">
-                          <div className="sim-pf-head">
-                            <strong>Preflight</strong>
-                            <span className="sim-pf-ok">All clear</span>
-                          </div>
-                          {PREFLIGHT_CHECKS.map(([title, detail], idx) => (
-                            <div
-                              key={title}
-                              className="sim-check"
-                              style={{ animationDelay: `${idx * 90}ms` }}
-                            >
-                              <div>
-                                <b>{title}</b>
-                                <span>{detail}</span>
-                              </div>
-                              <span className="sim-check-badge">✓</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {step === 3 && (
-                      <div className="sim-step3">
-                        <div className="sim-exp-cards">
-                          {SIM_EXPORT_FORMATS.map((fmt) => (
-                            <label key={fmt.id} className="sim-exp-card">
-                              <input
-                                type="radio"
-                                name="sim-format"
-                                checked={simFmt === fmt.id}
-                                onChange={() => setSimFmt(fmt.id)}
-                              />
-                              <b>{fmt.label}</b>
-                              <span>{fmt.hint}</span>
-                            </label>
-                          ))}
-                        </div>
-                        <div className="sim-exp-foot">
-                          <label className="sim-exp-chk">
-                            <input
-                              type="checkbox"
-                              checked={simCropMarks}
-                              onChange={(e) => setSimCropMarks(e.target.checked)}
-                            />
-                            <span>Include 3 mm crop marks</span>
-                          </label>
-                          <div className="sim-bar" aria-hidden="true"><div className="sim-bar-fill" /></div>
-                          <div className="sim-exp-status">
-                            <span>
-                              ✓ saturday-market-flyer.{simFmt.startsWith("pdf") ? "pdf" : simFmt} ready
-                            </span>
-                            <span className="sim-ed-export-btn">Export</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Miniature Bottom Page Strip */}
-                <div className="sim-ed-bottom">
-                  <div className="sim-strip" aria-hidden="true">
-                    <span className="sim-thumb sim-thumb-on">Page 1</span>
-                    <span className="sim-thumb">Page 2</span>
-                    <span className="sim-thumb">+</span>
-                  </div>
-                  <span className="sim-zoom">100%</span>
-                </div>
+                </ul>
               </div>
             </div>
           </div>

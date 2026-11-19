@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test("landing page renders all assets, walkthrough tabs, custom inputs, dark mode toggle, and navigates to /sign-in", async ({ page }) => {
+test("landing page renders all assets, walkthrough tabs, dark mode toggle, and navigates to /sign-in", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("heading", { name: /Design freely/i })).toBeVisible();
   await expect(page.locator("header .brand img[src='/logo.png']")).toBeVisible();
@@ -15,18 +15,15 @@ test("landing page renders all assets, walkthrough tabs, custom inputs, dark mod
   await expect(page.getByLabel("Highlights").getByText("Live cursors").first()).toBeVisible();
 
   // Interactive studio walkthrough tabs
+  const panel = page.getByRole("tabpanel");
   await page.getByRole("tab", { name: /02 · Design/i }).click();
-  await expect(page.locator(".sim-lock")).toHaveText("Brand lock · Fixed");
+  await expect(panel.getByRole("heading", { name: "Edit vectors, type & brand locks" })).toBeVisible();
+  await expect(panel).toContainText("Brand lock · Fixed");
   await page.getByRole("tab", { name: /03 · Review/i }).click();
-  await expect(page.getByText("Fonts available")).toBeVisible();
+  await expect(panel).toContainText("Fonts available");
   await page.getByRole("tab", { name: /04 · Export/i }).click();
-  await expect(page.locator(".sim-exp-card", { hasText: "PDF · Print" })).toBeVisible();
-
-  // Custom input styling (no default browser chrome)
-  const radioApp = await page.locator(".sim-exp-card input[type='radio']").first().evaluate((el) => getComputedStyle(el).appearance);
-  const checkApp = await page.locator(".sim-exp-chk input[type='checkbox']").evaluate((el) => getComputedStyle(el).appearance);
-  expect(radioApp).toBe("none");
-  expect(checkApp).toBe("none");
+  await expect(page.getByRole("tab", { name: /04 · Export/i })).toHaveAttribute("aria-selected", "true");
+  await expect(panel).toContainText("PDF · Print · crop marks");
 
   // Toggle dark mode and verify persistence across reload
   await page.getByRole("button", { name: "Toggle dark mode" }).click();
