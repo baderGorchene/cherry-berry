@@ -110,13 +110,78 @@ const STORIES = [
 ] as const;
 
 const FORMATS = [
-  { name: "Social post", size: "1080 × 1080 px", note: "Square feed graphics & carousels" },
-  { name: "Presentation", size: "1920 × 1080 px", note: "Widescreen multi-page decks" },
-  { name: "Print flyer", size: "A4 · 3 mm bleed", note: "Press-ready PDF with crop marks" },
-  { name: "Business card", size: "85 × 55 mm · bleed", note: "Crisp typography & brand logos" },
-  { name: "Event poster", size: "A3 · 3 mm bleed", note: "Full-bleed backgrounds & vectors" },
-  { name: "Custom canvas", size: "px · mm · cm · in", note: "Any dimensions you need" },
-];
+  { kind: "social", name: "Social post", size: "1080 × 1080 px", note: "Square feed graphics & carousels" },
+  { kind: "deck", name: "Presentation", size: "1920 × 1080 px", note: "Widescreen multi-page decks" },
+  { kind: "flyer", name: "Print flyer", size: "A4 · 3 mm bleed", note: "Press-ready PDF with crop marks" },
+  { kind: "card", name: "Business card", size: "85 × 55 mm · bleed", note: "Crisp typography & brand logos" },
+  { kind: "poster", name: "Event poster", size: "A3 · 3 mm bleed", note: "Full-bleed backgrounds & vectors" },
+  { kind: "custom", name: "Custom canvas", size: "px · mm · cm · in", note: "Any dimensions you need" },
+] as const;
+
+/** Decorative, looping mini design drawn at each format's real aspect ratio. */
+function FormatArt({ kind }: { kind: (typeof FORMATS)[number]["kind"] }) {
+  switch (kind) {
+    case "social":
+      return (
+        <>
+          <div className="fa fa-social">
+            <div className="fa-slides">
+              <span style={{ background: "#FFC0DE", color: "#4A0E56" }}>Fresh</span>
+              <span style={{ background: "#8E1EA2", color: "#fff" }}>Local</span>
+              <span style={{ background: "#C9303D", color: "#fff" }}>Sat 9am</span>
+              <span style={{ background: "#FFC0DE", color: "#4A0E56" }}>Fresh</span>
+            </div>
+          </div>
+          <span className="fa-dots"><i /><i /><i /></span>
+        </>
+      );
+    case "deck":
+      return (
+        <div className="fa fa-deck">
+          <b>Q3 growth</b>
+          <span className="fa-bars"><i /><i /><i /><i /><i /></span>
+        </div>
+      );
+    case "flyer":
+      return (
+        <div className="fa fa-flyer">
+          <span className="fa-bleed" />
+          <span className="fa-crop fa-crop-tl" /><span className="fa-crop fa-crop-tr" />
+          <span className="fa-crop fa-crop-bl" /><span className="fa-crop fa-crop-br" />
+          <span className="fa-flyer-sun" />
+          <b>Saturday<br />Market</b>
+          <i className="fa-line" /><i className="fa-line fa-line-s" />
+        </div>
+      );
+    case "card":
+      return (
+        <div className="fa fa-bcard">
+          <div className="fa-bcard-in">
+            <div className="fa-bcard-front">
+              <img src="/logo.png" alt="" />
+              <span><b>Maya Lin</b><small>Art director</small></span>
+            </div>
+            <div className="fa-bcard-back">Cherry Berry</div>
+          </div>
+        </div>
+      );
+    case "poster":
+      return (
+        <div className="fa fa-poster">
+          <span className="fa-poster-sun" />
+          <b><span>JAZZ</span><span>NIGHT</span></b>
+          <small>Fri · 8 pm</small>
+        </div>
+      );
+    case "custom":
+      return (
+        <div className="fa fa-custom">
+          <span className="fa-handle" />
+          <span className="fa-units"><span>1200 px</span><span>210 mm</span><span>21 cm</span><span>8.5 in</span><span>1200 px</span></span>
+        </div>
+      );
+  }
+}
 
 const MARQUEE = [
   "Vector booleans", "Bezier pen", "Multi-page layouts", "Brand kits", "Live cursors", "Version history",
@@ -398,10 +463,15 @@ export default function Landing() {
             </div>
             <div className="land-grid-3">
               {FORMATS.map((fmt) => (
-                <article key={fmt.name} className="land-card rv" onPointerMove={spotlight}>
-                  <span className="land-card-badge">{fmt.size}</span>
-                  <h3>{fmt.name}</h3>
-                  <p>{fmt.note}</p>
+                <article key={fmt.name} className="land-card fmt-card rv" onPointerMove={spotlight}>
+                  <div className="fmt-stage" aria-hidden="true">
+                    <FormatArt kind={fmt.kind} />
+                  </div>
+                  <div className="fmt-copy">
+                    <span className="land-card-badge">{fmt.size}</span>
+                    <h3>{fmt.name}</h3>
+                    <p>{fmt.note}</p>
+                  </div>
                 </article>
               ))}
             </div>
