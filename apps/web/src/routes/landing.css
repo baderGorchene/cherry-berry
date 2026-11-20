@@ -497,7 +497,7 @@
 
 .land-spark-a { top: 8%; left: 14%; }
 .land-spark-b { top: 22%; right: 6%; width: 10px; height: 10px; background: var(--blush); animation-delay: -1.1s; }
-.land-spark-c { bottom: 14%; left: 4%; width: 18px; height: 18px; background: var(--berry); animation-delay: -2.2s; }
+.land-spark-c { bottom: 14%; left: 4%; width: 18px; height: 18px; background: var(--cherry); animation-delay: -2.2s; }
 
 /* ----- App preview ----- */
 .land-preview {
@@ -907,7 +907,7 @@
 
 .land-marquee li::after {
   content: "✦";
-  color: var(--orchid);
+  color: var(--cherry);
   font-size: 12px;
 }
 
@@ -1277,3 +1277,24 @@
   font-style: normal;
 }
 .pv-avs i + i { margin-left: -6px; }
+
+/* Ink and cherry dark mode: neutral ink surfaces, so glows and the banner stay quiet behind the art. */
+[data-theme="dark"] .land-hero::before {
+  background: radial-gradient(circle, rgba(222, 143, 238, 0.22), transparent 70%);
+}
+
+[data-theme="dark"] .land-hero::after {
+  background: radial-gradient(circle, rgba(240, 96, 106, 0.14), transparent 70%);
+}
+
+[data-theme="dark"] .pv-stage::before {
+  opacity: 0.28;
+}
+
+[data-theme="dark"] .land-banner {
+  background-image: linear-gradient(120deg, #241327, #4E1A5C, #6B1F3E, #4E1A5C, #241327);
+}
+
+[data-theme="dark"] .land-banner p {
+  color: #E8DCE6;
+}
