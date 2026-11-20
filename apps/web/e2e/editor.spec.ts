@@ -1027,3 +1027,54 @@ test("global editor shortcuts do not fire while a modal dialog is open", async (
   await expect(grid).toHaveCount(0);
   await expect(layers(page).getByRole("button", { name: "Rectangle", exact: true })).toHaveCount(1);
 });
+
+test("text resize reflows live instead of stretching", async ({ page }) => {
+  await signUp(page, unique("resize"));
+  await createWorkspace(page, "Resize Studio");
+  await newDesign(page);
+  await editorReady(page);
+  await openPanel(page, "Text");
+  await panel(page, "Text").getByRole("button", { name: "Add a heading" }).click();
+  const size = toolbar(page).getByLabel("Size", { exact: true });
+  await expect(size).toHaveValue("64.8");
+
+  type K = { find(s: string): { attrs: Record<string, number>; absolutePosition(): { x: number; y: number }; name(): string }[] };
+  const text = () => page.evaluate(() => {
+    const t = (window as unknown as { Konva: { stages: K[] } }).Konva.stages[0]!.find("Text").find((n) => n.attrs.width! > 100)!;
+    return { scaleX: t.attrs.scaleX ?? 1, scaleY: t.attrs.scaleY ?? 1, width: t.attrs.width!, fontSize: t.attrs.fontSize! };
+  });
+  const anchor = (name: string) => page.evaluate((name) => {
+    const a = (window as unknown as { Konva: { stages: K[] } }).Konva.stages[0]!.find(`.${name}`)[0]!.absolutePosition();
+    return a;
+  }, name);
+  const canvas = (await page.getByLabel("Page 1 canvas").boundingBox())!;
+  const drag = async (name: string, dx: number, dy: number, during: (t: Awaited<ReturnType<typeof text>>) => void) => {
+    const a = await anchor(name);
+    await page.mouse.move(canvas.x + a.x, canvas.y + a.y);
+    await page.mouse.down();
+    await page.mouse.move(canvas.x + a.x + dx / 2, canvas.y + a.y + dy / 2, { steps: 4 });
+    await page.mouse.move(canvas.x + a.x + dx, canvas.y + a.y + dy, { steps: 4 });
+    during(await text()); // mid-drag, before mouseup
+    await page.mouse.up();
+  };
+
+  const before = await text();
+  // Side handle: wider box, same type, never scaled.
+  await drag("middle-right", 80, 0, (t) => {
+    expect(t).toMatchObject({ scaleX: 1, scaleY: 1, fontSize: before.fontSize });
+    expect(t.width).toBeGreaterThan(before.width + 40);
+  });
+  await expect(size).toHaveValue("64.8");
+  const wide = await text();
+
+  // Corner handle: bigger type live, and the toolbar size matches what the drag showed.
+  let live = 0;
+  await drag("bottom-right", 60, 60, (t) => {
+    expect(t).toMatchObject({ scaleX: 1, scaleY: 1 });
+    expect(t.fontSize).toBeGreaterThan(wide.fontSize);
+    live = t.fontSize;
+  });
+  const after = await text();
+  expect(after.fontSize).toBeCloseTo(live, 5);
+  expect(Number(await size.inputValue())).toBeGreaterThan(64.8);
+});

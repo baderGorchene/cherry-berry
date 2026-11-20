@@ -2,8 +2,10 @@ import { useEffect, useState, type ReactNode } from "react";
 import * as Y from "yjs";
 import { LOCAL, updateNode, updatePage, type CherryNode, type Page } from "@cherry/doc";
 import { scalePath, type AnchorRef, type BoolOp } from "@cherry/vector";
-import { getAsset, type Asset, type BrandKit, type Role } from "../api";
-import { BUILT_IN_FONTS, kitFamilies } from "../brand/fonts";
+import { getAsset, type Asset, type BrandKit, type Font, type Role } from "../api";
+import FontDialog from "../brand/FontDialog";
+import { BUILT_IN_FONTS, canQueryLocalFonts, kitFamilies, useLocalFonts } from "../brand/fonts";
+import { shell } from "../native";
 import { LICENSES } from "../library/assets";
 import { KitSelect } from "./BrandPanel";
 import { withTextHeight } from "./Canvas";
@@ -63,11 +65,13 @@ export type PathEditing = { node: CherryNode; anchors: AnchorRef[]; onDone(): vo
  * Viewers get no editing controls.
  */
 export default function ContextToolbar({
-  ydoc, page, nodes, kit, docColors, role, readOnly, workspaceId, designId, act, onLinked,
+  ydoc, page, nodes, kit, docColors, role, readOnly, workspaceId, designId, act, onLinked, onFontAdded,
   canCombine, canConvert, message, onCombine, onConvert, canGroup, groupWhy, onGroup, onUngroup, onEditPath, onLock, onReorder, editing,
 }: {
   ydoc: Y.Doc; page: Page; nodes: CherryNode[]; kit: BrandKit | null; docColors: string[]; role: Role; readOnly: boolean;
   workspaceId: string; designId: string; act(fn: () => void): void; onLinked(kitId: string | null): void;
+  /** A font was uploaded to the linked kit from the font picker. */
+  onFontAdded(font: Font): void;
   canCombine: boolean; canConvert: boolean; message: string; onCombine(op: BoolOp): void; onConvert(n: CherryNode): void;
   /** `groupWhy` says why Group is off (brand locks), or "". */
   canGroup: boolean; groupWhy: string; onGroup(): void; onUngroup(): void; onEditPath(id: string): void; onLock(): void; onReorder(to: "forward" | "backward"): void;
@@ -75,6 +79,8 @@ export default function ContextToolbar({
 }) {
   const { unit } = page;
   const kind = toolbarKind(nodes);
+  const [fontOpen, setFontOpen] = useState(false);
+  const [local, requestLocal] = useLocalFonts();
   // One row that keeps its height (so the canvas never jumps) and scrolls sideways when it doesn't fit; a mouse wheel scrolls it too.
   const bar = (children: ReactNode) => (
     <div role="toolbar" aria-label="Selection" className="ed-tb"
@@ -177,13 +183,39 @@ export default function ContextToolbar({
 
   if (n.kind === "text") {
     const fonts = kit ? kitFamilies(kit) : BUILT_IN_FONTS;
+    const computer = local && "families" in local ? local.families.filter((f) => !fonts.includes(f)) : [];
     const weights = fontWeights(n.fontFamily, kit);
     const size = (v: number) => v > 0 && set({ fontSize: Math.round(v * 100) / 100 });
+    const canUpload = !!kit && (role === "owner" || role === "admin");
     return bar(<>
       <select className="ed-tbsel ed-font" aria-label="Font" title="Font" value={n.fontFamily} disabled={frozen} style={{ fontFamily: `"${n.fontFamily}"` }}
         onChange={(e) => set({ fontFamily: e.target.value })}>
-        {(fonts.includes(n.fontFamily) ? fonts : [n.fontFamily, ...fonts]).map((f) => <option key={f} style={{ fontFamily: `"${f}"` }}>{f}</option>)}
+        {(fonts.includes(n.fontFamily) || computer.includes(n.fontFamily) ? fonts : [n.fontFamily, ...fonts]).map((f) => <option key={f} style={{ fontFamily: `"${f}"` }}>{f}</option>)}
+        {computer.length > 0 && (
+          <optgroup label="On this computer">
+            {computer.map((f) => <option key={f} style={{ fontFamily: `"${f}"` }}>{f}</option>)}
+          </optgroup>
+        )}
       </select>
+      {!frozen && (
+        <Popover label="Add fonts" button="Fonts" title="Upload a font or use the fonts on this computer">
+          <h2 className="ed-ph">Your fonts</h2>
+          {canUpload ? <button type="button" className="ed-mini" onClick={() => setFontOpen(true)}>Upload a font (WOFF2, WOFF, TTF, OTF)</button>
+            : <p className="muted ed-note">{kit ? `Ask a workspace owner or admin to add fonts to “${kit.name}”.` : "Link a brand kit in the Brand panel to upload your own fonts."}</p>}
+          {(canQueryLocalFonts() || shell() === "desktop") && (
+            local && "families" in local ? <p className="muted ed-note">Added {computer.length} font{computer.length === 1 ? "" : "s"} from this computer to the font list.</p>
+              : local?.error === "unsupported" ? <p role="alert" className="ed-note">This app can't read the fonts installed on this computer. Upload the font to a brand kit instead.</p>
+                : <>
+                  {local && <p role="alert" className="ed-note">Font access was blocked. Allow local fonts for this site and try again, or upload the font to a brand kit.</p>}
+                  <button type="button" className="ed-mini" onClick={requestLocal}>Show fonts on this computer</button>
+                </>
+          )}
+        </Popover>
+      )}
+      {fontOpen && kit && (
+        <FontDialog kit={kit} onClose={() => setFontOpen(false)}
+          onDone={(font) => { setFontOpen(false); onFontAdded(font); set({ fontFamily: font.family }); }} />
+      )}
       <span className="ed-tbg">
         <button type="button" className="ed-tbb ed-tbi" aria-label="Decrease font size" title="Decrease font size" disabled={frozen || n.fontSize <= 1} onClick={() => size(n.fontSize - 1)}>−</button>
         <Num label="Size" unit="pt" value={n.fontSize} disabled={frozen} onCommit={size} />

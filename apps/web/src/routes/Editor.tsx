@@ -380,6 +380,7 @@ function Shell({ d }: { d: Ready }) {
   const toolbar = (
     <ContextToolbar ydoc={ydoc} page={page} nodes={selectedNodes} kit={kit} docColors={colors} role={role} readOnly={readOnly}
       workspaceId={d.design.workspaceId} designId={d.design.id} act={act} onLinked={setKitId}
+      onFontAdded={(font) => setLoaded((l) => (l?.kit?.id === font.kitId ? { ...l, kit: { ...l.kit, fonts: [...l.kit.fonts, font] } } : l))}
       canCombine={canCombine} canConvert={convertible} message={message} onCombine={runCombine} onConvert={runConvert}
       canGroup={canGroup} groupWhy={groupWhy} onGroup={group} onUngroup={ungroup} onEditPath={enterEdit} onLock={toggleLock} onReorder={reorder}
       editing={editNode ? { node: editNode, anchors, onDone: exitEdit, panel: !phone } : null} />

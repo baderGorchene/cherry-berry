@@ -8,7 +8,7 @@ import {
   PT_PX, UNIT_PX, addNode, createShape, duplicateNodes, removeNodes, reorderNode, toPx, updateNode,
   type BasicShape, type CherryNode, type Page,
 } from "@cherry/doc";
-import { fromKonvaTransform, toKonvaAttrs } from "./geometry";
+import { foldTextScale, fromKonvaTransform, textBox, toKonvaAttrs, type TextAttrs } from "./geometry";
 import { loadPageFonts, pageFontFaces } from "./canvasFonts";
 import { snapBox, type Guides } from "./layout";
 import PathEditor, { type PathInput, type PathKeys } from "./PathEditor";
@@ -31,7 +31,16 @@ const konvaFont = (n: TextNode, unit: Unit) => ({
   text: n.text, width: n.width, fontFamily: n.fontFamily, fontSize: (n.fontSize * PT_PX) / UNIT_PX[unit],
   fontStyle: String(n.fontWeight), lineHeight: n.lineHeight, letterSpacing: n.letterSpacing, align: n.align,
 });
-const TEXT_LAYOUT = ["text", "fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "width"];
+/** Folds a Konva text's transform scale into its width and font size in place (see foldTextScale); returns the result. */
+function foldText(k: Konva.Text): TextAttrs {
+  const a = foldTextScale({
+    x: k.x(), y: k.y(), rotation: k.rotation(), scaleX: k.scaleX(), scaleY: k.scaleY(),
+    offsetX: k.offsetX(), offsetY: k.offsetY(), width: k.width(), fontSize: k.fontSize(),
+  });
+  k.setAttrs(a);
+  return a;
+}
+const TEXT_LAYOUT =["text", "fontFamily", "fontSize", "fontWeight", "lineHeight", "letterSpacing", "width"];
 
 /** Adds the rendered height to a patch that changes how a text node lays out (other patches pass through). */
 export function withTextHeight(n: CherryNode, patch: Partial<CherryNode>, unit: Unit): Partial<CherryNode> {
@@ -192,14 +201,24 @@ export default function Canvas({
   const commitKonva = (ks: Konva.Node[]) => {
     if (touch.current.pinch) {
       // A second finger ended this drag or transform: put the layers back rather than commit a half move.
-      ks.forEach((k) => { const n = top(k.id()); if (n) { const { x, y, rotation } = toKonvaAttrs(n); k.setAttrs({ x, y, rotation, scaleX: 1, scaleY: 1, skewX: 0, skewY: 0 }); } });
+      ks.forEach((k) => {
+        const n = top(k.id());
+        if (n) k.setAttrs({ ...toKonvaAttrs(n), ...(n.kind === "text" ? konvaFont(n, page.unit) : {}), scaleX: 1, scaleY: 1, skewX: 0, skewY: 0 });
+      });
       trRef.current?.forceUpdate();
       return stageRef.current?.batchDraw();
     }
-    const patches = ks.flatMap((k) => {
+    const patches = ks.flatMap((k): (readonly [string, Partial<CherryNode>])[] => {
       const n = top(k.id());
       if (!n || !canMove(n, role)) return [];
-      const t = { x: k.x(), y: k.y(), rotation: k.rotation(), scaleX: k.scaleX(), scaleY: k.scaleY() };
+      if (n.kind === "text" && k instanceof Konva.Text) {
+        const a = foldText(k);
+        k.skew({ x: 0, y: 0 });
+        const type = { width: a.width, fontSize: (a.fontSize * UNIT_PX[page.unit]) / PT_PX };
+        const { height } = withTextHeight(n, type, page.unit) as { height: number };
+        return [[n.id, { ...textBox(a, height), fontSize: type.fontSize }] as const];
+      }
+      const t ={ x: k.x(), y: k.y(), rotation: k.rotation(), scaleX: k.scaleX(), scaleY: k.scaleY() };
       // A multi-node resize can leave skew on rotated nodes; the document has no skew, so drop it.
       k.scale({ x: 1, y: 1 });
       k.skew({ x: 0, y: 0 });
@@ -414,7 +433,9 @@ export default function Canvas({
   const logoIds = kit?.content.rules.lockLogos ? Object.values(kit.content.logos) : [];
   const keepRatio = selected.some((s) => { const n = top(s); return n?.kind === "image" && logoIds.includes(n.assetId); });
   const frozen = selected.some((s) => { const n = top(s); return !!n && !canMove(n, role); });
-  const narrow = selected.some((s) => { const n = top(s); return !!n && (n.kind === "text" || isLine(n)); });
+  const narrow = selected.some((s) => { const n = top(s); return !!n && isLine(n); });
+  // Text: sides re-wrap, top/bottom resize the type, corners scale it evenly (foldText runs on every frame).
+  const allText = selected.length > 0 && selected.every((s) => top(s)?.kind === "text");
   const editNode = draft ?? (editing ? top(editing) : undefined);
   const preview = drag && {
     x: Math.min(drag.from.x, drag.to.x), y: Math.min(drag.from.y, drag.to.y),
@@ -503,9 +524,10 @@ export default function Canvas({
             )}
           </Group>
           {!readOnly && (
-            <Transformer ref={trRef} flipEnabled={false} rotateEnabled={!frozen} resizeEnabled={!frozen} keepRatio={keepRatio}
+            <Transformer ref={trRef} flipEnabled={false} rotateEnabled={!frozen} resizeEnabled={!frozen} keepRatio={keepRatio || allText}
               borderStroke="#8E1EA2" anchorStroke="#8E1EA2" anchorFill="#fff" anchorSize={10} anchorCornerRadius={2}
               enabledAnchors={narrow ? ["middle-left", "middle-right"] : undefined}
+              onTransform={() => trRef.current!.nodes().forEach((k) => { if (k instanceof Konva.Text) foldText(k); })}
               onTransformEnd={() => commitKonva(trRef.current!.nodes())} />
           )}
         </Layer>

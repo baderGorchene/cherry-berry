@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join, resolve } from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 import { addShape, createWorkspace, editorReady, newDesign, openPanel, panel as railPanel, popover, railButton, signUp, toolbar, unique } from "./helpers";
 
@@ -112,4 +115,37 @@ test("a locked text layer is left alone by text styles and colors", async ({ pag
   await expect(panel(page).getByText("Selected layers are locked")).toBeVisible();
   await openPanel(page, "Layers");
   await expect(layers(page).getByRole("button", { name: "Heading", exact: true })).toHaveCount(1);
+});
+
+test("uploads a font from the font picker and lists this computer's fonts", async ({ page }) => {
+  // A stand-in for the Local Font Access API (Chromium only shows its permission prompt to a real user).
+  await page.addInitScript(() => {
+    (window as unknown as { queryLocalFonts(): Promise<{ family: string }[]> }).queryLocalFonts =
+      async () => [{ family: "Desk Serif" }, { family: "Desk Serif" }, { family: "Arial" }];
+  });
+  await start(page, COLORS);
+  await link(page);
+  await panel(page).getByRole("button", { name: "Body", exact: true }).click();
+  const font = toolbar(page).getByRole("combobox", { name: "Font" });
+  await expect(font).toBeVisible();
+
+  const fonts = await popover(page, "Fonts", "Add fonts");
+  await fonts.getByRole("button", { name: /Upload a font/ }).click();
+  // A real WOFF2 (not just the magic bytes), so the browser has to load it.
+  const require = createRequire(import.meta.url);
+  const pkg = dirname(require.resolve("@fontsource/pacifico", { paths: [resolve("../server")] }));
+  await page.getByLabel("Font file").setInputFiles({ name: "Brand Script.woff2", mimeType: "", buffer: readFileSync(join(pkg, "files/pacifico-latin-400-normal.woff2")) });
+  await expect(page.getByLabel("Family", { exact: true })).toHaveValue("Brand Script");
+  await page.getByLabel("I have the right to use this font in this workspace.").check();
+  await page.getByRole("dialog", { name: "Upload font" }).getByRole("button", { name: "Upload", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Upload font" })).toHaveCount(0);
+  await expect(font).toHaveValue("Brand Script");
+  await expect.poll(() => page.evaluate(() => [...document.fonts].some((f) => f.family.replace(/"/g, "") === "Brand Script" && f.status === "loaded"))).toBe(true);
+
+  const again = await popover(page, "Fonts", "Add fonts");
+  await again.getByRole("button", { name: "Show fonts on this computer" }).click();
+  await expect(again.getByText("Added 1 font from this computer to the font list.")).toBeVisible();
+  await expect(font.locator("optgroup[label='On this computer'] option")).toHaveText(["Desk Serif"]);
+  await font.selectOption("Desk Serif");
+  await expect(font).toHaveValue("Desk Serif");
 });

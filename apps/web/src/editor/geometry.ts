@@ -29,7 +29,7 @@ export function fromKonvaTransform(
   node: CherryNode, t: { x: number; y: number; rotation: number; scaleX: number; scaleY: number },
 ): Partial<CherryNode> {
   const width = Math.abs(node.width * t.scaleX);
-  const height = node.kind === "text" ? node.height : Math.abs(node.height * t.scaleY);
+  const height = Math.abs(node.height * t.scaleY); // text never gets here: Canvas folds it with foldTextScale/textBox
   const out: Record<string, unknown> = {
     x: t.x - width / 2, y: t.y - height / 2, width, height, rotation: ((t.rotation % 360) + 360) % 360,
   };
@@ -39,6 +39,34 @@ export function fromKonvaTransform(
     out.children = scaleChildren(node.children, sx, sy);
   }
   return out as Partial<CherryNode>;
+}
+
+/** A Konva text node's live attrs (page units, rotation in degrees). */
+export type TextAttrs = {
+  x: number; y: number; rotation: number; scaleX: number; scaleY: number; offsetX: number; offsetY: number; width: number; fontSize: number;
+};
+
+/**
+ * Folds a text transform's scale into the type instead of stretching it: scaleX re-wraps (width), scaleY resizes
+ * (fontSize), and the scale goes back to 1. The scaled box keeps its top-left corner, so the text grows from where
+ * the transformer put it. Run on every `transform` frame and the drag shows the reflowed text live.
+ */
+export function foldTextScale(k: TextAttrs): TextAttrs {
+  // A side handle leaves the other scale at 1 ± float noise; that must not nudge the font size.
+  const snap = (s: number) => (Math.abs(Math.abs(s) - 1) < 1e-6 ? 1 : Math.abs(s));
+  const sx = snap(k.scaleX), sy = snap(k.scaleY), r = (k.rotation * Math.PI) / 180;
+  const dy = -k.offsetY * (sy - 1); // offsetY stays, so shift the origin along the rotated y axis to keep the top edge
+  return {
+    x: k.x - Math.sin(r) * dy, y: k.y + Math.cos(r) * dy, rotation: k.rotation, scaleX: 1, scaleY: 1,
+    offsetX: k.offsetX * sx, offsetY: k.offsetY, width: Math.max(1, k.width * sx), fontSize: Math.max(0.1, k.fontSize * sy),
+  };
+}
+
+/** The document box (unrotated top-left, rotation about the centre) of a folded text whose laid-out height is `height`. */
+export function textBox(k: TextAttrs, height: number) {
+  const r = (k.rotation * Math.PI) / 180, lx = k.width / 2 - k.offsetX, ly = height / 2 - k.offsetY;
+  const cx = k.x + lx * Math.cos(r) - ly * Math.sin(r), cy = k.y + lx * Math.sin(r) + ly * Math.cos(r);
+  return { x: cx - k.width / 2, y: cy - height / 2, width: k.width, height, rotation: ((k.rotation % 360) + 360) % 360 };
 }
 
 /** Zoom at which the page plus bleed fits the viewport with `padding` px on every side. */

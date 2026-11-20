@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FONTS } from "@cherry/doc";
 import type { BrandKit } from "../api";
-import { BUILT_IN_FONTS, kitFamilies } from "./fonts";
+import { BUILT_IN_FONTS, kitFamilies, queryLocalFamilies } from "./fonts";
 
 const kit = (families: string[]) => ({
   fonts: families.map((family, i) => ({ id: `f${i}`, kitId: "k", family, weight: 400, style: "normal", format: "woff2", bytes: 1 })),
@@ -34,5 +34,16 @@ describe("theme.css Google Fonts URL", () => {
       expect(m, f.family).not.toBeNull();
       expect(m![1]!.split(";").map(Number)).toEqual(expect.arrayContaining(f.weights));
     }
+  });
+});
+
+describe("queryLocalFamilies", () => {
+  it("lists each installed family once, sorted", async () => {
+    const q = async () => [{ family: "Zed" }, { family: "Arial" }, { family: "Zed" }];
+    expect(await queryLocalFamilies(q)).toEqual({ families: ["Arial", "Zed"] });
+  });
+  it("falls back clearly when the API is missing or permission is refused", async () => {
+    expect(await queryLocalFamilies(undefined)).toEqual({ error: "unsupported" });
+    expect(await queryLocalFamilies(async () => { throw new DOMException("no", "NotAllowedError"); })).toEqual({ error: "denied" });
   });
 });
