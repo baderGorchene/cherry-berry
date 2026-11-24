@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from "react";
+import { createRoot } from "react-dom/client";
 import { IconClose } from "./icons";
 
 /** A modal dialog: focuses inside on open, traps Tab, closes on Escape, and gives focus back to its opener. */
@@ -36,4 +37,31 @@ export default function Modal({ title, onClose, children, className, closeButton
       </div>
     </div>
   );
+}
+
+/** In-app replacement for window.confirm / window.prompt. Resolves to true/the typed text, or false/null when cancelled. */
+export function ask(opts: { title: string; body?: string; ok?: string; danger?: boolean }): Promise<boolean>;
+export function ask(opts: { title: string; body?: string; ok?: string; input: string }): Promise<string | null>;
+export function ask({ title, body, ok = "OK", danger, input }: { title: string; body?: string; ok?: string; danger?: boolean; input?: string }) {
+  return new Promise<boolean | string | null>((resolve) => {
+    const host = document.body.appendChild(document.createElement("div"));
+    const root = createRoot(host);
+    const done = (v: boolean | string | null) => { root.unmount(); host.remove(); resolve(v); };
+    const cancel = () => done(input === undefined ? false : null);
+    root.render(
+      <Modal title={title} onClose={cancel}>
+        <form style={{ display: "flex", flexDirection: "column", gap: 12 }} onSubmit={(e) => {
+          e.preventDefault();
+          done(input === undefined ? true : String(new FormData(e.currentTarget).get("v") ?? ""));
+        }}>
+          {body && <p className="muted" style={{ margin: 0 }}>{body}</p>}
+          {input !== undefined && <input className="inp" name="v" aria-label={title} defaultValue={input} required data-autofocus />}
+          <div className="hist-actions">
+            <button type="button" className="btn" onClick={cancel}>Cancel</button>
+            <button type="submit" className={`btn ${danger ? "btn-danger" : "btn-p"}`} data-autofocus={input === undefined ? true : undefined}>{ok}</button>
+          </div>
+        </form>
+      </Modal>,
+    );
+  });
 }

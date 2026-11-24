@@ -1,3 +1,4 @@
+import { ask } from "../Modal";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router";
 import {
@@ -97,7 +98,7 @@ export default function Brand() {
     try { await load((await createKit(ws.id, { name: name.trim(), content })).id); setError(""); } catch (e) { fail(e); }
   };
   const remove = async () => {
-    if (!kit || !confirm(`Delete "${kit.name}"? This can't be undone.`)) return;
+    if (!kit || !(await ask({ title: `Delete "${kit.name}"?`, body: "This can't be undone.", ok: "Delete", danger: true }))) return;
     try { await deleteKit(kit.id); await load(); } catch (e) { fail(e); }
   };
   const download = () => {
@@ -113,7 +114,7 @@ export default function Brand() {
     if (!r.ok) return setError("That file isn't a Cherry Berry kit.");
     await newKit(r.name, r.content);
   };
-  const promptNew = () => void newKit(prompt("Name your brand kit"), defaultKitContent());
+  const promptNew = async () => void newKit(await ask({ title: "Name your brand kit", ok: "Create", input: "" }), defaultKitContent());
 
   const saveColor = () => {
     if (!colorForm) return;
@@ -122,8 +123,8 @@ export default function Brand() {
     setColorForm(null);
   };
 
-  const pickLogo = (key: keyof Logos) => {
-    if (!confirm("Only upload a logo your organisation owns. Continue?")) return;
+  const pickLogo = async (key: keyof Logos) => {
+    if (!(await ask({ title: "Upload a logo", body: "Only upload a logo your organisation owns. Continue?", ok: "Continue" }))) return;
     logoSlot.current = key;
     logoInput.current?.click();
   };

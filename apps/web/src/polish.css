@@ -523,7 +523,7 @@ input[type="search"]::-webkit-search-cancel-button {
   border-bottom-color: var(--line);
 }
 
-[data-theme="dark"] .adm .btn-danger {
+[data-theme="dark"] .btn-danger {
   border-color: #7F2D2D;
 }
 
@@ -615,3 +615,38 @@ input[type="search"]::-webkit-search-cancel-button {
     color: #fff;
   }
 }
+
+/* Native file inputs: the picker button matches .btn, the file name reads as muted text */
+input[type="file"] {
+  max-width: 100%;
+  font: 500 14px Inter, sans-serif;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+  min-height: 40px;
+  margin-right: 12px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--elevated, #fff);
+  color: var(--ink);
+  font: 600 14px Inter, sans-serif;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease;
+}
+
+input[type="file"]:hover:not(:disabled)::file-selector-button {
+  border-color: var(--blush);
+  box-shadow: 0 6px 16px -6px rgba(34, 20, 42, 0.18);
+}
+
+input[type="file"]:focus-visible {
+  outline: 3px solid var(--blush);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+input[type="file"]:disabled { opacity: 0.6; cursor: default; }
+input[type="file"]:disabled::file-selector-button { cursor: default; }

@@ -149,3 +149,19 @@ test("uploads a font from the font picker and lists this computer's fonts", asyn
   await font.selectOption("Desk Serif");
   await expect(font).toHaveValue("Desk Serif");
 });
+
+test("uploads a font from the Text panel and adds text in it", async ({ page }) => {
+  await start(page, COLORS);
+  await link(page);
+  await openPanel(page, "Text");
+  const text = railPanel(page, "Text");
+  await text.getByRole("button", { name: /Upload a font/ }).click();
+  const require = createRequire(import.meta.url);
+  const pkg = dirname(require.resolve("@fontsource/pacifico", { paths: [resolve("../server")] }));
+  await page.getByLabel("Font file").setInputFiles({ name: "Panel Script.woff2", mimeType: "", buffer: readFileSync(join(pkg, "files/pacifico-latin-400-normal.woff2")) });
+  await page.getByLabel("I have the right to use this font in this workspace.").check();
+  await page.getByRole("dialog", { name: "Upload font" }).getByRole("button", { name: "Upload", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Upload font" })).toHaveCount(0);
+  await expect(toolbar(page).getByRole("combobox", { name: "Font" })).toHaveValue("Panel Script");
+  await expect(text.getByRole("button", { name: "Add text in Panel Script" })).toBeVisible();
+});

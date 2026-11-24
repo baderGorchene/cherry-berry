@@ -1,3 +1,4 @@
+import { ask } from "../Modal";
 import { useEffect, useState } from "react";
 import { parsePath, pathBounds, transformPath } from "@cherry/vector";
 import { Navigate } from "react-router";
@@ -75,7 +76,7 @@ export default function Shapes() {
   };
 
   const remove = async (s: Shape) => {
-    if (!confirm(`Delete "${s.name}"? This can't be undone.`)) return;
+    if (!(await ask({ title: `Delete "${s.name}"?`, body: "This can't be undone.", ok: "Delete", danger: true }))) return;
     try {
       await deleteShape(s.id);
       retry();

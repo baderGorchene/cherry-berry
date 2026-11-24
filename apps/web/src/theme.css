@@ -34,6 +34,7 @@ a { color: var(--berry); }
   background: #fff; color: var(--ink); font: 600 14px Inter, sans-serif; cursor: pointer; text-decoration: none;
 }
 .btn:disabled { opacity: .6; cursor: default; }
+.btn-danger { color: var(--error); border-color: #F2C4C0; }
 .btn-p { background: var(--berry); border-color: var(--berry); color: #fff; }
 .btn-p:hover:not(:disabled) { background: var(--berry-dark); }
 .btn-link { border: 0; background: none; padding: 0; min-height: 0; color: var(--berry); font-weight: 600; text-decoration: underline; }

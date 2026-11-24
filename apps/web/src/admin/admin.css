@@ -27,7 +27,6 @@
 .adm .adm-hint { font-size: 13px; margin-top: 6px; }
 .adm .adm-save { display: flex; align-items: center; gap: 14px; }
 .adm .adm-ok { color: var(--success); font-weight: 600; font-size: 14px; }
-.adm .btn-danger { color: var(--error); border-color: #F2C4C0; }
 
 .adm .adm-scroll { overflow-x: auto; }
 .adm .adm-table { width: 100%; border-collapse: collapse; font-size: 14px; }

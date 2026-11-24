@@ -1,3 +1,4 @@
+import { ask } from "../Modal";
 import { useEffect, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { STARTER_TEMPLATES, serializeCherry, type StarterTemplate } from "@cherry/doc";
@@ -47,8 +48,8 @@ function Card({ t, ws, onUse, onDone, onReport, onError }: { t: Template } & Car
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         {t.status === "pending" && admin && <button className="btn" onClick={() => void run(() => approveTemplate(t.id))}>Approve</button>}
         {(t.mine || admin) && (
-          <button className="btn" onClick={() => {
-            if (confirm(`Delete "${t.name}"? This can't be undone.`)) void run(() => deleteTemplate(t.id));
+          <button className="btn" onClick={async () => {
+            if (await ask({ title: `Delete "${t.name}"?`, body: "This can't be undone.", ok: "Delete", danger: true })) void run(() => deleteTemplate(t.id));
           }}>Delete</button>
         )}
         {t.visibility === "public" && !t.mine && <button className="btn" onClick={() => onReport(t)}>Report</button>}

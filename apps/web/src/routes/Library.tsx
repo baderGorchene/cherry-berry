@@ -1,3 +1,4 @@
+import { ask } from "../Modal";
 import { useEffect, useState } from "react";
 import { Navigate } from "react-router";
 import {
@@ -51,7 +52,7 @@ function Details({ a, ws, onEdited, onDeleted, onError }: {
     } catch (e) { setFormError(errorMessage(e)); }
   };
   const remove = async () => {
-    if (!confirm(`Delete "${a.title}"? This can't be undone.`)) return;
+    if (!(await ask({ title: `Delete "${a.title}"?`, body: "This can't be undone.", ok: "Delete", danger: true }))) return;
     try { await deleteAsset(a.id); onDeleted(); } catch (e) { onError(errorMessage(e)); }
   };
 

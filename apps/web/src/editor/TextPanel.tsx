@@ -1,7 +1,8 @@
 import { useState } from "react";
 import * as Y from "yjs";
 import { FONTS, addNode, updateNode, type CherryNode, type Page } from "@cherry/doc";
-import type { BrandKit, Role } from "../api";
+import type { BrandKit, Font, Role } from "../api";
+import FontDialog from "../brand/FontDialog";
 import { canMove } from "./brandLock";
 import { measureText } from "./Canvas";
 import { presetPair, presetText, type TextPreset } from "./textPresets";
@@ -17,11 +18,15 @@ const PAIRS: [string, string][] = [
 ];
 
 /** Text presets sized to the page, the linked kit's text styles and colours, and font pairings, each centred on `center`. */
-export default function TextPanel({ ydoc, page, center, kit, readOnly, role, selected, act, onSelect }: {
+export default function TextPanel({ ydoc, page, center, kit, readOnly, role, selected, act, onSelect, onFontAdded }: {
   ydoc: Y.Doc; page: Page; center: { x: number; y: number }; kit: BrandKit | null; readOnly: boolean; role: Role; selected: string[];
-  act(fn: () => void): void; onSelect(ids: string[]): void;
+  act(fn: () => void): void; onSelect(ids: string[]): void; onFontAdded(font: Font): void;
 }) {
   const [note, setNote] = useState("");
+  const [fontOpen, setFontOpen] = useState(false);
+  const canUpload = !!kit && !readOnly && (role === "owner" || role === "admin");
+  const uploaded = kit ? [...new Set(kit.fonts.map((f) => f.family))] : [];
+  const addIn = (family: string) => add(presetText("body", page, center, measureText, { fontFamily: family, text: family }));
   const add = (n: CherryNode) => { act(() => addNode(ydoc, page.id, n)); onSelect([n.id]); };
   const ink = kit?.content.colors.find((c) => c.role === "text");
   const paint = (hex: string) => {
@@ -63,6 +68,20 @@ export default function TextPanel({ ydoc, page, center, kit, readOnly, role, sel
           )}
           {note && <p role="status" className="muted" style={{ fontSize: 13, margin: 0 }}>{note}</p>}
         </section>
+      )}
+
+      <section className="ed-sec">
+        <h2 className="ed-ph">Your fonts</h2>
+        {uploaded.map((f) => (
+          <button key={f} type="button" className="ed-mini ed-kitfont" disabled={readOnly} style={{ fontFamily: `"${f}"` }}
+            aria-label={`Add text in ${f}`} onClick={() => addIn(f)}>{f}</button>
+        ))}
+        {canUpload ? <button type="button" className="ed-mini" onClick={() => setFontOpen(true)}>Upload a font (WOFF2, WOFF, TTF, OTF)</button>
+          : <p className="muted ed-note">{kit ? `Ask a workspace owner or admin to add fonts to “${kit.name}”.` : "Link a brand kit in the Brand panel to upload your own fonts."}</p>}
+      </section>
+      {fontOpen && kit && (
+        <FontDialog kit={kit} onClose={() => setFontOpen(false)}
+          onDone={(font) => { setFontOpen(false); onFontAdded(font); addIn(font.family); }} />
       )}
 
       <section className="ed-sec">

@@ -6,7 +6,7 @@ import {
   LOCAL, addNode, brandIssues, duplicateNodes, fromPx, insertPages, removeNodes, reorderNode, setTitle, toPx, updateNode, yToDoc,
   type CherryDocument, type CherryNode, type Page,
 } from "@cherry/doc";
-import { getKit, myWorkspaces, startFromTemplate, type BrandKit } from "../api";
+import { getKit, myWorkspaces, startFromTemplate, type BrandKit, type Font } from "../api";
 import { useSession } from "../App";
 import { ThemeToggle } from "../ThemeToggle";
 import { useCreateDialog } from "../create/CreateDialog";
@@ -350,6 +350,7 @@ function Shell({ d }: { d: Ready }) {
     ]} />
   );
   const done = editNode && <button className="ed-done" title="Done (Esc)" onClick={exitEdit}>Done</button>;
+  const addFont = (font: Font) => setLoaded((l) => (l?.kit?.id === font.kitId ? { ...l, kit: { ...l.kit, fonts: [...l.kit.fonts, font] } } : l));
   const panelBody = (p: RailItem) => ({
     templates: (
       <TemplatesPanel page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} onInsert={insertTemplate}
@@ -358,7 +359,7 @@ function Shell({ d }: { d: Ready }) {
     // On phones an armed tool closes the sheet so the canvas can take the tap.
     elements: <ShapesPanel ydoc={ydoc} page={page} workspaceId={d.design.workspaceId} designId={d.design.id} readOnly={readOnly} act={act} onSelect={select}
       onTool={(t) => { setTool(t); if (phone) setSheet(null); }} />,
-    text: <TextPanel ydoc={ydoc} page={page} center={center} kit={kit} readOnly={readOnly} role={role} selected={sel.selected} act={act} onSelect={select} />,
+    text: <TextPanel ydoc={ydoc} page={page} center={center} kit={kit} readOnly={readOnly} role={role} selected={sel.selected} act={act} onSelect={select} onFontAdded={addFont} />,
     uploads: <VisualsPanel ydoc={ydoc} page={page} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role} selected={sel.selected} act={act} onSelect={select} />,
     brand: (
       <BrandPanel ydoc={ydoc} page={page} kit={kit} loading={kitLoading} issues={issues} designId={d.design.id} workspaceId={d.design.workspaceId} readOnly={readOnly} role={role}
@@ -380,7 +381,7 @@ function Shell({ d }: { d: Ready }) {
   const toolbar = (
     <ContextToolbar ydoc={ydoc} page={page} nodes={selectedNodes} kit={kit} docColors={colors} role={role} readOnly={readOnly}
       workspaceId={d.design.workspaceId} designId={d.design.id} act={act} onLinked={setKitId}
-      onFontAdded={(font) => setLoaded((l) => (l?.kit?.id === font.kitId ? { ...l, kit: { ...l.kit, fonts: [...l.kit.fonts, font] } } : l))}
+      onFontAdded={addFont}
       canCombine={canCombine} canConvert={convertible} message={message} onCombine={runCombine} onConvert={runConvert}
       canGroup={canGroup} groupWhy={groupWhy} onGroup={group} onUngroup={ungroup} onEditPath={enterEdit} onLock={toggleLock} onReorder={reorder}
       editing={editNode ? { node: editNode, anchors, onDone: exitEdit, panel: !phone } : null} />

@@ -7,8 +7,10 @@ async function startKit(page: Page, name = "North Studio brand") {
   await createWorkspace(page, "Brand Studio");
   await page.goto("/brand");
   await expect(page.getByText("No brand kit yet.")).toBeVisible();
-  page.once("dialog", (d) => void d.accept(name));
   await page.getByRole("button", { name: "Create a brand kit" }).click();
+  const dlg = page.getByRole("dialog", { name: "Name your brand kit" });
+  await dlg.getByRole("textbox").fill(name);
+  await dlg.getByRole("button", { name: "Create" }).click();
   await expect(page.getByLabel("Brand kit", { exact: true })).toContainText(name);
 }
 
@@ -65,9 +67,11 @@ test("uploads a font and a logo", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Remove Fraunces" })).toBeVisible();
 
   const slot = page.getByTestId("slot-primary");
-  page.once("dialog", (d) => { expect(d.message()).toBe("Only upload a logo your organisation owns. Continue?"); void d.accept(); });
-  const chooser = page.waitForEvent("filechooser");
   await slot.getByRole("button", { name: /Primary/ }).click();
+  const logoDlg = page.getByRole("dialog", { name: "Upload a logo" });
+  await expect(logoDlg).toContainText("Only upload a logo your organisation owns. Continue?");
+  const chooser = page.waitForEvent("filechooser");
+  await logoDlg.getByRole("button", { name: "Continue" }).click();
   await saved(page, async () => (await chooser).setFiles({ name: "logo.png", mimeType: "image/png", buffer: uniquePng() }));
   await expect(slot.getByRole("img", { name: "Primary logo" })).toBeVisible();
   await expect(slot.getByRole("button", { name: "Replace" })).toBeVisible();

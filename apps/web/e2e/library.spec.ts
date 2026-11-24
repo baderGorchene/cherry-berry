@@ -107,8 +107,8 @@ test("edit and delete your own visual", async ({ page }) => {
   await expect(tile(page, "Berry spot")).toBeVisible();
   await expect(tile(page, "Berry dot")).toHaveCount(0);
 
-  page.once("dialog", (d) => void d.accept());
   await aside.getByRole("button", { name: "Delete" }).click();
+  await page.getByRole("dialog", { name: 'Delete "Berry spot"?' }).getByRole("button", { name: "Delete" }).click();
   await expect(tile(page, "Berry spot")).toHaveCount(0);
 });
 
